@@ -1,0 +1,29 @@
+# Segreti — non devono MAI entrare nell'immagine.
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# Dipendenze e artefatti: ricostruiti dentro l'immagine, non copiati dall'host.
+node_modules
+dist
+prisma/generated
+
+# Cronologia e strumenti di sviluppo.
+.git
+.gitignore
+.idea
+.vscode
+*.log
+
+# Test e infrastruttura locale: non servono al runtime di produzione.
+test/docker-compose.yml
+docker
+Dockerfile
+.dockerignore
+
+# Contenuti caricati a runtime: vivono su volume, non nell'immagine.
+public/images/*
+public/pdf/*
+!public/images/.gitkeep
+!public/pdf/.gitkeep

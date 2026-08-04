@@ -1,0 +1,21 @@
+# The containers that compose the project
+services:
+  db:
+    image: postgres:16
+    restart: always
+    container_name: tests-prisma
+    ports:
+      - "5445:5432"
+    environment:
+      POSTGRES_USER: prisma
+      POSTGRES_PASSWORD: prisma
+      POSTGRES_DB: tests
+    healthcheck:
+      # NOTA — il file arrivava dal template con questa riga tronca ("pg_isready
+      # -U prisma -d tests) e senza chiusura di stringa né di array: `docker
+      # compose` falliva il parsing YAML e `yarn docker-test:up` non partiva,
+      # quindi la suite non era eseguibile. Corretta qui, senza altre modifiche.
+      test: ["CMD-SHELL", "pg_isready -U prisma -d tests"]
+      interval: 2s
+      timeout: 5s
+      retries: 10

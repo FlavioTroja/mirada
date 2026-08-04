@@ -1,0 +1,94 @@
+import { Service } from "fastify-decorators";
+import { DanceRole, Prisma, Registration, RegistrationStatus } from "@prisma/client";
+import { BaseRepository } from "@repositories/BaseRepository";
+import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
+import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
+import { OrganizationScope, relationOrganizationScopeWhere } from "@utils/helpers/organizationScope";
+
+/** Iscrizioni ancora "vive" — le uniche che devono risultare a contatore (invariante I6). */
+export const ACTIVE_REGISTRATION_STATUSES: RegistrationStatus[] = [
+    RegistrationStatus.CONFIRMED,
+    RegistrationStatus.TO_CONFIRM,
+];
+
+@Service()
+export class RegistrationRepository extends BaseRepository<"registration"> {
+    constructor() {
+        super("registration");
+    }
+
+    async findByEvent(eventId: number, options?: FindOptions, tx?: Prisma.TransactionClient): Promise<Registration[]> {
+        return this.findMany({ eventId, deleted: false }, { ...options, orderBy: { id: "asc" } }, tx);
+    }
+
+    async findByIds(ids: number[], tx?: Prisma.TransactionClient): Promise<Registration[]> {
+        if (!ids.length) {
+            return [];
+        }
+        return this.findMany({ id: { in: ids } }, { orderBy: { id: "asc" } }, tx);
+    }
+
+    /** Le due iscrizioni di una coppia (§4.10): sono loro a puntare alla coppia. */
+    async findByCouple(coupleId: number, tx?: Prisma.TransactionClient): Promise<Registration[]> {
+        return this.findMany({ coupleId, deleted: false }, { orderBy: { id: "asc" } }, tx);
+    }
+
+    /** Una iscrizione per persona per evento (§3.6). */
+    async findByEventAndPerson(
+        eventId: number,
+        personUserId: number,
+        tx?: Prisma.TransactionClient,
+    ): Promise<Registration | null> {
+        return this.findOne({ eventId, personUserId, deleted: false }, undefined, tx);
+    }
+
+    /**
+     * Iscritti per ruolo — è ciò da cui il cruscotto legge lo **sbilancio
+     * corrente** senza alcun calcolo aggregato (`05` §10), e la base
+     * dell'invariante I4 (nessuna iscrizione attiva senza `assignedRole` su
+     * eventi con quote di ruolo).
+     */
+    async countActiveByRole(eventId: number, role: DanceRole | null, tx?: Prisma.TransactionClient): Promise<number> {
+        return this.count(
+            {
+                eventId,
+                deleted: false,
+                status: { in: ACTIVE_REGISTRATION_STATUSES },
+                assignedRole: role,
+            },
+            tx,
+        );
+    }
+
+    async countActive(eventId: number, tx?: Prisma.TransactionClient): Promise<number> {
+        return this.count(
+            { eventId, deleted: false, status: { in: ACTIVE_REGISTRATION_STATUSES } },
+            tx,
+        );
+    }
+
+    /** §1.5 — lo scope passa dall'evento. */
+    async findOneInScope(
+        scope: OrganizationScope,
+        query: Prisma.RegistrationWhereInput,
+        options?: FindOptions,
+        tx?: Prisma.TransactionClient,
+    ): Promise<Registration | null> {
+        return this.findOne({ AND: [query, relationOrganizationScopeWhere(scope, "event")] }, options, tx);
+    }
+
+    async paginateInScope(
+        scope: OrganizationScope,
+        query: Prisma.RegistrationWhereInput,
+        options: PaginateOptions,
+        tx?: Prisma.TransactionClient,
+    ): Promise<PaginateDatasourceDTO<Registration>> {
+        return this.paginate({ AND: [query, relationOrganizationScopeWhere(scope, "event")] }, options, tx);
+    }
+
+    async safeDeleteById(id: number, tx?: Prisma.TransactionClient): Promise<Registration> {
+        return this.exec(() =>
+            this.getDelegate(tx).update({ where: { id }, data: { deleted: true } })
+        );
+    }
+}

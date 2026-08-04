@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  postgresql:
+    image: overzoom/postgres
+    container_name: mirada-postgres
+    hostname: mirada-postgres
+    restart: always
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    ports:
+      - "5442:5432"
+    environment:
+      POSTGRES_USER: mirada
+      POSTGRES_PASSWORD: mirada
+      POSTGRES_DB: mirada
+

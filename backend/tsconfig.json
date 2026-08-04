@@ -1,0 +1,37 @@
+{
+	"compilerOptions": {
+		"target": "es2018",
+		"module": "commonjs",
+		"outDir": "dist",
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"strict": true,
+		"noImplicitAny": true,
+		"strictNullChecks": true,
+		"useUnknownInCatchVariables": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"skipLibCheck": true,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"declaration": true,
+		"resolveJsonModule": true,
+		"sourceMap": true,
+		"rootDir": ".",
+		"baseUrl": "src",
+		"paths": {
+			"@utils/*": [ "utils/*" ],
+			"@repositories/*": [ "stack/repositories/*" ],
+			"@models/*": [ "models/*" ],
+			"@services/*": [ "stack/services/*" ],
+			"@controllers/*": [ "stack/controllers/*" ],
+			"@routes/*": [ "routes/*" ],
+			"@middleware/*": [ "middleware/*" ],
+			"@DTOs/*": [ "stack/DTOs/*" ],
+			"@transformers/*": [ "stack/transformers*" ],
+			"@enums/*": [ "stack/enums/*" ],
+			"@websocket/*": [ "websocket/*" ],
+			"@prisma-gen/*": [ "../prisma/generated/*" ]
+		}
+	}
+}

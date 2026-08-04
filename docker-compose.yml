@@ -1,0 +1,91 @@
+# Mirada Tango — stack completo.
+#
+# Due modi di lavorare, mai insieme (competono sulla stessa porta 5442):
+#
+#   sviluppo   docker compose up -d postgres redis     # solo i servizi
+#              cd backend && yarn dev                  # backend sull'host
+#
+#   completo   docker compose up -d --build            # tutto in container
+#
+# Perimetro attuale: primo taglio (`13-primo-taglio.md` §4), solo backend.
+# Le tre applicazioni frontend — www (SSR), app (keijo-ui), wall — non sono
+# ancora costruite e compariranno qui quando lo saranno.
+
+name: mirada
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: mirada-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-mirada}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mirada}
+      POSTGRES_DB: ${DB_NAME:-mirada}
+    ports:
+      # 5442 e non 5432: la 5432 di questa macchina è occupata da un altro stack.
+      - "${DB_PORT:-5442}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mirada} -d ${DB_NAME:-mirada}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: mirada-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # NOTA ONESTA: nessun codice consuma ancora Redis. È previsto dal §5 del
+    # backend-brief per il fan-out WebSocket multi-istanza, il rate limiting in
+    # apertura vendite e il lock dello scheduler delle prenotazioni scadute.
+    # Sta qui perché quelle tre cose arrivano nel perimetro attuale, non per
+    # riempire il compose.
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mirada-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 5000
+      # §3.1 del contratto: fuso Europe/Rome, valuta EUR.
+      TIMEZONE: Europe/Rome
+      DOMAIN_URL: ${DOMAIN_URL:-http://localhost:5000}
+      DATABASE_URL: postgresql://${DB_USER:-mirada}:${DB_PASSWORD:-mirada}@postgres:5432/${DB_NAME:-mirada}?schema=public&connection_limit=20
+      REDIS_URL: redis://redis:6379
+      # Nessun default: il compose si rifiuta di partire se non lo definisci.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET non impostato — copia .env.example in .env e generane uno}
+      SALT_ROUNDS: 12
+      GOD_USERNAME: ${GOD_USERNAME:-god}
+      GOD_PASSWORD: ${GOD_PASSWORD:?GOD_PASSWORD non impostato}
+      # Il seed è idempotente (upsert): ruoli, permessi e utenti di servizio.
+      SEED_DB: ${SEED_DB:-true}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+    ports:
+      - "${API_PORT:-5000}:5000"
+    volumes:
+      # Decisione D-K: i binari stanno sul disco del backend, non su S3.
+      # Senza questo volume locandine e PDF sparirebbero a ogni redeploy.
+      - backend_public:/app/public
+
+volumes:
+  postgres_data:
+  backend_public:

@@ -1,0 +1,33 @@
+# keijo scaffolder: tarball copy of .gitignore (npm never packs the real one) — keep in sync
+# Dependencies
+node_modules/
+
+# Output
+dist/
+coverage/
+yarn-error.log
+npm-debug.log
+
+# IDE stuff
+.idea/
+
+# Uploads
+public/contents/
+
+# Esportazioni di back-office generate a runtime (POST /events/:id/exports, §3.7)
+public/exports/
+
+# Environment files
+.env
+.env.test
+
+# Log
+public/logs
+/.yarn/
+/.yarnrc.yml
+/.yarnrc
+/.pnp.cjs
+/.pnp.loader.mjs
+/public/images/
+/public/pdf/
+/docker/postgres/populate-staging-db.sh

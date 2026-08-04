@@ -1,0 +1,1253 @@
+generator client {
+     provider        = "prisma-client-js"
+     binaryTargets   = ["native", "linux-musl", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "linux-musl-openssl-3.0.x"]
+     previewFeatures = ["fullTextSearchPostgres"]
+}
+
+generator zod {
+     provider                         = "zod-prisma-types"
+     output                           = "./generated/zod"
+     useMultipleFiles                 = true
+     createOptionalDefaultValuesTypes = true
+     createPartialTypes               = true
+     createInputTypes                 = false
+     addInputTypeValidation           = false
+     createRelationValuesTypes        = true
+     writeNullishInModelTypes         = true
+}
+
+datasource db {
+     provider = "postgresql"
+}
+
+/// Ruoli di piattaforma (backend-brief §1.3 / §3.8).
+/// GOD è allow-all implicito (vedi hasPermission) e non è mai un ruolo dell'interfaccia.
+///
+/// ATTENZIONE — ADMIN e USER NON appartengono al dominio Mirada Tango.
+/// Restano nell'enum solo perché il seed di serie del template li usa
+/// (prisma/seed-data/seed_users.ts assegna ADMIN/USER agli utenti di sviluppo e
+/// Log.toRoles ha default [ADMIN, USER]): rimuoverli romperebbe il seed e il modello Log.
+/// Non hanno e non devono avere ALCUNA riga in PermissionConfig: nessun permesso,
+/// in nessuno scope. Ogni concessione del progetto vive sui cinque ruoli del §3.8.
+enum RoleName {
+     GOD
+     ADMIN // legacy template — nessun permesso concesso
+     USER // legacy template — nessun permesso concesso
+     OWNER
+     EVENT_MANAGER
+     CHECKIN_OPERATOR
+     DANCER
+}
+
+enum UiScope {
+     EDITABLE
+     VISIBLE
+     INVISIBLE
+}
+
+enum ValueType {
+     float
+     integer
+     string
+     boolean
+     json
+}
+
+enum Level {
+     INFO
+     WARNING
+     ERROR
+}
+
+enum Gender {
+     M
+     F
+     OTHER
+}
+
+
+enum PersonType {
+     USER
+}
+
+model User {
+     id        Int     @id @default(autoincrement())
+     username  String  @unique
+     password  String
+     wsCode    String?
+     avatarUrl String?
+     note      String?
+
+     enabled     Boolean   @default(true) // sospensione account (gate login)
+     activatedAt DateTime? // "valido da"; null = nessun vincolo di inizio
+     expiresAt   DateTime? // scadenza; null = nessuna scadenza
+
+     logoFileId Int?
+     logoFile   File? @relation("UserLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+
+     personId Int      @unique
+     person   Person   @relation(fields: [personId], references: [id])
+     roles    RoleToUser[]
+     logs   Log[]
+
+     dancerProfile           DancerProfile?
+     organizationMemberships OrganizationMember[]
+     fiscalDeclarations      FiscalDeclaration[]  @relation("FiscalDeclarationDeclaredBy")
+     registrations           Registration[]       @relation("RegistrationPerson")
+     guardedRegistrations    Registration[]       @relation("RegistrationGuardian")
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+}
+
+model PermissionConfig {
+     id       Int      @id @default(autoincrement())
+     roleName RoleName
+     role     Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
+     action   String
+     entity   String
+     scope    String
+
+     @@unique([action, entity, scope, roleName])
+     @@index([action, entity, scope])
+}
+
+model HiddenComponentConfig {
+     id        Int      @id @default(autoincrement())
+     roleName  RoleName
+     role      Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
+     context   String
+     section   String
+     component String
+     isActive  Boolean
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@unique([context, section, component, roleName])
+     @@index([context, section, component])
+}
+
+model Role {
+     name                   RoleName                @id
+     label                  String?
+     rank                   Float
+     isActive               Boolean?                @default(true)
+     users                  RoleToUser[]
+     permissionConfigs      PermissionConfig[]
+     hiddenComponentConfigs HiddenComponentConfig[]
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+}
+
+model RoleToUser {
+     id       Int      @id @default(autoincrement())
+     roleName RoleName
+     userId   Int
+     role     Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
+     user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+     isActive Boolean  @default(true)
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@unique([roleName, userId])
+}
+
+model Log {
+     id               Int        @id @default(autoincrement())
+     level            Level      @default(INFO)
+     description      String?
+     entityId         Int?
+     entityName       String?
+     input            Json?
+     output           Json?
+     toRoles          RoleName[] @default([ADMIN, USER])
+     actionByUsername String?
+     actionById       Int?
+     actionBy         User?      @relation(fields: [actionById], references: [id], onDelete: SetNull)
+     isNotification   Boolean?   @default(false)
+     hasError         Boolean?   @default(false)
+     createdAt        DateTime   @default(now())
+
+     recipients Json?
+}
+
+model Config {
+     name      String    @id
+     scope     String
+     uiScope   UiScope   @default(INVISIBLE)
+     type      ValueType @default(boolean)
+     boolean   Boolean?
+     integer   Int?
+     float     Float?
+     string    String?
+     json      Json?
+     createdAt DateTime  @default(now())
+     updatedAt DateTime  @updatedAt
+}
+
+model Person {
+     id Int @id @default(autoincrement())
+
+     name       String
+     surname    String
+     birthDate  DateTime?
+     fiscalCode String?
+     vatNumber  String?
+     gender     Gender?
+     personType PersonType
+     note       String?
+     avatarUrl  String?
+
+     bornIn  String? // City of birth
+     livesIn String? // City of residence
+
+     user        User?
+     contactId   Int          @unique
+     contact     Contact      @relation(fields: [contactId], references: [id])
+     addresses   Address[]
+     files       PersonFile[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+}
+
+model Contact {
+     id Int @id @default(autoincrement())
+
+     email       String  @unique
+     phoneNumber String?
+     note        String?
+     telephone   String?
+     pec         String?
+
+     person Person?
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+}
+
+model Address {
+     id       Int      @id @default(autoincrement())
+     country  String?
+     state    String?
+     province String?
+     city     String?
+     zipCode  String?
+     address  String?
+     number   String?
+     note     String?
+     default  Boolean? @default(false)
+     billing  Boolean? @default(false)
+
+     personId Int?
+     person   Person? @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+     organizations Organization[]
+     venues        Venue[]
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+}
+
+model File {
+     id Int @id @default(autoincrement())
+
+     name     String
+     path     String
+     url      String @unique
+     mimeType String
+     size     Int
+
+     personFiles PersonFile[]
+     userLogos   User[]       @relation("UserLogo")
+
+     organizationLogos   Organization[]  @relation("OrganizationLogo")
+     dancerProfileAvatar DancerProfile[] @relation("DancerProfileAvatar")
+     artistPhotos        Artist[]        @relation("ArtistPhoto")
+
+     eventPostersVertical   Event[] @relation("EventPosterVertical")
+     eventPostersHorizontal Event[] @relation("EventPosterHorizontal")
+     eventPostersSquare     Event[] @relation("EventPosterSquare")
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+}
+
+model PersonFile {
+     personId Int
+     fileId   Int
+
+     person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+     file   File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+     createdAt DateTime @default(now())
+
+     @@id([personId, fileId])
+     @@index([fileId])
+}
+
+
+// =============================================================================
+// Mirada Tango — Fase A (backend-brief §2 passi 1→6)
+// Enumerazioni: sottoinsieme del §3.5 usato dalle entità di fase A.
+// =============================================================================
+
+enum OrganizationStatus {
+     PENDING
+     APPROVED
+     SUSPENDED
+     REJECTED
+}
+
+enum PayoutStatus {
+     NOT_CONNECTED
+     PENDING
+     ENABLED
+     DISABLED
+}
+
+enum OrgMemberRole {
+     OWNER
+     EVENT_MANAGER
+     CHECKIN_OPERATOR
+}
+
+enum PreferredDanceRole {
+     LEADER
+     FOLLOWER
+     BOTH
+}
+
+enum ArtistKind {
+     TEACHER
+     DJ
+     ORCHESTRA
+}
+
+enum RequirementKind {
+     DECLARATION
+     CUSTOM_FIELD
+}
+
+// -----------------------------------------------------------------------------
+// Passo 1 — cataloghi di piattaforma (§4.1). Scrittura riservata a GOD.
+// -----------------------------------------------------------------------------
+
+model EventType {
+     id Int @id @default(autoincrement())
+
+     /// I18nText { it, en? }
+     name Json
+     slug String @unique
+
+     /// Le cinque capacità generano il wizard di creazione evento (§4.1).
+     capMultiSession Boolean @default(false)
+     capRoleQuotas   Boolean @default(false)
+     capLevels       Boolean @default(false)
+     capCast         Boolean @default(false)
+     capCouple       Boolean @default(false)
+
+     defaultTemplate Json    @default("{}")
+     active          Boolean @default(true)
+     sortOrder       Int     @default(0)
+
+     events Event[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([active])
+     @@index([sortOrder])
+}
+
+model RequirementType {
+     id Int @id @default(autoincrement())
+
+     /// I18nText { it, en? }
+     name         Json
+     kind         RequirementKind
+     configSchema Json            @default("{}")
+     active       Boolean         @default(true)
+
+     eventRequirements EventRequirement[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([active])
+     @@index([kind])
+}
+
+model ServiceType {
+     id Int @id @default(autoincrement())
+
+     /// I18nText { it, en? }
+     name             Json
+     attributesSchema Json    @default("{}")
+     active           Boolean @default(true)
+
+     eventServices EventService[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([active])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 2 — Organization (§4.2)
+// -----------------------------------------------------------------------------
+
+model Organization {
+     id Int @id @default(autoincrement())
+
+     name      String
+     legalName String
+     legalForm String
+     vatNumber String?
+     taxCode   String?
+
+     addressId Int?
+     address   Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+
+     contactEmail String
+     contactPhone String?
+     website      String?
+
+     status OrganizationStatus @default(PENDING)
+
+     /// Calcolati dal server a partire da Stripe — mai accettati dal client (§4.2, §5).
+     stripeAccountId String?      @unique
+     payoutStatus    PayoutStatus @default(NOT_CONNECTED)
+     payoutCheckedAt DateTime?
+
+     termsVersion    String?
+     termsAcceptedAt DateTime?
+
+     logoFileId Int?
+     logoFile   File? @relation("OrganizationLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+
+     members            OrganizationMember[]
+     venues             Venue[]
+     artists            Artist[]
+     refundPolicies     RefundPolicy[]
+     events             Event[]
+     fiscalDeclarations FiscalDeclaration[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([status])
+     @@index([payoutStatus])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 3 — DancerProfile (§4.3)
+// -----------------------------------------------------------------------------
+
+model DancerProfile {
+     id Int @id @default(autoincrement())
+
+     userId Int  @unique
+     user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+     nickname      String             @unique
+     preferredRole PreferredDanceRole @default(BOTH)
+     city          String?
+     /// `@default([])` è necessario, non cosmetico: senza, `zod-prisma-types` rende
+     /// la lista OBBLIGATORIA nel DTO Create e il client dovrebbe mandare `[]` per
+     /// creare un profilo senza lingue dichiarate. Stesso difetto già corretto su
+     /// `Event.tags` in fase B (backend-brief §C.4).
+     languages     String[]           @default([])
+     birthDate     DateTime?
+     declaredLevel String?
+
+     avatarFileId Int?
+     avatarFile   File? @relation("DancerProfileAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+
+     /// Calcolati dal server dal servizio changeNickname (§4.3).
+     nicknameChangedAt   DateTime?
+     nicknameChangeCount Int       @default(0)
+
+     /// Spazio riservato agli attributi di ballo estensibili di fase 2 (§4.3).
+     attributes Json @default("{}")
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// Passo 4 — OrganizationMember (§4.3) — risolve il contesto di tenancy (§1.5)
+// -----------------------------------------------------------------------------
+
+model OrganizationMember {
+     id Int @id @default(autoincrement())
+
+     organizationId Int
+     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+     userId Int
+     user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+     role       OrgMemberRole
+     invitedAt  DateTime      @default(now())
+     acceptedAt DateTime?
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@unique([organizationId, userId, role])
+     @@index([userId])
+     @@index([organizationId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 5 — Venue · Artist (§4.4)
+// -----------------------------------------------------------------------------
+
+model Venue {
+     id Int @id @default(autoincrement())
+
+     /// Null = sala di piattaforma, non appartenente ad alcuna organizzazione.
+     organizationId Int?
+     organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+     name String
+
+     addressId Int
+     address   Address @relation(fields: [addressId], references: [id], onDelete: Restrict)
+
+     latitude  Float?
+     longitude Float?
+     /// Proposta come default alla quota di capienza della sala, mai imposta (§4.4).
+     capacity   Int?
+     floorNotes String?
+
+     airConditioning Boolean @default(false)
+     parking         Boolean @default(false)
+     accessibility   String?
+     notes           String?
+
+     events Event[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([organizationId])
+     @@index([addressId])
+}
+
+model Artist {
+     id Int @id @default(autoincrement())
+
+     /// Null = anagrafica di piattaforma. Nessuna relazione a User: l'artista non ha account (§4.4).
+     organizationId Int?
+     organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+     name String
+     kind ArtistKind
+
+     /// I18nText { it, en? }
+     bio Json?
+
+     photoFileId Int?
+     photoFile   File? @relation("ArtistPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+
+     website String?
+
+     eventCasts EventCast[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([organizationId])
+     @@index([kind])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 6 — RefundPolicy (§4.4)
+// -----------------------------------------------------------------------------
+
+model RefundPolicy {
+     id Int @id @default(autoincrement())
+
+     /// I18nText { it, en? }
+     name Json
+
+     /// [{ daysBefore, percent }]
+     tiers Json @default("[]")
+
+     transferDeadlineHours Int     @default(0)
+     feeRefundable         Boolean @default(false)
+     isPlatformPreset      Boolean @default(false)
+
+     /// Null = preset di piattaforma.
+     organizationId Int?
+     organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+     /// Preset di piattaforma da cui la policy discende (emendamento B.0 al §3.6).
+     /// È il termine di paragone che rende verificabile la regola del §4.4:
+     /// una policy derivata può essere più favorevole al partecipante, mai più restrittiva.
+     derivedFromPolicyId Int?
+     derivedFromPolicy   RefundPolicy?  @relation("RefundPolicyDerivation", fields: [derivedFromPolicyId], references: [id], onDelete: SetNull)
+     derivedPolicies     RefundPolicy[] @relation("RefundPolicyDerivation")
+
+     events Event[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([organizationId])
+     @@index([isPlatformPreset])
+     @@index([derivedFromPolicyId])
+}
+
+// =============================================================================
+// Mirada Tango — Fase B (backend-brief §2 passi 7→12)
+// =============================================================================
+
+enum DanceRole {
+     LEADER
+     FOLLOWER
+}
+
+enum EventStatus {
+     DRAFT
+     PUBLISHED
+     SALES_CLOSED
+     RUNNING
+     ENDED
+     ARCHIVED
+     CANCELLED
+}
+
+enum SalesCloseCriterion {
+     DATE
+     QUOTA_EXHAUSTED
+     MANUAL
+     EVENT_START
+}
+
+enum FiscalDeclarationKind {
+     ORGANIZATION_FRAMEWORK
+     EVENT_ATTESTATION
+}
+
+enum RequirementBlocking {
+     PURCHASE
+     ENTRY
+     NONE
+}
+
+enum RequirementVerification {
+     AUTOMATIC
+     MANUAL
+}
+
+enum SaleUnit {
+     PER_PERSON
+     PER_COUPLE
+}
+
+enum TicketTypeVisibility {
+     PUBLIC
+     CODE_RESTRICTED
+}
+
+enum PriceTierKind {
+     BY_DATE
+     BY_QUANTITY
+     COMBINED
+}
+
+// -----------------------------------------------------------------------------
+// Passo 7 — Event (§4.5)
+// -----------------------------------------------------------------------------
+
+model Event {
+     id Int @id @default(autoincrement())
+
+     organizationId Int
+     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+     eventTypeId Int
+     eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Restrict)
+
+     venueId Int
+     venue   Venue @relation(fields: [venueId], references: [id], onDelete: Restrict)
+
+     /// I18nText { it, en? }
+     title Json
+     /// Unico GLOBALE: è la chiave di `GET /api/public/events/:slug` (§4.5).
+     slug String @unique
+     /// I18nText { it, en? }
+     description Json
+
+     startAt DateTime
+     endAt   DateTime
+
+     contentLanguage String
+     secondLanguage  String?
+     /// `@default([])` è necessario, non cosmetico: senza, `zod-prisma-types` rende
+     /// la lista OBBLIGATORIA nel DTO Create e il client dovrebbe mandare `[]`
+     /// per dire «nessun tag». L'assenza deve significare l'insieme vuoto.
+     tags String[] @default([])
+
+     posterVerticalFileId Int?
+     posterVerticalFile   File? @relation("EventPosterVertical", fields: [posterVerticalFileId], references: [id], onDelete: SetNull)
+
+     posterHorizontalFileId Int?
+     posterHorizontalFile   File? @relation("EventPosterHorizontal", fields: [posterHorizontalFileId], references: [id], onDelete: SetNull)
+
+     posterSquareFileId Int?
+     posterSquareFile   File? @relation("EventPosterSquare", fields: [posterSquareFileId], references: [id], onDelete: SetNull)
+
+     /// Governato dalle transizioni del servizio, mai scritto dal DTO Create (§4.5).
+     status EventStatus @default(DRAFT)
+
+     refundPolicyId Int?
+     refundPolicy   RefundPolicy? @relation(fields: [refundPolicyId], references: [id], onDelete: SetNull)
+     /// I18nText { it, en? }
+     refundPolicyText Json @default("{}")
+
+     minorsAdmitted Boolean @default(false)
+     /// I18nText { it, en? }
+     minorsConditions Json?
+
+     salesCloseAt       DateTime?
+     /// Vedi la nota su `tags`: l'assenza di criteri configurati è l'insieme vuoto,
+     /// e `EVENT_START` resta comunque sempre attivo come ultimo (`RF-EVT-40`).
+     salesCloseCriteria SalesCloseCriterion[] @default([])
+
+     manageExternalChannels Boolean @default(false)
+
+     publishedAt        DateTime?
+     cancelledAt        DateTime?
+     cancellationReason String?
+
+     sessions           Session[]
+     casts              EventCast[]
+     requirements       EventRequirement[]
+     services           EventService[]
+     ticketTypes        TicketType[]
+     fiscalDeclarations FiscalDeclaration[]
+     capacityQuotas     CapacityQuota[]
+     couples            Couple[]
+     registrations      Registration[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([organizationId, status])
+     @@index([startAt])
+     @@index([slug])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 8 — FiscalDeclaration (§4.3) — IMMUTABILE
+// -----------------------------------------------------------------------------
+
+/// Nessun `PATCH`, nessun `DELETE`: si crea una nuova versione (`RF-ORG-8`).
+/// Tutte le relazioni sono `Restrict`: una dichiarazione non si perde mai per cascata.
+model FiscalDeclaration {
+     id Int @id @default(autoincrement())
+
+     organizationId Int
+     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+     eventId Int?
+     event   Event? @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+     kind FiscalDeclarationKind
+
+     /// Progressivo per (organizationId, kind, eventId) — calcolato dal servizio.
+     version Int @default(1)
+
+     frameworkLabel String
+     statementText  String
+
+     /// Calcolati dal server, mai accettati dal client (§4.3).
+     declaredAt       DateTime @default(now())
+     declaredByUserId Int
+     declaredBy       User     @relation("FiscalDeclarationDeclaredBy", fields: [declaredByUserId], references: [id], onDelete: Restrict)
+     ipAddress        String
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     /// Regge il progressivo delle attestazioni di evento. Per le dichiarazioni di
+     /// inquadramento (`eventId` nullo) Postgres considera i NULL distinti: lì il
+     /// progressivo è garantito dal servizio, che calcola `max(version) + 1` in transazione.
+     @@unique([organizationId, kind, eventId, version])
+     @@index([organizationId, kind])
+     @@index([eventId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 9 — Session (§4.6)
+// -----------------------------------------------------------------------------
+
+model Session {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+     /// I18nText { it, en? }
+     name Json
+
+     startAt DateTime
+     endAt   DateTime
+
+     room  String?
+     level String?
+
+     /// Peso di ripartizione (`RF-EVT-36`): default uniforme calcolato dal servizio.
+     allocationWeight Int @default(1)
+
+     /// Sessione implicita reale creata dal servizio quando l'EventType ha
+     /// `capMultiSession = false`: il check-in di una milonga singola gira sullo
+     /// stesso codice di quello di un festival (§4.6).
+     isImplicit Boolean @default(false)
+
+     cancelledAt        DateTime?
+     cancellationReason String?
+     sortOrder          Int       @default(0)
+
+     ticketTypeSessions TicketTypeSession[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId])
+     @@index([eventId, startAt])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 10 — EventCast · EventRequirement · EventService (§4.6)
+// -----------------------------------------------------------------------------
+
+model EventCast {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+     artistId Int
+     artist   Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
+
+     kind      ArtistKind
+     sortOrder Int        @default(0)
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId])
+     @@index([artistId])
+}
+
+model EventRequirement {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+     requirementTypeId Int
+     requirementType   RequirementType @relation(fields: [requirementTypeId], references: [id], onDelete: Restrict)
+
+     /// I18nText { it, en? }
+     label Json
+     /// I18nText { it, en? }
+     text Json
+
+     mandatory    Boolean                 @default(false)
+     blocking     RequirementBlocking     @default(NONE)
+     verification RequirementVerification @default(AUTOMATIC)
+
+     dueAt     DateTime?
+     config    Json      @default("{}")
+     sortOrder Int       @default(0)
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId])
+     @@index([requirementTypeId])
+}
+
+model EventService {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+     serviceTypeId Int
+     serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+
+     /// I18nText { it, en? }
+     name Json
+     /// I18nText { it, en? }
+     description Json?
+
+     /// Centesimi interi (§3.1).
+     price Int @default(0)
+
+     refundCutoffAt DateTime?
+
+     /// Dichiara quali attributi si raccolgono all'acquisto (taglia, dieta, slot).
+     /// Diete e allergie sono l'unico dato riconducibile alla salute che resta in
+     /// piattaforma: accesso ristretto, mai nelle esportazioni generiche (§4.6).
+     attributesConfig Json @default("{}")
+
+     sortOrder Int @default(0)
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId])
+     @@index([serviceTypeId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 11 — TicketType (§4.7)
+// -----------------------------------------------------------------------------
+
+model TicketType {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+     /// I18nText { it, en? }
+     name Json
+     /// I18nText { it, en? }
+     description Json?
+
+     /// Centesimi interi (§3.1).
+     basePrice Int @default(0)
+
+     saleUnit SaleUnit @default(PER_PERSON)
+
+     /// Vincolo di ruolo del titolo. Incompatibile con `consumesRoleQuota = false` (§4.7).
+     roleConstraint    DanceRole?
+     consumesRoleQuota Boolean    @default(true)
+
+     saleOpensAt  DateTime?
+     saleClosesAt DateTime?
+
+     visibility TicketTypeVisibility @default(PUBLIC)
+     accessCode String?
+
+     minPerOrder Int @default(1)
+     maxPerOrder Int @default(10)
+
+     indicatedLevel String?
+     highlighted    Boolean @default(false)
+     sortOrder      Int     @default(0)
+
+     sessions   TicketTypeSession[]
+     priceTiers PriceTier[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId])
+     @@index([accessCode])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 12 — TicketTypeSession · PriceTier (§4.7) — figli posseduti
+// Nessun controller proprio: si scrivono con l'unico PATCH sub-risorsa del §3.4.
+// -----------------------------------------------------------------------------
+
+/// Elenco ESPLICITO delle sessioni incluse nel titolo.
+model TicketTypeSession {
+     id Int @id @default(autoincrement())
+
+     ticketTypeId Int
+     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+     sessionId Int
+     session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@unique([ticketTypeId, sessionId])
+     @@index([sessionId])
+}
+
+/// Scaglioni di prezzo. `soldQuantity` è calcolato dal server (§4.7).
+model PriceTier {
+     id Int @id @default(autoincrement())
+
+     ticketTypeId Int
+     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+     kind PriceTierKind
+
+     /// Centesimi interi (§3.1).
+     price Int
+
+     validUntil   DateTime?
+     maxQuantity  Int?
+     soldQuantity Int       @default(0)
+     sortOrder    Int       @default(0)
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([ticketTypeId])
+}
+
+// =============================================================================
+// FASE C — Il motore di capienza (backend-brief §4.8 · §4.9 · §4.10,
+// allegato tecnico-funzionale `05-modello-capienza.md`)
+//
+// È il componente più delicato del prodotto: sbaglia in silenzio, sbaglia sotto
+// carico, e ogni errore si traduce in una persona che ha pagato e non entra.
+// =============================================================================
+
+enum QuotaScope {
+     EVENT
+     SESSION
+     TICKET_TYPE
+     SERVICE
+}
+
+enum QuotaReservedFor {
+     COMPLIMENTARY
+     EXTERNAL_CHANNEL
+}
+
+enum DeclaredDanceRole {
+     LEADER
+     FOLLOWER
+     FLEXIBLE
+}
+
+enum RegistrationStatus {
+     CONFIRMED
+     TO_CONFIRM
+     DECLINED
+}
+
+enum RegistrationChannel {
+     ONLINE_SALE
+     DOOR_SALE
+     COMPLIMENTARY
+     EXTERNAL_CHANNEL
+}
+
+// -----------------------------------------------------------------------------
+// Passo 13 — CapacityQuota (§4.8)
+// -----------------------------------------------------------------------------
+
+/// Ogni vincolo di capienza è una RIGA DI CONFIGURAZIONE, non un campo sparso su
+/// evento e titolo: capienza della sala, equilibrio dei ruoli, inventario
+/// commerciale del titolo, capienza di una sala secondaria, impegno con un
+/// fornitore. Rende identico il codice che serve una milonga da 120 posti e un
+/// encuentro 50+50 con tolleranza (`05` §1).
+///
+/// `consumed` è un CAMPO CALCOLATO DAL SERVER (§5): nessun DTO di scrittura lo
+/// accetta, si muove solo attraverso `CapacityEngineService`.
+model CapacityQuota {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+     scope QuotaScope
+
+     /// Riferimento POLIMORFO SENZA CHIAVE ESTERNA: punta a `Session`,
+     /// `TicketType` o `EventService` secondo `scope` (§4.8). La coerenza è
+     /// verificata dal servizio, non dal database.
+     scopeId Int?
+
+     /// Nullo = quota totale, indifferente al ruolo. Valorizzabile SOLO su
+     /// `scope ∈ {EVENT, SESSION}`: le quote di titolo e di servizio sono per
+     /// persona, indipendentemente da come balla.
+     role DanceRole?
+
+     /// Tetto assoluto.
+     limit Int
+
+     /// Contatore denormalizzato, mosso nella stessa transazione dei consumi con
+     /// l'AGGIORNAMENTO CONDIZIONATO del §4.8. Mai scritto dal client.
+     consumed Int @default(0)
+
+     /// Se falso la quota CONTA i posti ma NON BLOCCA la vendita (`05` §3): è il
+     /// caso delle milonghe incluse in un pass, dove non esiste un posto
+     /// assegnato e la sala assorbe.
+     limiting Boolean @default(true)
+
+     /// Quota sottratta alla vendita online e non esposta nella disponibilità
+     /// pubblica: omaggi (`COMPLIMENTARY`) e biglietteria dell'organizzatore
+     /// (`EXTERNAL_CHANNEL`).
+     reservedFor QuotaReservedFor?
+
+     /// Valorizzato solo sulle quote di ruolo appaiate del medesimo ambito.
+     /// Nullo = nessun cancello. NON estende il limite: restringe dinamicamente
+     /// l'accesso al ruolo sovrarappresentato (`05` §6).
+     imbalanceTolerance Int?
+
+     /// Posti accettabili oltre il limite senza rifiutare l'ordine.
+     /// FORZATO A 0 E NON MODIFICABILE sulla capienza della sala
+     /// (`scope=EVENT, role=null`) e sulle quote di ruolo di ambito `EVENT`:
+     /// non è un limite commerciale, è un vincolo di sicurezza (`05` §5.1).
+     overbookAllowance Int @default(0)
+
+     /// Se falso la disponibilità residua non compare in scheda evento.
+     publiclyVisible Boolean @default(true)
+
+     consumptions QuotaConsumption[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     /// Non esistono due quote per la stessa cosa (`05` §2.1).
+     ///
+     /// SCOSTAMENTO DICHIARATO DAL §3.6 — la terna del brief è
+     /// `(eventId, scope, scopeId, role)`, ma il §4.8 indirizza il contingente
+     /// degli accrediti come `quota(EVENT, null, reservedFor: COMPLIMENTARY)`:
+     /// una quota di ambito EVENT con `scopeId` e `role` nulli, cioè **la stessa
+     /// terna della capienza della sala**. Con la terna letterale le due righe
+     /// non potrebbero coesistere e il ramo accrediti del §4.8 — con il caso di
+     /// test T19 — sarebbe irrealizzabile; lo stesso vale per il contingente
+     /// `EXTERNAL_CHANNEL` dell'assunzione AS-4. `reservedFor` entra quindi
+     /// nell'identità. Il vincolo resta un SOVRAINSIEME di quello del §3.6:
+     /// continua a vietare due quote ordinarie per la stessa cosa.
+     @@unique([eventId, scope, scopeId, role, reservedFor])
+     @@index([eventId, scope])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 14 — Couple (§4.10)
+// -----------------------------------------------------------------------------
+
+/// NON porta riferimenti alle due iscrizioni: sono le `Registration` a puntare
+/// alla coppia con `coupleId`, così il grafo resta aciclico (§3.6).
+/// Vincolo di servizio: esattamente due `Registration` con ruoli assegnati
+/// complementari. `dissolve` NON muove alcun consumo — le persone restano,
+/// cambia solo il legame (`05` §8).
+model Couple {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+     dissolvedAt DateTime?
+
+     registrations Registration[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 15 — Registration (§4.10)
+// -----------------------------------------------------------------------------
+
+/// Una iscrizione per persona per evento, con più biglietti collegati.
+/// `assignedRole` è CALCOLATO DAL SERVER (§5): il DTO `Update` non lo accetta,
+/// la riassegnazione passa dal servizio che rilascia i consumi del vecchio ruolo
+/// e impegna quelli del nuovo con le stesse verifiche di un acquisto.
+model Registration {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+     personUserId Int?
+     personUser   User? @relation("RegistrationPerson", fields: [personUserId], references: [id], onDelete: SetNull)
+
+     holderName    String
+     holderSurname String
+     holderEmail   String
+
+     /// Ciò che l'utente ha scelto.
+     declaredRole DeclaredDanceRole
+     /// Il ruolo effettivo, risolto alla conferma del pagamento. Mai nullo su
+     /// eventi con quote di ruolo (`05` §2.3, invariante I4).
+     assignedRole DanceRole?
+
+     channel RegistrationChannel @default(ONLINE_SALE)
+     status  RegistrationStatus  @default(TO_CONFIRM)
+
+     confirmedAt DateTime?
+     declinedAt  DateTime?
+
+     coupleId Int?
+     couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: SetNull)
+
+     isMinor        Boolean @default(false)
+     guardianUserId Int?
+     guardian       User?   @relation("RegistrationGuardian", fields: [guardianUserId], references: [id], onDelete: SetNull)
+
+     quotaConsumptions QuotaConsumption[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     /// Unico su `(eventId, personUserId)` QUANDO `personUserId` non è nullo:
+     /// in PostgreSQL un unique index tratta ogni NULL come distinto, quindi le
+     /// iscrizioni senza account non si ostacolano fra loro (§3.6).
+     @@unique([eventId, personUserId])
+     @@index([eventId, assignedRole])
+     @@index([eventId, status])
+     @@index([coupleId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 16 — QuotaConsumption (§4.9)
+// -----------------------------------------------------------------------------
+
+/// Il registro di ciò che ogni iscrizione occupa. È l'elemento che rende il
+/// RILASCIO ESATTO anziché ricostruito: si leggono queste righe, si decrementano
+/// esattamente quei contatori, si cancellano le righe (`05` §8).
+///
+/// La chiave unica `(capacityQuotaId, registrationId)` è ciò che rende l'impegno
+/// IDEMPOTENTE sulla doppia notifica del prestatore di pagamento (§4.8 nota 3).
+model QuotaConsumption {
+     id Int @id @default(autoincrement())
+
+     capacityQuotaId Int
+     capacityQuota   CapacityQuota @relation(fields: [capacityQuotaId], references: [id], onDelete: Cascade)
+
+     registrationId Int
+     registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+     quantity Int @default(1)
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@unique([capacityQuotaId, registrationId])
+     @@index([registrationId])
+}

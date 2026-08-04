@@ -1,0 +1,1 @@
+export type FieldResolvers = Record<string, (...args: any[]) => any>;

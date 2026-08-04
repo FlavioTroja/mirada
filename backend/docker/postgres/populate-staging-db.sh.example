@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# Variabili da sostituire
+USERNAME="your_username"
+REMOTE_HOST="38.242.142.219"
+
+# Scarico il dump giornaliero sulla mia macchina
+scp -P 1022 $USERNAME@$REMOTE_HOST:/home/manager/orch/staging-orch/staging-backup-daily/db.dump .
+
+# Restore dump on dev DB
+docker cp db.dump postgresql:/tmp/db.dump
+docker exec postgresql pg_restore --verbose --clean --no-acl --no-owner --host localhost --dbname mirada-backend --username user  /tmp/db.dump
+
+# Remove file
+rm -rf /tmp/db.dump
+rm -rf ./db.dump
