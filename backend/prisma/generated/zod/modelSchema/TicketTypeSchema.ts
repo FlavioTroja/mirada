@@ -10,6 +10,12 @@ import { TicketTypeSessionWithRelationsSchema, TicketTypeSessionPartialWithRelat
 import type { TicketTypeSessionWithRelations, TicketTypeSessionPartialWithRelations, TicketTypeSessionOptionalDefaultsWithRelations } from './TicketTypeSessionSchema'
 import { PriceTierWithRelationsSchema, PriceTierPartialWithRelationsSchema, PriceTierOptionalDefaultsWithRelationsSchema } from './PriceTierSchema'
 import type { PriceTierWithRelations, PriceTierPartialWithRelations, PriceTierOptionalDefaultsWithRelations } from './PriceTierSchema'
+import { OrderLineWithRelationsSchema, OrderLinePartialWithRelationsSchema, OrderLineOptionalDefaultsWithRelationsSchema } from './OrderLineSchema'
+import type { OrderLineWithRelations, OrderLinePartialWithRelations, OrderLineOptionalDefaultsWithRelations } from './OrderLineSchema'
+import { PassIssuanceWithRelationsSchema, PassIssuancePartialWithRelationsSchema, PassIssuanceOptionalDefaultsWithRelationsSchema } from './PassIssuanceSchema'
+import type { PassIssuanceWithRelations, PassIssuancePartialWithRelations, PassIssuanceOptionalDefaultsWithRelations } from './PassIssuanceSchema'
+import { TicketWithRelationsSchema, TicketPartialWithRelationsSchema, TicketOptionalDefaultsWithRelationsSchema } from './TicketSchema'
+import type { TicketWithRelations, TicketPartialWithRelations, TicketOptionalDefaultsWithRelations } from './TicketSchema'
 
 /////////////////////////////////////////
 // TICKET TYPE SCHEMA
@@ -92,6 +98,9 @@ export type TicketTypeRelations = {
   event: EventWithRelations;
   sessions: TicketTypeSessionWithRelations[];
   priceTiers: PriceTierWithRelations[];
+  orderLines: OrderLineWithRelations[];
+  passIssuances: PassIssuanceWithRelations[];
+  tickets: TicketWithRelations[];
 };
 
 export type TicketTypeWithRelations = Omit<z.infer<typeof TicketTypeSchema>, "description"> & {
@@ -102,6 +111,9 @@ export const TicketTypeWithRelationsSchema: z.ZodType<TicketTypeWithRelations> =
   event: z.lazy(() => EventWithRelationsSchema),
   sessions: z.lazy(() => TicketTypeSessionWithRelationsSchema).array(),
   priceTiers: z.lazy(() => PriceTierWithRelationsSchema).array(),
+  orderLines: z.lazy(() => OrderLineWithRelationsSchema).array(),
+  passIssuances: z.lazy(() => PassIssuanceWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -112,6 +124,9 @@ export type TicketTypeOptionalDefaultsRelations = {
   event: EventOptionalDefaultsWithRelations;
   sessions: TicketTypeSessionOptionalDefaultsWithRelations[];
   priceTiers: PriceTierOptionalDefaultsWithRelations[];
+  orderLines: OrderLineOptionalDefaultsWithRelations[];
+  passIssuances: PassIssuanceOptionalDefaultsWithRelations[];
+  tickets: TicketOptionalDefaultsWithRelations[];
 };
 
 export type TicketTypeOptionalDefaultsWithRelations = Omit<z.infer<typeof TicketTypeOptionalDefaultsSchema>, "description"> & {
@@ -122,6 +137,9 @@ export const TicketTypeOptionalDefaultsWithRelationsSchema: z.ZodType<TicketType
   event: z.lazy(() => EventOptionalDefaultsWithRelationsSchema),
   sessions: z.lazy(() => TicketTypeSessionOptionalDefaultsWithRelationsSchema).array(),
   priceTiers: z.lazy(() => PriceTierOptionalDefaultsWithRelationsSchema).array(),
+  orderLines: z.lazy(() => OrderLineOptionalDefaultsWithRelationsSchema).array(),
+  passIssuances: z.lazy(() => PassIssuanceOptionalDefaultsWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -132,6 +150,9 @@ export type TicketTypePartialRelations = {
   event?: EventPartialWithRelations;
   sessions?: TicketTypeSessionPartialWithRelations[];
   priceTiers?: PriceTierPartialWithRelations[];
+  orderLines?: OrderLinePartialWithRelations[];
+  passIssuances?: PassIssuancePartialWithRelations[];
+  tickets?: TicketPartialWithRelations[];
 };
 
 export type TicketTypePartialWithRelations = Omit<z.infer<typeof TicketTypePartialSchema>, "description"> & {
@@ -142,6 +163,9 @@ export const TicketTypePartialWithRelationsSchema: z.ZodType<TicketTypePartialWi
   event: z.lazy(() => EventPartialWithRelationsSchema),
   sessions: z.lazy(() => TicketTypeSessionPartialWithRelationsSchema).array(),
   priceTiers: z.lazy(() => PriceTierPartialWithRelationsSchema).array(),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
+  passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
 })).partial()
 
 export type TicketTypeOptionalDefaultsWithPartialRelations = Omit<z.infer<typeof TicketTypeOptionalDefaultsSchema>, "description"> & {
@@ -152,6 +176,9 @@ export const TicketTypeOptionalDefaultsWithPartialRelationsSchema: z.ZodType<Tic
   event: z.lazy(() => EventPartialWithRelationsSchema),
   sessions: z.lazy(() => TicketTypeSessionPartialWithRelationsSchema).array(),
   priceTiers: z.lazy(() => PriceTierPartialWithRelationsSchema).array(),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
+  passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
 }).partial())
 
 export type TicketTypeWithPartialRelations = Omit<z.infer<typeof TicketTypeSchema>, "description"> & {
@@ -162,6 +189,9 @@ export const TicketTypeWithPartialRelationsSchema: z.ZodType<TicketTypeWithParti
   event: z.lazy(() => EventPartialWithRelationsSchema),
   sessions: z.lazy(() => TicketTypeSessionPartialWithRelationsSchema).array(),
   priceTiers: z.lazy(() => PriceTierPartialWithRelationsSchema).array(),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
+  passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
 }).partial())
 
 export default TicketTypeSchema;

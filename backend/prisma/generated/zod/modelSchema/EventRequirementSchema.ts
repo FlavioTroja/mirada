@@ -6,6 +6,8 @@ import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptiona
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
 import { RequirementTypeWithRelationsSchema, RequirementTypePartialWithRelationsSchema, RequirementTypeOptionalDefaultsWithRelationsSchema } from './RequirementTypeSchema'
 import type { RequirementTypeWithRelations, RequirementTypePartialWithRelations, RequirementTypeOptionalDefaultsWithRelations } from './RequirementTypeSchema'
+import { RequirementOutcomeWithRelationsSchema, RequirementOutcomePartialWithRelationsSchema, RequirementOutcomeOptionalDefaultsWithRelationsSchema } from './RequirementOutcomeSchema'
+import type { RequirementOutcomeWithRelations, RequirementOutcomePartialWithRelations, RequirementOutcomeOptionalDefaultsWithRelations } from './RequirementOutcomeSchema'
 
 /////////////////////////////////////////
 // EVENT REQUIREMENT SCHEMA
@@ -69,6 +71,7 @@ export type EventRequirementOptionalDefaults = z.infer<typeof EventRequirementOp
 export type EventRequirementRelations = {
   event: EventWithRelations;
   requirementType: RequirementTypeWithRelations;
+  outcomes: RequirementOutcomeWithRelations[];
 };
 
 export type EventRequirementWithRelations = z.infer<typeof EventRequirementSchema> & EventRequirementRelations
@@ -76,6 +79,7 @@ export type EventRequirementWithRelations = z.infer<typeof EventRequirementSchem
 export const EventRequirementWithRelationsSchema: z.ZodType<EventRequirementWithRelations> = EventRequirementSchema.merge(z.object({
   event: z.lazy(() => EventWithRelationsSchema),
   requirementType: z.lazy(() => RequirementTypeWithRelationsSchema),
+  outcomes: z.lazy(() => RequirementOutcomeWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -85,6 +89,7 @@ export const EventRequirementWithRelationsSchema: z.ZodType<EventRequirementWith
 export type EventRequirementOptionalDefaultsRelations = {
   event: EventOptionalDefaultsWithRelations;
   requirementType: RequirementTypeOptionalDefaultsWithRelations;
+  outcomes: RequirementOutcomeOptionalDefaultsWithRelations[];
 };
 
 export type EventRequirementOptionalDefaultsWithRelations = z.infer<typeof EventRequirementOptionalDefaultsSchema> & EventRequirementOptionalDefaultsRelations
@@ -92,6 +97,7 @@ export type EventRequirementOptionalDefaultsWithRelations = z.infer<typeof Event
 export const EventRequirementOptionalDefaultsWithRelationsSchema: z.ZodType<EventRequirementOptionalDefaultsWithRelations> = EventRequirementOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventOptionalDefaultsWithRelationsSchema),
   requirementType: z.lazy(() => RequirementTypeOptionalDefaultsWithRelationsSchema),
+  outcomes: z.lazy(() => RequirementOutcomeOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -101,6 +107,7 @@ export const EventRequirementOptionalDefaultsWithRelationsSchema: z.ZodType<Even
 export type EventRequirementPartialRelations = {
   event?: EventPartialWithRelations;
   requirementType?: RequirementTypePartialWithRelations;
+  outcomes?: RequirementOutcomePartialWithRelations[];
 };
 
 export type EventRequirementPartialWithRelations = z.infer<typeof EventRequirementPartialSchema> & EventRequirementPartialRelations
@@ -108,6 +115,7 @@ export type EventRequirementPartialWithRelations = z.infer<typeof EventRequireme
 export const EventRequirementPartialWithRelationsSchema: z.ZodType<EventRequirementPartialWithRelations> = EventRequirementPartialSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   requirementType: z.lazy(() => RequirementTypePartialWithRelationsSchema),
+  outcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
 })).partial()
 
 export type EventRequirementOptionalDefaultsWithPartialRelations = z.infer<typeof EventRequirementOptionalDefaultsSchema> & EventRequirementPartialRelations
@@ -115,6 +123,7 @@ export type EventRequirementOptionalDefaultsWithPartialRelations = z.infer<typeo
 export const EventRequirementOptionalDefaultsWithPartialRelationsSchema: z.ZodType<EventRequirementOptionalDefaultsWithPartialRelations> = EventRequirementOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   requirementType: z.lazy(() => RequirementTypePartialWithRelationsSchema),
+  outcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
 }).partial())
 
 export type EventRequirementWithPartialRelations = z.infer<typeof EventRequirementSchema> & EventRequirementPartialRelations
@@ -122,6 +131,7 @@ export type EventRequirementWithPartialRelations = z.infer<typeof EventRequireme
 export const EventRequirementWithPartialRelationsSchema: z.ZodType<EventRequirementWithPartialRelations> = EventRequirementSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   requirementType: z.lazy(() => RequirementTypePartialWithRelationsSchema),
+  outcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
 }).partial())
 
 export default EventRequirementSchema;

@@ -23,6 +23,7 @@ import {
   check,
   checkCircle,
   close,
+  edit,
   eventSeat,
   handshake,
   heartBroken,
@@ -397,10 +398,14 @@ export class RegistrationDetailComponent implements OnInit {
     }
 
     if (this.canWrite()) {
+      // «Modifica», non «Salva»: `startEdit()` apre la modalità di modifica e non
+      // scrive nulla — il salvataggio vero è il pulsante nel footer della sezione.
+      // Un'azione etichettata «Salva» che non salva tradisce chi la preme.
+      // (keijo-fe-check, 4 agosto 2026, rilievo A3.)
       actions.push({
-        id: 'save',
-        icon: save,
-        label: 'Salva',
+        id: 'edit',
+        icon: edit,
+        label: 'Modifica',
         tooltip: 'Modifica i dati dell’iscrizione',
         run: () => this.startEdit(),
       });

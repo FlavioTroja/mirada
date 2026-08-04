@@ -41,6 +41,20 @@ export const ModelNameItalian: Record<Prisma.ModelName, string> = {
     QuotaConsumption: "consumo di quota",
     Registration: "iscrizione",
     Couple: "coppia",
+
+    // Mirada Tango — fase D1 (requisiti, biglietti, pass, check-in)
+    RequirementOutcome: "esito del requisito",
+    PassIssuance: "emissione di pass",
+    Ticket: "biglietto",
+    TicketTransfer: "trasferimento di biglietto",
+    CheckIn: "ingresso",
+
+    // Gusci del checkout, riempiti dalla fase D2 (§2 passi 18→22)
+    Purchase: "acquisto",
+    Order: "ordine",
+    OrderLine: "riga d'ordine",
+    Reservation: "prenotazione",
+    Payment: "pagamento",
 };
 
 export const italianModelName = (name: Prisma.ModelName): string => ModelNameItalian[name];

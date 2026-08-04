@@ -7,9 +7,8 @@ import { DanceRoleSchema, EventStatusSchema } from "@prisma-gen/zod";
  * ── `RB21`: ogni numero dichiara su quali dati è calcolato ────────────────────
  * Il cruscotto del brief chiede venduto per titolo, incasso netto, iscritti per
  * ruolo con sbilancio, coppie complete, servizi venduti, requisiti mancanti e
- * andamento. Nel perimetro attuale `Order`, `OrderLine`, `Payment`, `Ticket`,
- * `CheckIn` e `RequirementOutcome` **non esistono ancora** (§2, passi 17→27 non
- * costruiti): le voci che dipendono da loro **non sono inventate né azzerate in
+ * andamento. Nel perimetro attuale `Order`, `OrderLine` e `Payment`
+ * **non esistono ancora** (§2, passi 18→22, rinviati con Stripe): le voci che dipendono da loro **non sono inventate né azzerate in
  * silenzio**. Ogni sezione porta quindi `available`, l'elenco `basedOn` delle
  * entità su cui è davvero calcolata e, quando indisponibile, `requires` e
  * `reason`.
@@ -31,6 +30,10 @@ export const DashboardDataSourceSchema = z.enum([
     "EventService",
     "EventRequirement",
     "Session",
+    // Fase D1 — passi 17 e 23→26 del §2.
+    "Ticket",
+    "CheckIn",
+    "RequirementOutcome",
 ]);
 export type DashboardDataSource = z.infer<typeof DashboardDataSourceSchema>;
 
@@ -159,6 +162,54 @@ export const RegistrationsTrendSchema = availableSection({
         .array(),
 });
 
+/**
+ * Presenze — **un asse distinto dalle quote** (`RB19`). Le quote governano
+ * l'ammissione, questo contatore governa la sicurezza: sono due numeri che
+ * misurano cose diverse e che il cruscotto non deve mai sommare.
+ *
+ * `openConflicts` è la coda di `/check-in/conflicts`: doppi ingressi rilevati in
+ * sincronizzazione, **restituiti da risolvere e mai risolti in silenzio**
+ * (`RF-CHK-6`). Un cruscotto che li nascondesse mostrerebbe un contatore
+ * plausibile su un dato che nessuno ha ancora dirimito.
+ */
+export const AttendanceSchema = availableSection({
+    totalEntries: z.number().int(),
+    distinctTickets: z.number().int(),
+    openConflicts: z.number().int(),
+    bySession: z
+        .object({
+            sessionId: z.number().int(),
+            name: z.unknown(),
+            startAt: z.date(),
+            entries: z.number().int(),
+        })
+        .array(),
+});
+
+/**
+ * Requisiti mancanti — `RF-BKO-1`.
+ *
+ * «Mancante» è uno stato di `RequirementOutcome` per iscrizione
+ * (`TO_PROVIDE` · `UNDER_REVIEW` · `REJECTED` · `EXPIRED`), **oppure l'assenza
+ * dell'esito**: un requisito obbligatorio su cui nessuno ha dichiarato nulla
+ * manca esattamente come uno rifiutato.
+ *
+ * `RB12` — di ogni requisito si riporta **il nome e il conteggio**, mai il
+ * contenuto degli esiti.
+ */
+export const MissingRequirementsSchema = availableSection({
+    registrationsWithMissing: z.number().int(),
+    byRequirement: z
+        .object({
+            eventRequirementId: z.number().int(),
+            label: z.unknown(),
+            blocking: z.string(),
+            mandatory: z.boolean(),
+            missing: z.number().int(),
+        })
+        .array(),
+});
+
 export const EventDashboardSchema = z.object({
     eventId: z.number().int(),
     slug: z.string(),
@@ -183,10 +234,11 @@ export const EventDashboardSchema = z.object({
         requirements: RequirementsSchema,
         registrationsTrend: RegistrationsTrendSchema,
 
+        missingRequirements: MissingRequirementsSchema,
+        attendance: AttendanceSchema,
+
         soldByTicketType: UnavailableSectionSchema,
         netRevenue: UnavailableSectionSchema,
-        missingRequirements: UnavailableSectionSchema,
-        attendance: UnavailableSectionSchema,
     }),
 });
 export type EventDashboardDTO = z.infer<typeof EventDashboardSchema>;

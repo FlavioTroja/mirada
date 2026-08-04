@@ -149,11 +149,64 @@ body {
   border-color: rgba(var(--mirada-ivory), 0.14) !important;
 }
 
+/* Decima superficie con il bianco cablato: il pulsante dei filtri della barra
+   di ricerca (`background: #fff` + `text-gray-900`). Non era solo stonato —
+   l'icona ereditava l'avorio del tema e finiva **avorio su bianco**, circa
+   1,1:1: il pulsante appariva come un quadrato vuoto e la sua funzione era
+   invisibile. Qui rientra nella palette e l'icona torna leggibile. */
+keijo-search-bar div.aspect-square {
+  background: rgba(var(--mirada-ivory), 0.06) !important;
+  border: 1px solid rgba(var(--mirada-ivory), 0.18);
+  color: rgb(var(--mirada-ivory)) !important;
+}
+
 /* Campi di form: cursore e widget nativi coerenti con il tema scuro */
 input,
 textarea,
 select {
   color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
+   Superficie dei campi — ottava e nona sorgente di colore freddo cablato.
+
+   `color-scheme: dark` (sopra) serve ai widget nativi — calendario, barre di
+   scorrimento — ma lascia a Chrome il **fondo** del campo, che diventa un grigio
+   NEUTRO `#3b3b3b`: nessuna regola CSS lo imponeva, era il colore di sistema.
+   Su una superficie prugna calda stona per costruzione, perché è privo di tinta.
+
+   Il bordo arrivava da due sorgenti, entrambe fredde e non tematizzabili:
+     · il preflight di Tailwind — `border-color: #e5e7eb` su `*, ::before, ::after`
+     · `.border-input` di keijo-ui — `border: 1px solid #e2e8f0`
+   cioè un contorno quasi bianco attorno a ogni campo della pagina.
+
+   Qui i campi rientrano nella palette: fondo prugna sollevato, bordo avorio a
+   bassa opacità, e oro al focus — che è anche il solo segnale di messa a fuoco
+   visibile, dato che i componenti dichiarano `focus:outline-none`.
+   --------------------------------------------------------------------------- */
+.border-input,
+.border-input-error,
+input:not([type='checkbox']):not([type='radio']),
+textarea,
+select {
+  background-color: rgba(var(--mirada-ivory), 0.06) !important;
+  border-color: rgba(var(--mirada-ivory), 0.18) !important;
+}
+
+.border-input:focus,
+input:not([type='checkbox']):not([type='radio']):focus,
+textarea:focus,
+select:focus {
+  background-color: rgba(var(--mirada-ivory), 0.09) !important;
+  border-color: rgba(var(--mirada-gold), 0.6) !important;
+}
+
+/* Il trigger della select è un div, non un `input`: senza questo i menù a
+   tendina resterebbero a filo della card mentre gli altri campi sono sollevati,
+   e la riga di form apparirebbe disallineata. */
+.keijo-mat-select-trigger {
+  background: rgba(var(--mirada-ivory), 0.06) !important;
+  border-color: rgba(var(--mirada-ivory), 0.18) !important;
 }
 
 ::placeholder {
@@ -182,9 +235,26 @@ select {
   line-height: 1.5;
   color: rgba(var(--mirada-ivory), 0.72);
 }
+/* Messaggio d'errore di form.
+ *
+ * Il colore da solo non bastava: `--color-error` su superficie dà 8:1 nominali,
+ * ma a 12 px e peso 400 il testo chiaro su fondo scuro si assottiglia
+ * nell'antialiasing e in sala macchine risultava quasi nero sul prugna.
+ * Il rapporto passava e la leggibilità no.
+ *
+ * Un errore deve *sembrare* un errore: corpo e peso maggiori, e la superficie
+ * d'errore della palette con un bordo sul lato, così legge come un avviso e non
+ * come una postilla. */
 .mirada-error {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
   color: var(--color-error);
+  background: var(--color-error-light);
+  border-left: 3px solid var(--color-error);
+  border-radius: 0 4px 4px 0;
+  padding: 0.375rem 0.625rem;
+  margin: 0.25rem 0;
 }
 .mirada-divider {
   border-top: 1px solid rgba(var(--mirada-ivory), 0.12);

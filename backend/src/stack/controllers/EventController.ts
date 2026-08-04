@@ -10,6 +10,9 @@ import httpErrors from "http-errors";
 import { EventService } from "@services/EventService";
 import { EventDashboardService } from "@services/EventDashboardService";
 import { EventExportService } from "@services/EventExportService";
+import { CheckInService } from "@services/CheckInService";
+import { PassIssuanceService } from "@services/PassIssuanceService";
+import { PassIssuanceBulkDTO, PassIssuanceBulkSchema } from "@DTOs/pass_issuance/PassIssuanceCreateDTO";
 import { EventExportRequestDTO, EventExportRequestSchema } from "@DTOs/event/EventExportDTO";
 import { EventCreateDTO, EventCreateSchema } from "@DTOs/event/EventCreateDTO";
 import { EventUpdateDTO, EventUpdateSchema } from "@DTOs/event/EventUpdateDTO";
@@ -38,6 +41,8 @@ export class EventController {
         private readonly eventService: EventService,
         private readonly eventDashboardService: EventDashboardService,
         private readonly eventExportService: EventExportService,
+        private readonly checkInService: CheckInService,
+        private readonly passIssuanceService: PassIssuanceService,
     ) {}
 
     @POST("/create", {
@@ -314,5 +319,48 @@ export class EventController {
         reply: FastifyReply,
     ) {
         reply.status(200).send(await this.eventExportService.export(+req.user.id, +req.params.id, req.body));
+    }
+
+    // ─── Fase D1 — check-in ed emissione manuale (§3.7) ──────────────────────
+
+    @GET("/:id/checkin-manifest", {
+        schema: {
+            operationId: "getEventCheckinManifest",
+            summary: "Signed check-in manifest of an event",
+            description: "The downloadable list of the event in SIGNED form, plus the Ed25519 PUBLIC KEY, plus the sessions and the entry-blocking requirements (RF-CHK-2, RF-CHK-3). This is what the operator downloads before the event and keeps in IndexedDB: in the room there is no network, and QR verification must work anyway — without the key on the device the signature would only be verifiable online, which is precisely when it is not needed. RB12: every entry carries name, dance role, ticket type, included sessions and services — never an email, never requirement content, never diets. The permission triple is READ#CHECK_IN#ALL and not READ#EVENT#…: a DANCER holds READ#EVENT#ALL and would otherwise be able to download the full attendee list of any published event.",
+            params: exz.pathId,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.READ, PermissionResource.CHECK_IN, PermissionScope.ALL),
+        ],
+    })
+    async checkinManifest(
+        req: FastifyRequest<{ Params: { id: string } }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(await this.checkInService.manifest(+req.user.id, +req.params.id));
+    }
+
+    @POST("/:id/pass-issuances/bulk", {
+        schema: {
+            operationId: "issueEventPassesBulk",
+            summary: "Manual pass issuance",
+            description: "RB20, RF-TCK-14: the issuance is NEVER blocked by the quotas — the consumption is registered, a WARNING is returned when the room capacity is exceeded, and the issuance proceeds. RF-TCK-15: if the event uses role quotas the dance role is mandatory, otherwise the leader/follower balance shown to the organizer becomes false exactly where it matters. Passes issued in bulk without a name are BEARER passes: bearer = true, not transferable.",
+            params: exz.pathId,
+            body: PassIssuanceBulkSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.CREATE, PermissionResource.PASS_ISSUANCE, PermissionScope.ALL),
+        ],
+    })
+    async issuePassesBulk(
+        req: FastifyRequest<{ Params: { id: string }, Body: PassIssuanceBulkDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(await this.passIssuanceService.issueBulk(+req.user.id, +req.params.id, req.body));
     }
 }

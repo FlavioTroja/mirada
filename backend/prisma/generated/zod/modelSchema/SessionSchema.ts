@@ -4,6 +4,8 @@ import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptiona
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
 import { TicketTypeSessionWithRelationsSchema, TicketTypeSessionPartialWithRelationsSchema, TicketTypeSessionOptionalDefaultsWithRelationsSchema } from './TicketTypeSessionSchema'
 import type { TicketTypeSessionWithRelations, TicketTypeSessionPartialWithRelations, TicketTypeSessionOptionalDefaultsWithRelations } from './TicketTypeSessionSchema'
+import { CheckInWithRelationsSchema, CheckInPartialWithRelationsSchema, CheckInOptionalDefaultsWithRelationsSchema } from './CheckInSchema'
+import type { CheckInWithRelations, CheckInPartialWithRelations, CheckInOptionalDefaultsWithRelations } from './CheckInSchema'
 
 /////////////////////////////////////////
 // SESSION SCHEMA
@@ -79,6 +81,7 @@ export type SessionOptionalDefaults = z.infer<typeof SessionOptionalDefaultsSche
 export type SessionRelations = {
   event: EventWithRelations;
   ticketTypeSessions: TicketTypeSessionWithRelations[];
+  checkIns: CheckInWithRelations[];
 };
 
 export type SessionWithRelations = z.infer<typeof SessionSchema> & SessionRelations
@@ -86,6 +89,7 @@ export type SessionWithRelations = z.infer<typeof SessionSchema> & SessionRelati
 export const SessionWithRelationsSchema: z.ZodType<SessionWithRelations> = SessionSchema.merge(z.object({
   event: z.lazy(() => EventWithRelationsSchema),
   ticketTypeSessions: z.lazy(() => TicketTypeSessionWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -95,6 +99,7 @@ export const SessionWithRelationsSchema: z.ZodType<SessionWithRelations> = Sessi
 export type SessionOptionalDefaultsRelations = {
   event: EventOptionalDefaultsWithRelations;
   ticketTypeSessions: TicketTypeSessionOptionalDefaultsWithRelations[];
+  checkIns: CheckInOptionalDefaultsWithRelations[];
 };
 
 export type SessionOptionalDefaultsWithRelations = z.infer<typeof SessionOptionalDefaultsSchema> & SessionOptionalDefaultsRelations
@@ -102,6 +107,7 @@ export type SessionOptionalDefaultsWithRelations = z.infer<typeof SessionOptiona
 export const SessionOptionalDefaultsWithRelationsSchema: z.ZodType<SessionOptionalDefaultsWithRelations> = SessionOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventOptionalDefaultsWithRelationsSchema),
   ticketTypeSessions: z.lazy(() => TicketTypeSessionOptionalDefaultsWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -111,6 +117,7 @@ export const SessionOptionalDefaultsWithRelationsSchema: z.ZodType<SessionOption
 export type SessionPartialRelations = {
   event?: EventPartialWithRelations;
   ticketTypeSessions?: TicketTypeSessionPartialWithRelations[];
+  checkIns?: CheckInPartialWithRelations[];
 };
 
 export type SessionPartialWithRelations = z.infer<typeof SessionPartialSchema> & SessionPartialRelations
@@ -118,6 +125,7 @@ export type SessionPartialWithRelations = z.infer<typeof SessionPartialSchema> &
 export const SessionPartialWithRelationsSchema: z.ZodType<SessionPartialWithRelations> = SessionPartialSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   ticketTypeSessions: z.lazy(() => TicketTypeSessionPartialWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
 })).partial()
 
 export type SessionOptionalDefaultsWithPartialRelations = z.infer<typeof SessionOptionalDefaultsSchema> & SessionPartialRelations
@@ -125,6 +133,7 @@ export type SessionOptionalDefaultsWithPartialRelations = z.infer<typeof Session
 export const SessionOptionalDefaultsWithPartialRelationsSchema: z.ZodType<SessionOptionalDefaultsWithPartialRelations> = SessionOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   ticketTypeSessions: z.lazy(() => TicketTypeSessionPartialWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
 }).partial())
 
 export type SessionWithPartialRelations = z.infer<typeof SessionSchema> & SessionPartialRelations
@@ -132,6 +141,7 @@ export type SessionWithPartialRelations = z.infer<typeof SessionSchema> & Sessio
 export const SessionWithPartialRelationsSchema: z.ZodType<SessionWithPartialRelations> = SessionSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   ticketTypeSessions: z.lazy(() => TicketTypeSessionPartialWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
 }).partial())
 
 export default SessionSchema;

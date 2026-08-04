@@ -43,6 +43,37 @@ export const RegistrationExportColumnSchema = z.enum([
 ]);
 export type RegistrationExportColumn = z.infer<typeof RegistrationExportColumnSchema>;
 
+/**
+ * Colonne esportabili per `ATTENDANCE`, elenco chiuso.
+ *
+ * Le presenze sono righe di `CheckIn` sulla **coppia biglietto–sessione**
+ * (`RB7`). Il tracciato porta la sessione, il biglietto, il nominativo, il
+ * **ruolo di ballo**, l'ora e la **postazione** — e la traccia di revoca e
+ * conflitto, perché un'esportazione che tacesse un doppio ingresso non ancora
+ * dirimito mostrerebbe una presenza che nessuno ha confermato (`RF-CHK-6`).
+ *
+ * `RB12` — **nessun contatto**, nessun dato dei requisiti, nessuna dieta:
+ * l'elenco è chiuso, e ciò che non compare qui non esce.
+ */
+export const AttendanceExportColumnSchema = z.enum([
+    "checkInId",
+    "sessionId",
+    "sessionName",
+    "ticketId",
+    "ticketCode",
+    "holderName",
+    "holderSurname",
+    "role",
+    "kind",
+    "scannedAt",
+    "deviceId",
+    "offline",
+    "syncedAt",
+    "revokedAt",
+    "conflictWithId",
+]);
+export type AttendanceExportColumn = z.infer<typeof AttendanceExportColumnSchema>;
+
 export const EventExportRequestSchema = z.object({
     kind: ExportKindSchema,
     /** Vuoto o assente = tutte le colonne disponibili per il `kind` richiesto. */

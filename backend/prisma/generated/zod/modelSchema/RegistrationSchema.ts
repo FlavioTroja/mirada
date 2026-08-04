@@ -11,6 +11,12 @@ import { CoupleWithRelationsSchema, CouplePartialWithRelationsSchema, CoupleOpti
 import type { CoupleWithRelations, CouplePartialWithRelations, CoupleOptionalDefaultsWithRelations } from './CoupleSchema'
 import { QuotaConsumptionWithRelationsSchema, QuotaConsumptionPartialWithRelationsSchema, QuotaConsumptionOptionalDefaultsWithRelationsSchema } from './QuotaConsumptionSchema'
 import type { QuotaConsumptionWithRelations, QuotaConsumptionPartialWithRelations, QuotaConsumptionOptionalDefaultsWithRelations } from './QuotaConsumptionSchema'
+import { RequirementOutcomeWithRelationsSchema, RequirementOutcomePartialWithRelationsSchema, RequirementOutcomeOptionalDefaultsWithRelationsSchema } from './RequirementOutcomeSchema'
+import type { RequirementOutcomeWithRelations, RequirementOutcomePartialWithRelations, RequirementOutcomeOptionalDefaultsWithRelations } from './RequirementOutcomeSchema'
+import { TicketWithRelationsSchema, TicketPartialWithRelationsSchema, TicketOptionalDefaultsWithRelationsSchema } from './TicketSchema'
+import type { TicketWithRelations, TicketPartialWithRelations, TicketOptionalDefaultsWithRelations } from './TicketSchema'
+import { CheckInWithRelationsSchema, CheckInPartialWithRelationsSchema, CheckInOptionalDefaultsWithRelationsSchema } from './CheckInSchema'
+import type { CheckInWithRelations, CheckInPartialWithRelations, CheckInOptionalDefaultsWithRelations } from './CheckInSchema'
 
 /////////////////////////////////////////
 // REGISTRATION SCHEMA
@@ -86,6 +92,9 @@ export type RegistrationRelations = {
   couple?: CoupleWithRelations | null;
   guardian?: UserWithRelations | null;
   quotaConsumptions: QuotaConsumptionWithRelations[];
+  requirementOutcomes: RequirementOutcomeWithRelations[];
+  tickets: TicketWithRelations[];
+  checkIns: CheckInWithRelations[];
 };
 
 export type RegistrationWithRelations = z.infer<typeof RegistrationSchema> & RegistrationRelations
@@ -96,6 +105,9 @@ export const RegistrationWithRelationsSchema: z.ZodType<RegistrationWithRelation
   couple: z.lazy(() => CoupleWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionWithRelationsSchema).array(),
+  requirementOutcomes: z.lazy(() => RequirementOutcomeWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -108,6 +120,9 @@ export type RegistrationOptionalDefaultsRelations = {
   couple?: CoupleOptionalDefaultsWithRelations | null;
   guardian?: UserOptionalDefaultsWithRelations | null;
   quotaConsumptions: QuotaConsumptionOptionalDefaultsWithRelations[];
+  requirementOutcomes: RequirementOutcomeOptionalDefaultsWithRelations[];
+  tickets: TicketOptionalDefaultsWithRelations[];
+  checkIns: CheckInOptionalDefaultsWithRelations[];
 };
 
 export type RegistrationOptionalDefaultsWithRelations = z.infer<typeof RegistrationOptionalDefaultsSchema> & RegistrationOptionalDefaultsRelations
@@ -118,6 +133,9 @@ export const RegistrationOptionalDefaultsWithRelationsSchema: z.ZodType<Registra
   couple: z.lazy(() => CoupleOptionalDefaultsWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserOptionalDefaultsWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionOptionalDefaultsWithRelationsSchema).array(),
+  requirementOutcomes: z.lazy(() => RequirementOutcomeOptionalDefaultsWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -130,6 +148,9 @@ export type RegistrationPartialRelations = {
   couple?: CouplePartialWithRelations | null;
   guardian?: UserPartialWithRelations | null;
   quotaConsumptions?: QuotaConsumptionPartialWithRelations[];
+  requirementOutcomes?: RequirementOutcomePartialWithRelations[];
+  tickets?: TicketPartialWithRelations[];
+  checkIns?: CheckInPartialWithRelations[];
 };
 
 export type RegistrationPartialWithRelations = z.infer<typeof RegistrationPartialSchema> & RegistrationPartialRelations
@@ -140,6 +161,9 @@ export const RegistrationPartialWithRelationsSchema: z.ZodType<RegistrationParti
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionPartialWithRelationsSchema).array(),
+  requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
 })).partial()
 
 export type RegistrationOptionalDefaultsWithPartialRelations = z.infer<typeof RegistrationOptionalDefaultsSchema> & RegistrationPartialRelations
@@ -150,6 +174,9 @@ export const RegistrationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<R
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionPartialWithRelationsSchema).array(),
+  requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
 }).partial())
 
 export type RegistrationWithPartialRelations = z.infer<typeof RegistrationSchema> & RegistrationPartialRelations
@@ -160,6 +187,9 @@ export const RegistrationWithPartialRelationsSchema: z.ZodType<RegistrationWithP
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionPartialWithRelationsSchema).array(),
+  requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
+  tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
+  checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
 }).partial())
 
 export default RegistrationSchema;

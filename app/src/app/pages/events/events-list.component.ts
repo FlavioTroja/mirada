@@ -25,7 +25,6 @@ import {
   cancel as cancelIconShape,
   celebration,
   copyAll,
-  edit,
   eventSeat,
   iconDelete,
   lock,
@@ -178,13 +177,15 @@ interface LifecycleAction {
                       (action)="cancel(ev)"
                     />
                   }
+                  <!--
+                    Qui c'era anche un pulsante «Modifica i dati base» (warning)
+                    collegato allo stesso open(ev) del pulsante accent: due
+                    etichette e due colori per un unico comportamento. La scheda
+                    dell'evento è già un form editabile, quindi non esiste una
+                    «modifica» distinta dall'apertura da offrire.
+                    (keijo-fe-check, 4 agosto 2026, rilievo A4.)
+                  -->
                   @if (canWrite()) {
-                    <keijo-button
-                      variant="warning"
-                      [icon]="editIcon"
-                      tooltip="Modifica i dati base"
-                      (action)="open(ev)"
-                    />
                     <keijo-button
                       variant="default"
                       [icon]="duplicateIcon"
@@ -278,7 +279,6 @@ export class EventsListComponent implements OnInit {
   readonly seatIcon = eventSeat;
   readonly balanceIcon = scale;
   readonly viewIcon = visibility;
-  readonly editIcon = edit;
   readonly deleteIcon = iconDelete;
   readonly duplicateIcon = copyAll;
   readonly cancelIcon = cancelIconShape;

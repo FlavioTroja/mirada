@@ -17,6 +17,9 @@ public/contents/
 # Esportazioni di back-office generate a runtime (POST /events/:id/exports, §3.7)
 public/exports/
 
+# Conferme d'ordine dei biglietti generate a runtime (GET /tickets/:id/pdf, §3.7)
+public/tickets/
+
 # Environment files
 .env
 .env.test

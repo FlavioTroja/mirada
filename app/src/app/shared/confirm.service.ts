@@ -16,10 +16,16 @@ export interface ConfirmOptions {
 }
 
 /**
- * Conferma modale. Usa `ModalService` di keijo-ui, mai `MatDialog`.
+ * Conferma modale, costruita sul `ModalService` di keijo-ui.
  *
  * Ordine dei pulsanti del footer: **primo = annulla (a sinistra), ultimo =
  * conferma (a destra)**, come prescritto dalla libreria.
+ *
+ * Nota: il testo di questo commento citava per contrasto il servizio modale di
+ * Angular Material, e `keijo-fe check-compliance` lo segnalava come violazione
+ * di `KEIJO-NO-ANGULAR-MATERIAL` — la regola cerca il nome della classe e lo
+ * trovava dentro una frase che ne vietava l'uso. Il nome è stato tolto: questo
+ * progetto non ha alcuna dipendenza da Angular Material.
  */
 @Injectable({ providedIn: 'root' })
 export class ConfirmService {

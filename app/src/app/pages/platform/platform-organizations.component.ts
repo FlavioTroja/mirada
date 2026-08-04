@@ -359,7 +359,11 @@ export class PlatformOrganizationsComponent implements OnInit {
   }
 
   open(org: Organization): void {
-    void this.store.loadOne(org.id).then(() => this.router.navigateByUrl('/organization'));
+    // La riga scelta viaggia nell'URL. Il solo `loadOne` non bastava: l'`ngOnInit`
+    // della scheda organizzazione ricaricava `items()[0]` e sovrascriveva la
+    // selezione, così si apriva sempre la prima organizzazione dell'elenco.
+    // (keijo-fe-check, 4 agosto 2026, rilievo A2.)
+    void this.router.navigate(['/organization'], { queryParams: { orgId: org.id } });
   }
 
   startCreate(): void {

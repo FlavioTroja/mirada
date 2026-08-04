@@ -5,6 +5,8 @@ import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptiona
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
 import { ServiceTypeWithRelationsSchema, ServiceTypePartialWithRelationsSchema, ServiceTypeOptionalDefaultsWithRelationsSchema } from './ServiceTypeSchema'
 import type { ServiceTypeWithRelations, ServiceTypePartialWithRelations, ServiceTypeOptionalDefaultsWithRelations } from './ServiceTypeSchema'
+import { OrderLineWithRelationsSchema, OrderLinePartialWithRelationsSchema, OrderLineOptionalDefaultsWithRelationsSchema } from './OrderLineSchema'
+import type { OrderLineWithRelations, OrderLinePartialWithRelations, OrderLineOptionalDefaultsWithRelations } from './OrderLineSchema'
 
 /////////////////////////////////////////
 // EVENT SERVICE SCHEMA
@@ -80,6 +82,7 @@ export type EventServiceOptionalDefaults = z.infer<typeof EventServiceOptionalDe
 export type EventServiceRelations = {
   event: EventWithRelations;
   serviceType: ServiceTypeWithRelations;
+  orderLines: OrderLineWithRelations[];
 };
 
 export type EventServiceWithRelations = Omit<z.infer<typeof EventServiceSchema>, "description"> & {
@@ -89,6 +92,7 @@ export type EventServiceWithRelations = Omit<z.infer<typeof EventServiceSchema>,
 export const EventServiceWithRelationsSchema: z.ZodType<EventServiceWithRelations> = EventServiceSchema.merge(z.object({
   event: z.lazy(() => EventWithRelationsSchema),
   serviceType: z.lazy(() => ServiceTypeWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLineWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -98,6 +102,7 @@ export const EventServiceWithRelationsSchema: z.ZodType<EventServiceWithRelation
 export type EventServiceOptionalDefaultsRelations = {
   event: EventOptionalDefaultsWithRelations;
   serviceType: ServiceTypeOptionalDefaultsWithRelations;
+  orderLines: OrderLineOptionalDefaultsWithRelations[];
 };
 
 export type EventServiceOptionalDefaultsWithRelations = Omit<z.infer<typeof EventServiceOptionalDefaultsSchema>, "description"> & {
@@ -107,6 +112,7 @@ export type EventServiceOptionalDefaultsWithRelations = Omit<z.infer<typeof Even
 export const EventServiceOptionalDefaultsWithRelationsSchema: z.ZodType<EventServiceOptionalDefaultsWithRelations> = EventServiceOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventOptionalDefaultsWithRelationsSchema),
   serviceType: z.lazy(() => ServiceTypeOptionalDefaultsWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLineOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -116,6 +122,7 @@ export const EventServiceOptionalDefaultsWithRelationsSchema: z.ZodType<EventSer
 export type EventServicePartialRelations = {
   event?: EventPartialWithRelations;
   serviceType?: ServiceTypePartialWithRelations;
+  orderLines?: OrderLinePartialWithRelations[];
 };
 
 export type EventServicePartialWithRelations = Omit<z.infer<typeof EventServicePartialSchema>, "description"> & {
@@ -125,6 +132,7 @@ export type EventServicePartialWithRelations = Omit<z.infer<typeof EventServiceP
 export const EventServicePartialWithRelationsSchema: z.ZodType<EventServicePartialWithRelations> = EventServicePartialSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   serviceType: z.lazy(() => ServiceTypePartialWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
 })).partial()
 
 export type EventServiceOptionalDefaultsWithPartialRelations = Omit<z.infer<typeof EventServiceOptionalDefaultsSchema>, "description"> & {
@@ -134,6 +142,7 @@ export type EventServiceOptionalDefaultsWithPartialRelations = Omit<z.infer<type
 export const EventServiceOptionalDefaultsWithPartialRelationsSchema: z.ZodType<EventServiceOptionalDefaultsWithPartialRelations> = EventServiceOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   serviceType: z.lazy(() => ServiceTypePartialWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
 }).partial())
 
 export type EventServiceWithPartialRelations = Omit<z.infer<typeof EventServiceSchema>, "description"> & {
@@ -143,6 +152,7 @@ export type EventServiceWithPartialRelations = Omit<z.infer<typeof EventServiceS
 export const EventServiceWithPartialRelationsSchema: z.ZodType<EventServiceWithPartialRelations> = EventServiceSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
   serviceType: z.lazy(() => ServiceTypePartialWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
 }).partial())
 
 export default EventServiceSchema;

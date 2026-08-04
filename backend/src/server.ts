@@ -49,6 +49,11 @@ import { CapacityQuotaController } from "@controllers/CapacityQuotaController";
 import { QuotaConsumptionController } from "@controllers/QuotaConsumptionController";
 import { RegistrationController } from "@controllers/RegistrationController";
 import { CoupleController } from "@controllers/CoupleController";
+import { RequirementOutcomeController } from "@controllers/RequirementOutcomeController";
+import { TicketController } from "@controllers/TicketController";
+import { TicketTransferController } from "@controllers/TicketTransferController";
+import { PassIssuanceController } from "@controllers/PassIssuanceController";
+import { CheckInController } from "@controllers/CheckInController";
 
 export class APIServer {
     private readonly server: FastifyApplication;
@@ -316,6 +321,12 @@ export class APIServer {
                 QuotaConsumptionController,
                 RegistrationController,
                 CoupleController,
+                // --- Mirada Tango, fase D1 ---
+                RequirementOutcomeController,
+                TicketController,
+                TicketTransferController,
+                PassIssuanceController,
+                CheckInController,
             ].sort((curr, next) => curr.name < next.name ? -1 : 1 ),
             prefix: "/api"
         });

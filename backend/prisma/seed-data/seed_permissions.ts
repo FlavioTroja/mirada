@@ -58,7 +58,7 @@ const READ_ONLY = [PermissionAction.READ];
  */
 const CREATE_READ = [PermissionAction.CREATE, PermissionAction.READ];
 
-/** Matrice §3.8 — entità delle fasi A (passi 1→6), B (7→12) e C (13→16) del §2. */
+/** Matrice §3.8 — entità delle fasi A (passi 1→6), B (7→12), C (13→16) e D1 (17, 23→26) del §2. */
 const MATRIX: ResourceMatrix[] = [
     {
         // | ORGANIZATION | ∀ | READ/UPDATE#OWN | READ#OWN | READ#OWN | – |
@@ -293,6 +293,80 @@ const MATRIX: ResourceMatrix[] = [
             own(RoleName.OWNER, ALL_ACTIONS),
             own(RoleName.EVENT_MANAGER, ALL_ACTIONS),
             own(RoleName.DANCER, READ_ONLY),
+        ],
+    },
+
+    // ─── Fase D1 — requisiti, biglietti, pass e check-in (passi 17, 23→26) ───
+    {
+        // | REQUIREMENT_OUTCOME | ∀ | ∀#OWN | ∀#OWN | READ#OWN | CREATE/READ/UPDATE#OWN |
+        // Il DANCER dichiara e corregge il proprio esito, non lo cancella: una
+        // dichiarazione ritirata in silenzio è una dichiarazione mai data.
+        resource: PermissionResource.REQUIREMENT_OUTCOME,
+        grants: [
+            own(RoleName.OWNER, ALL_ACTIONS),
+            own(RoleName.EVENT_MANAGER, ALL_ACTIONS),
+            own(RoleName.CHECKIN_OPERATOR, READ_ONLY),
+            own(RoleName.DANCER, [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE]),
+        ],
+    },
+    {
+        // | TICKET | ∀ | READ/UPDATE#OWN | READ/UPDATE#OWN | READ#OWN | READ/UPDATE#OWN |
+        //
+        // Nessun ruolo dell'interfaccia ha CREATE né DELETE, ed è coerente: i
+        // biglietti nascono da una riga d'ordine pagata (fase D2) o da
+        // un'emissione manuale di pass, mai da una creazione a mano. Le rotte del
+        // dialetto restano dichiarate e sono di fatto riservate a GOD.
+        //
+        // `UPDATE` è anche la terna di `POST /tickets/:id/transfer`: il
+        // trasferimento È un aggiornamento del titolare, e la riga di
+        // `TicketTransfer` ne è lo storico. Vedi la nota nel controller.
+        resource: PermissionResource.TICKET,
+        grants: [
+            own(RoleName.OWNER, [PermissionAction.READ, PermissionAction.UPDATE]),
+            own(RoleName.EVENT_MANAGER, [PermissionAction.READ, PermissionAction.UPDATE]),
+            own(RoleName.CHECKIN_OPERATOR, READ_ONLY),
+            own(RoleName.DANCER, [PermissionAction.READ, PermissionAction.UPDATE]),
+        ],
+    },
+    {
+        // | TICKET_TRANSFER | ∀ | READ#OWN | READ#OWN | – | CREATE/READ#OWN |
+        // SOLA LETTURA via API (§3.4): le righe nascono solo dentro la
+        // transazione di `POST /tickets/:id/transfer`. La cella `CREATE` del
+        // DANCER è seminata perché la matrice la dichiara, ma nessuna rotta
+        // dichiara quella terna: uno storico che si può scrivere da fuori non è
+        // uno storico.
+        resource: PermissionResource.TICKET_TRANSFER,
+        grants: [
+            own(RoleName.OWNER, READ_ONLY),
+            own(RoleName.EVENT_MANAGER, READ_ONLY),
+            own(RoleName.DANCER, [PermissionAction.CREATE, PermissionAction.READ]),
+        ],
+    },
+    {
+        // | PASS_ISSUANCE | ∀ | ∀#OWN | ∀#OWN | – | – |
+        // Il CHECKIN_OPERATOR non emette pass: emettere è un atto commerciale,
+        // scansionare è un atto di porta, e il volontario fa il secondo.
+        resource: PermissionResource.PASS_ISSUANCE,
+        grants: [
+            own(RoleName.OWNER, ALL_ACTIONS),
+            own(RoleName.EVENT_MANAGER, ALL_ACTIONS),
+        ],
+    },
+    {
+        // | CHECK_IN | ∀ | ∀#OWN | ∀#OWN | CREATE/READ/UPDATE#OWN | – |
+        // Il DANCER non ha alcun accesso: le presenze in sala non sono un dato
+        // del partecipante. `READ#CHECK_IN#ALL` è anche la terna del manifest
+        // firmato, ed è ciò che impedisce a un DANCER — che ha `READ#EVENT#ALL` —
+        // di scaricare la lista degli iscritti di un evento qualunque.
+        resource: PermissionResource.CHECK_IN,
+        grants: [
+            own(RoleName.OWNER, ALL_ACTIONS),
+            own(RoleName.EVENT_MANAGER, ALL_ACTIONS),
+            own(RoleName.CHECKIN_OPERATOR, [
+                PermissionAction.CREATE,
+                PermissionAction.READ,
+                PermissionAction.UPDATE,
+            ]),
         ],
     },
 ];

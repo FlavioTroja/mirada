@@ -250,8 +250,11 @@ export class OrganizationFiscalComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.headerTitle.set('Dichiarazione');
     await this.organizations.replaceQuery({});
-    const first = this.organizations.items()[0];
-    if (first) await this.organizations.loadOne(first.id);
+    // Conserva la selezione già attiva: ricaricare incondizionatamente
+    // `items()[0]` la sovrascriveva a ogni navigazione fra le schede
+    // dell'organizzazione. (keijo-fe-check, 4 agosto 2026, rilievo A2.)
+    const target = this.organizations.current()?.id ?? this.organizations.items()[0]?.id;
+    if (target) await this.organizations.loadOne(target);
 
     const orgId = this.organizationId();
     await Promise.all([

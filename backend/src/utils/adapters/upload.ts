@@ -21,6 +21,12 @@ export async function uploadFile(data: MultipartFile, urlPath: string, filePath:
     const buffer = await data.toBuffer();
 
     try {
+        // La cartella va creata: `writeFile` non la crea, e su una macchina pulita
+        // `public/images/` e `public/pdf/` non esistono — il primo caricamento
+        // falliva con un 500 opaco (`ENOENT: open 'public/images/…'`). Difetto di
+        // fondazione del template, da correggere anche a monte.
+        await fs.mkdir(`public/${filePath}`, { recursive: true });
+
         await fs.writeFile(`public/${filePath}/${filename}`, buffer, {
             mode: mode ?? 0o644, // Set file permissions by default to read/write for owner, and read for group and others
         });

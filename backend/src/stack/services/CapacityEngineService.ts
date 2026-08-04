@@ -59,6 +59,24 @@ export type CommitOutcome = {
     alreadyCommitted: number[];
 };
 
+/**
+ * Superamento di una quota registrato **senza rifiutare** — `RB20`. Nomina la
+ * quota, il suo limite e di quanto è stata superata: l'organizzatore deve vedere
+ * *di quanto* ha ecceduto e su cosa, non un generico «attenzione».
+ */
+export type CapacityWarning = {
+    quotaId: number;
+    scope: QuotaScope;
+    scopeId: number | null;
+    scopeLabel: string;
+    role: DanceRole | null;
+    limit: number;
+    consumed: number;
+    exceededBy: number;
+};
+
+export type UnblockedCommitOutcome = CommitOutcome & { warnings: CapacityWarning[] };
+
 export type ReleaseOutcome = {
     registrationIds: number[];
     /** Quote effettivamente decrementate, in ordine di id crescente. */
@@ -693,6 +711,143 @@ export class CapacityEngineService {
         const outcome = await getPrismaClient().$transaction(run, CapacityEngineService.TRANSACTION_OPTIONS);
         await this.signalAvailabilityChange(registration.eventId);
         return outcome;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Impegno NON bloccante — emissione manuale di pass (`RB20`, `RF-TCK-14`)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Registra il consumo **senza mai rifiutare**, e restituisce gli avvisi.
+     *
+     * È l'unica strada dell'emissione manuale di pass, e la differenza con
+     * `commit` non è una scorciatoia: è la regola `RB20`. *L'emissione manuale non
+     * è mai bloccata dalle quote: si registra il consumo, si restituisce un avviso
+     * se si supera la capienza della sala, e si procede.* La responsabilità della
+     * sala è dell'organizzatore, che sta emettendo un accredito conoscendo la
+     * propria porta; un blocco qui trasformerebbe uno strumento di servizio in un
+     * ostacolo la sera dell'evento.
+     *
+     * Ciò che **non** cambia rispetto a `commit`:
+     *  - le quote applicabili sono le stesse, risolte con lo stesso algoritmo;
+     *  - i `QuotaConsumption` sono scritti comunque, perché il **rilascio deve
+     *    restare esatto** anche per un pass revocato;
+     *  - le quote sono toccate in **ordine di id crescente**, che è la difesa
+     *    contro i deadlock e non dipende dal fatto che l'operazione blocchi o no.
+     *
+     * Ciò che cambia: nessun cancello di tolleranza, nessuna verifica preliminare
+     * di saturazione, e l'incremento è **incondizionato**. Il superamento diventa
+     * un avviso che nomina la quota, il suo limite e di quanto è stata superata.
+     */
+    public async commitWithoutBlocking(
+        eventId: number,
+        items: CommitItem[],
+        tx?: Prisma.TransactionClient,
+    ): Promise<UnblockedCommitOutcome> {
+        if (tx) {
+            return this.commitWithoutBlockingInTransaction(eventId, items, tx);
+        }
+
+        const outcome = await getPrismaClient().$transaction(
+            prisma => this.commitWithoutBlockingInTransaction(eventId, items, prisma),
+            CapacityEngineService.TRANSACTION_OPTIONS,
+        );
+
+        await this.signalAvailabilityChange(eventId);
+        return outcome;
+    }
+
+    private async commitWithoutBlockingInTransaction(
+        eventId: number,
+        items: CommitItem[],
+        tx: Prisma.TransactionClient,
+    ): Promise<UnblockedCommitOutcome> {
+        if (!items.length) {
+            return { eventId, committed: [], alreadyCommitted: [], warnings: [] };
+        }
+
+        const registrationIds = items.map(item => item.registrationId);
+        const existing = await this.quotaConsumptionRepository.findByRegistrations(registrationIds, tx);
+        const alreadyCommitted = new Set(existing.map(row => row.registrationId));
+        const pendingItems = items.filter(item => !alreadyCommitted.has(item.registrationId));
+
+        if (!pendingItems.length) {
+            Log.info(
+                `[CapacityEngine Service]: unblocked commit on event (id ${eventId}) is a no-op — `
+                + `all ${items.length} registration(s) were already committed`,
+            );
+            return { eventId, committed: [], alreadyCommitted: [...alreadyCommitted], warnings: [] };
+        }
+
+        const quotas = await this.capacityQuotaRepository.findByEvent(eventId, tx);
+        const resolved = await this.resolveItems(eventId, pendingItems, quotas, tx);
+        const requests = this.aggregate(resolved);
+
+        const warnings: CapacityWarning[] = [];
+
+        for (const { quota, quantity } of requests) {
+            await this.capacityQuotaRepository.incrementUnconditionally(quota.id, quantity, tx);
+
+            const projected = quota.consumed + quantity;
+            const ceiling = quota.limit + quota.overbookAllowance;
+            if (quota.limiting && projected > ceiling) {
+                const label = await this.describeQuota(quota, tx);
+                warnings.push({
+                    quotaId: quota.id,
+                    scope: quota.scope,
+                    scopeId: quota.scopeId,
+                    scopeLabel: label,
+                    role: quota.role,
+                    limit: quota.limit,
+                    consumed: projected,
+                    exceededBy: projected - ceiling,
+                });
+                Log.warn(
+                    `[CapacityEngine Service]: unblocked commit EXCEEDED quota (id ${quota.id}, ${quota.scope}`
+                    + `${quota.role ? `/${quota.role}` : ""}) on event (id ${eventId}) — ${projected} of ${ceiling} `
+                    + `(RB20: the issuance proceeds, the organizer is warned)`,
+                );
+            }
+
+            for (const item of resolved) {
+                if (item.quotas.some(q => q.id === quota.id)) {
+                    await this.quotaConsumptionRepository.save(
+                        {
+                            capacityQuotaId: quota.id,
+                            registrationId: item.registration.id,
+                            quantity: item.quantity,
+                        },
+                        tx,
+                    );
+                }
+            }
+        }
+
+        for (const item of resolved) {
+            if (item.role !== item.registration.assignedRole) {
+                await this.registrationRepository.update(
+                    { id: item.registration.id },
+                    { assignedRole: item.role },
+                    undefined,
+                    undefined,
+                    tx,
+                );
+            }
+        }
+
+        const committed: CommittedRegistration[] = resolved.map(item => ({
+            registrationId: item.registration.id,
+            assignedRole: item.role,
+            quotaIds: item.quotas.map(q => q.id),
+            quantity: item.quantity,
+        }));
+
+        Log.info(
+            `[CapacityEngine Service]: unblocked commit registered ${committed.length} registration(s) on event `
+            + `(id ${eventId}) across ${requests.length} quota(s) — ${warnings.length} warning(s), nothing refused`,
+        );
+
+        return { eventId, committed, alreadyCommitted: [...alreadyCommitted], warnings };
     }
 
     // ═════════════════════════════════════════════════════════════════════════

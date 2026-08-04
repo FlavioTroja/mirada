@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import {
   FormRowComponent,
   FormWrapperComponent,
@@ -215,6 +216,7 @@ export class OrganizationProfileComponent implements OnInit {
 
   readonly store = inject(OrganizationStore);
   private readonly addresses = inject(AddressStore);
+  private readonly route = inject(ActivatedRoute);
 
   readonly orgIcon = accountBalance;
   readonly termsIcon = description;
@@ -245,13 +247,47 @@ export class OrganizationProfileComponent implements OnInit {
     website: new FormControl('', { nonNullable: true }),
   });
 
+  /** Organizzazione con cui il form è stato popolato l'ultima volta. */
+  private patchedOrgId: number | null = null;
+
+  constructor() {
+    // Il form si ri-popola a **ogni** cambio di organizzazione.
+    //
+    // Prima il `patch()` avveniva una sola volta in `ngOnInit`: il selettore di
+    // contesto cambiava `store.current()` ma lasciava nel form i valori della
+    // precedente, e `save()` — che legge `current()` — scriveva denominazione,
+    // ragione sociale, partita IVA e sede dell'organizzazione A sulla B, in
+    // silenzio e senza errore. (keijo-fe-check, 4 agosto 2026, rilievo A1.)
+    //
+    // Il confronto sull'id evita di sovrascrivere una compilazione in corso
+    // quando la stessa organizzazione viene semplicemente ricaricata.
+    effect(() => {
+      const org = this.store.current();
+      if (org && org.id !== this.patchedOrgId) {
+        this.patchedOrgId = org.id;
+        this.patch(org);
+      }
+    });
+  }
+
   async ngOnInit(): Promise<void> {
     this.headerTitle.set('Organizzazione');
     await this.store.replaceQuery({});
-    const first = this.store.items()[0];
-    if (first) {
-      const org = await this.store.loadOne(first.id);
-      this.patch(org);
+
+    // La selezione arriva dall'URL quando c'è: `/platform/organizations`
+    // navigava qui dopo un `loadOne(org.id)`, ma questo `ngOnInit` ricaricava
+    // `items()[0]` e sovrascriveva la scelta — si apriva **sempre la prima**
+    // organizzazione, qualunque riga fosse stata cliccata.
+    // (keijo-fe-check, 4 agosto 2026, rilievo A2.)
+    const requested = Number(this.route.snapshot.queryParamMap.get('orgId'));
+    const target = Number.isFinite(requested) && requested > 0
+      ? requested
+      : this.store.items()[0]?.id;
+
+    // Il `patch()` del form lo esegue l'`effect` del costruttore, che segue
+    // `store.current()`: qui basta caricare l'organizzazione giusta.
+    if (target) {
+      await this.store.loadOne(target);
     }
     this.registerActions();
   }

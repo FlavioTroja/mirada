@@ -16,6 +16,16 @@ export const Events = {
     EVENT_AVAILABILITY_CHANGED: "event/availability-changed",
     /** A registration entered the event — the organizer's dashboard must refetch (§4.10). */
     REGISTRATION_CREATED: "registration/created",
+    /**
+     * A ticket changed holder (§4.12). Sent to BOTH parties and to the organization
+     * members: the old holder's QR stops opening the door, the new holder's starts.
+     */
+    TICKET_TRANSFERRED: "ticket/transferred",
+    /**
+     * Somebody entered a session (§4.13). **Immediate, never aggregated**: this is the
+     * live presence counter, and a safety figure that arrives late is a wrong figure.
+     */
+    CHECKIN_REGISTERED: "checkin/registered",
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

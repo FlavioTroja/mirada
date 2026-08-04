@@ -96,6 +96,15 @@ model User {
      registrations           Registration[]       @relation("RegistrationPerson")
      guardedRegistrations    Registration[]       @relation("RegistrationGuardian")
 
+     // Fase D1 — passi 17, 23→26 (più i gusci 18→22 del checkout).
+     reviewedRequirementOutcomes RequirementOutcome[] @relation("RequirementOutcomeReviewer")
+     purchases                   Purchase[]           @relation("PurchaseBuyer")
+     reservations                Reservation[]        @relation("ReservationUser")
+     passIssuances               PassIssuance[]       @relation("PassIssuanceIssuedBy")
+     ticketTransfersFrom         TicketTransfer[]     @relation("TicketTransferFrom")
+     ticketTransfersTo           TicketTransfer[]     @relation("TicketTransferTo")
+     checkIns                    CheckIn[]            @relation("CheckInOperator")
+
      deleted   Boolean  @default(false)
      createdAt DateTime @default(now())
      updatedAt DateTime @updatedAt
@@ -274,6 +283,8 @@ model File {
      eventPostersHorizontal Event[] @relation("EventPosterHorizontal")
      eventPostersSquare     Event[] @relation("EventPosterSquare")
 
+     ticketPdfs Ticket[] @relation("TicketPdf")
+
      createdAt DateTime @default(now())
      updatedAt DateTime @updatedAt
 }
@@ -436,6 +447,7 @@ model Organization {
      logoFile   File? @relation("OrganizationLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
 
      members            OrganizationMember[]
+     orders             Order[]
      venues             Venue[]
      artists            Artist[]
      refundPolicies     RefundPolicy[]
@@ -748,6 +760,10 @@ model Event {
      capacityQuotas     CapacityQuota[]
      couples            Couple[]
      registrations      Registration[]
+     orders             Order[]
+     reservations       Reservation[]
+     passIssuances      PassIssuance[]
+     tickets            Ticket[]
 
      deleted   Boolean  @default(false)
      createdAt DateTime @default(now())
@@ -831,6 +847,7 @@ model Session {
      sortOrder          Int       @default(0)
 
      ticketTypeSessions TicketTypeSession[]
+     checkIns           CheckIn[]
 
      deleted   Boolean  @default(false)
      createdAt DateTime @default(now())
@@ -886,6 +903,8 @@ model EventRequirement {
      config    Json      @default("{}")
      sortOrder Int       @default(0)
 
+     outcomes RequirementOutcome[]
+
      deleted   Boolean  @default(false)
      createdAt DateTime @default(now())
      updatedAt DateTime @updatedAt
@@ -919,6 +938,8 @@ model EventService {
      attributesConfig Json @default("{}")
 
      sortOrder Int @default(0)
+
+     orderLines OrderLine[]
 
      deleted   Boolean  @default(false)
      createdAt DateTime @default(now())
@@ -968,6 +989,10 @@ model TicketType {
      sessions   TicketTypeSession[]
      priceTiers PriceTier[]
 
+     orderLines    OrderLine[]
+     passIssuances PassIssuance[]
+     tickets       Ticket[]
+
      deleted   Boolean  @default(false)
      createdAt DateTime @default(now())
      updatedAt DateTime @updatedAt
@@ -1014,6 +1039,8 @@ model PriceTier {
      maxQuantity  Int?
      soldQuantity Int       @default(0)
      sortOrder    Int       @default(0)
+
+     orderLines OrderLine[]
 
      createdAt DateTime @default(now())
      updatedAt DateTime @updatedAt
@@ -1209,7 +1236,10 @@ model Registration {
      guardianUserId Int?
      guardian       User?   @relation("RegistrationGuardian", fields: [guardianUserId], references: [id], onDelete: SetNull)
 
-     quotaConsumptions QuotaConsumption[]
+     quotaConsumptions   QuotaConsumption[]
+     requirementOutcomes RequirementOutcome[]
+     tickets             Ticket[]
+     checkIns            CheckIn[]
 
      deleted   Boolean  @default(false)
      createdAt DateTime @default(now())
@@ -1250,4 +1280,550 @@ model QuotaConsumption {
 
      @@unique([capacityQuotaId, registrationId])
      @@index([registrationId])
+}
+
+// =============================================================================
+// FASE D1 — Requisiti, biglietti, pass e check-in
+// backend-brief §2 passi 17 e 23→26 · §4.10 (RequirementOutcome) · §4.12
+// (Ticket, TicketTransfer, PassIssuance) · §4.13 (CheckIn) · `09` §7.
+//
+// LA REGOLA STRUTTURALE DI TUTTA LA FASE — **l'utilizzo non è uno stato del
+// biglietto**. Un Full Pass viene scansionato dodici volte in tre giorni e resta
+// `VALID`: il check-in è registrato sulla COPPIA biglietto–sessione, e per gli
+// eventi senza sessioni si usa la sessione implicita già creata in fase B
+// (`AS-5`). Non esiste, e non deve esistere, uno stato `USED` su `Ticket`.
+// =============================================================================
+
+enum RequirementOutcomeStatus {
+     TO_PROVIDE
+     UNDER_REVIEW
+     VALID
+     REJECTED
+     EXPIRED
+}
+
+enum TicketStatus {
+     VALID
+     TRANSFERRED
+     CANCELLED
+     REFUNDED
+}
+
+enum PassIssuanceReason {
+     COMPLIMENTARY
+     EXTERNAL_SALE
+     GIFT
+     COURTESY
+}
+
+enum CheckInKind {
+     OPERATOR
+     MANUAL_SEARCH
+     EXTERNAL_ENTRY
+}
+
+/// Esito della verifica di `POST /tickets/verify` (§3.5, `RF-CHK-4`).
+///
+/// NON è una colonna: il check-in non porta un esito, perché una riga di
+/// `CheckIn` esiste solo quando l'ingresso è avvenuto. L'enum è dichiarato qui
+/// perché il §3.5 lo elenca fra le enumerazioni del contratto e perché così i
+/// DTO lo ricevono da `@prisma-gen/zod` come tutti gli altri, da un'unica fonte.
+enum CheckInResult {
+     VALID
+     ALREADY_USED
+     WRONG_EVENT
+     REFUNDED_OR_CANCELLED
+     REQUIREMENT_BLOCKED
+}
+
+// -----------------------------------------------------------------------------
+// Passo 17 — RequirementOutcome (§4.10)
+// -----------------------------------------------------------------------------
+
+/// L'esito di un requisito d'evento su una singola iscrizione.
+///
+/// `acceptedAt`, `acceptedIp` e `acceptedVersion` sono **calcolati dal server**
+/// (`RF-REQ-4`): sono la prova di quando e da dove la persona ha accettato, e un
+/// client che li scrivesse renderebbe la prova inutile. Nessun DTO li accetta.
+///
+/// `value` porta il dato dichiarato (`DECLARATION`) o il campo personalizzato
+/// (`CUSTOM_FIELD`). Nel primo taglio non esistono altri generi: nessun upload di
+/// documenti, nessun dato sanitario, mai (`RF-REQ-2`, `RF-REQ-3`). Il contenuto
+/// di `value` **non compare mai** nella vista di check-in (`RB12`).
+model RequirementOutcome {
+     id Int @id @default(autoincrement())
+
+     registrationId Int
+     registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+     eventRequirementId Int
+     eventRequirement   EventRequirement @relation(fields: [eventRequirementId], references: [id], onDelete: Restrict)
+
+     status RequirementOutcomeStatus @default(TO_PROVIDE)
+     value  Json                     @default("{}")
+
+     /// Calcolati dal server (`RF-REQ-4`).
+     acceptedAt      DateTime?
+     acceptedIp      String?
+     acceptedVersion String?
+
+     reviewedByUserId Int?
+     reviewedBy       User?     @relation("RequirementOutcomeReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+     reviewedAt       DateTime?
+     rejectionReason  String?
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@unique([registrationId, eventRequirementId])
+     @@index([eventRequirementId])
+     @@index([registrationId, status])
+}
+
+// -----------------------------------------------------------------------------
+// Passi 18→22 — Purchase · Order · OrderLine · Reservation · Payment
+//
+// GUSCI DICHIARATI, SENZA REPOSITORY NÉ SERVICE NÉ CONTROLLER.
+//
+// Stripe e il checkout sono rinviati a una fase successiva per decisione del
+// committente. Le cinque entità sono però dichiarate qui perché
+// `Ticket.orderLineId` è una chiave esterna reale: senza di esse il grafo
+// mentirebbe sulla provenienza del biglietto acquistato online, e la fase D2
+// dovrebbe migrare una colonna già popolata. La fase D2 riempie questi gusci —
+// repository, servizi di prenotazione e pagamento, webhook — senza toccare la
+// forma delle tabelle.
+// -----------------------------------------------------------------------------
+
+enum OrderStatus {
+     PENDING_PAYMENT
+     PAID
+     FAILED
+     EXPIRED
+     CANCELLED
+}
+
+enum PaymentProvider {
+     STRIPE
+}
+
+enum PaymentStatus {
+     PENDING
+     SUCCEEDED
+     FAILED
+     REFUNDED
+     PARTIALLY_REFUNDED
+}
+
+enum ReleaseReason {
+     EXPIRED
+     ABANDONED
+     PAYMENT_FAILED
+     COMPLETED
+}
+
+/// Guscio della fase D2 (§4.11). Raggruppa N `Order`, uno per organizzatore.
+model Purchase {
+     id Int @id @default(autoincrement())
+
+     buyerUserId Int
+     buyer       User @relation("PurchaseBuyer", fields: [buyerUserId], references: [id], onDelete: Restrict)
+
+     /// Centesimi interi (§3.1).
+     totalAmount        Int @default(0)
+     totalPresaleRights Int @default(0)
+
+     orders Order[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([buyerUserId])
+}
+
+/// Guscio della fase D2 (§4.11). Un ordine per organizzatore (`RF-PAY-34`).
+model Order {
+     id Int @id @default(autoincrement())
+
+     purchaseId Int
+     purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+     organizationId Int
+     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+     status OrderStatus @default(PENDING_PAYMENT)
+
+     /// Centesimi interi, tutti calcolati dal server (§4.11).
+     subtotal      Int @default(0)
+     presaleRights Int @default(0)
+     total         Int @default(0)
+
+     priceLockedAt DateTime  @default(now())
+     expiresAt     DateTime?
+     paidAt        DateTime?
+     failedAt      DateTime?
+     cancelledAt   DateTime?
+
+     lines        OrderLine[]
+     reservations Reservation[]
+     payments     Payment[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([purchaseId])
+     @@index([organizationId, status])
+     @@index([eventId, status])
+}
+
+/// Guscio della fase D2 (§4.11). Figlio posseduto: `Cascade` da `Order`, nessun
+/// controller proprio (`PATCH /orders/:id/lines`).
+model OrderLine {
+     id Int @id @default(autoincrement())
+
+     orderId Int
+     order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+     ticketTypeId Int?
+     ticketType   TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
+
+     eventServiceId Int?
+     eventService   EventService? @relation(fields: [eventServiceId], references: [id], onDelete: SetNull)
+
+     quantity Int @default(1)
+
+     /// Centesimi interi, calcolati dal server: un prezzo che arriva dal client è
+     /// un difetto di sicurezza (§4.11).
+     unitPrice            Int @default(0)
+     presaleRightsPerUnit Int @default(0)
+     lineTotal            Int @default(0)
+
+     priceTierId Int?
+     priceTier   PriceTier? @relation(fields: [priceTierId], references: [id], onDelete: SetNull)
+
+     /// `[{ name, surname, email, declaredRole, serviceAttributes }]`.
+     /// `serviceAttributes` può contenere diete e allergie: accesso ristretto,
+     /// mai nelle esportazioni generiche né nella vista di check-in (`RB12`).
+     attendees Json @default("[]")
+
+     tickets Ticket[]
+
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([orderId])
+     @@index([ticketTypeId])
+}
+
+/// Guscio della fase D2 (§4.11). Una sola prenotazione attiva per
+/// `(userId, eventId)` — indice unico PARZIALE su `releasedAt IS NULL`, creato a
+/// mano nella migrazione (`RF-PAY-23`).
+model Reservation {
+     id Int @id @default(autoincrement())
+
+     orderId Int
+     order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+     userId Int
+     user   User @relation("ReservationUser", fields: [userId], references: [id], onDelete: Restrict)
+
+     expiresAt  DateTime
+     rearmedAt  DateTime?
+     releasedAt DateTime?
+
+     releaseReason ReleaseReason?
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([orderId])
+     @@index([userId, eventId])
+     @@index([expiresAt])
+}
+
+/// Guscio della fase D2 (§4.11). `idempotencyKey` unico e `processedEventIds`
+/// sono la difesa contro la doppia notifica di Stripe (`RF-PAY-10`).
+model Payment {
+     id Int @id @default(autoincrement())
+
+     orderId Int
+     order   Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+     provider          PaymentProvider @default(STRIPE)
+     providerPaymentId String
+     providerAccountId String
+
+     status PaymentStatus @default(PENDING)
+
+     /// Centesimi interi (§3.1).
+     amount              Int @default(0)
+     applicationFeeAmount Int @default(0)
+
+     idempotencyKey    String   @unique
+     processedEventIds String[] @default([])
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([orderId, status])
+     @@index([providerPaymentId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 23 — PassIssuance (§4.12)
+// -----------------------------------------------------------------------------
+
+/// Emissione manuale di pass — accrediti, vendite esterne, omaggi, cortesie.
+///
+/// **Non è mai bloccata dalle quote** (`RB20`, `RF-TCK-14`): si registra il
+/// consumo, si restituisce un avviso se si supera la capienza della sala, e si
+/// procede. La responsabilità della sala è dell'organizzatore, non della
+/// piattaforma, e un blocco qui trasformerebbe uno strumento di servizio in un
+/// ostacolo la sera dell'evento.
+///
+/// `role` è **obbligatorio quando l'evento usa quote per ruolo** (`RF-TCK-15`):
+/// senza quel dato l'equilibrio leader/follower mostrato all'organizzatore
+/// diventa falso proprio dove serve. Il vincolo è del servizio, non della
+/// tabella, perché dipende dalla configurazione dell'evento.
+model PassIssuance {
+     id Int @id @default(autoincrement())
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+     ticketTypeId Int
+     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+
+     issuedByUserId Int
+     issuedBy       User @relation("PassIssuanceIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+
+     quantity Int                @default(1)
+     reason   PassIssuanceReason
+     role     DanceRole?
+
+     /// Falso = pass **al portatore**, senza nominativo e **non trasferibili**.
+     nominal Boolean @default(true)
+     note    String?
+
+     issuedAt  DateTime  @default(now())
+     revokedAt DateTime?
+
+     tickets Ticket[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId, issuedAt])
+     @@index([ticketTypeId])
+     @@index([issuedByUserId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 24 — Ticket (§4.12)
+// -----------------------------------------------------------------------------
+
+/// **L'esemplare acquistato**: nominale, trasferibile, con il suo QR (`09` §7).
+///
+/// Il biglietto è un titolo economico; l'iscrizione è la persona nell'evento con
+/// il suo ruolo, i suoi requisiti e i suoi consumi di capienza. Sono due entità
+/// distinte e non vanno accorpate: una persona può avere più biglietti e una sola
+/// iscrizione.
+///
+/// ── Il QR (`AS-7`) ───────────────────────────────────────────────────────────
+/// Payload firmato **Ed25519** in JWS compatto, con almeno
+/// `{ ticketId, eventId, issuedAt, keyId }`. La chiave pubblica è distribuita con
+/// il manifest di check-in perché la verifica deve funzionare **senza rete**; il
+/// `keyId` esiste per la rotazione. Un QR non firmato è un QR falsificabile con
+/// uno screenshot: non esiste una variante «semplificata» del requisito.
+/// Il QR è **uno solo per biglietto**, non uno per sessione (`09` §7).
+///
+/// ── Il PDF (`RF-TCK-11`) ─────────────────────────────────────────────────────
+/// `pdfFileId` punta a una **conferma d'ordine con QR di accesso, mai un titolo
+/// fiscale**: nessuna numerazione progressiva, nessun sigillo, nessuna dicitura
+/// che possa farlo apparire tale. È una delle tre condizioni che reggono il
+/// posizionamento fiscale della piattaforma, non una scelta di copywriting.
+///
+/// ── Ciò che NON c'è, deliberatamente ─────────────────────────────────────────
+/// Non esiste uno stato `USED`, e non deve esistere: l'utilizzo è registrato su
+/// `CheckIn`, sulla coppia biglietto–sessione (`09` §7, §4.13).
+model Ticket {
+     id Int @id @default(autoincrement())
+
+     /// Provenienza: riga d'ordine (vendita online) **oppure** emissione manuale.
+     /// Entrambe nullable e `SetNull`: un biglietto non sparisce né perde validità
+     /// perché l'ordine da cui nasce viene riorganizzato.
+     orderLineId Int?
+     orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+
+     passIssuanceId Int?
+     passIssuance   PassIssuance? @relation(fields: [passIssuanceId], references: [id], onDelete: SetNull)
+
+     eventId Int
+     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+     ticketTypeId Int
+     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+
+     /// L'iscrizione a cui il biglietto dà corpo. Nulla sui pass al portatore, che
+     /// non hanno una persona finché qualcuno non si presenta.
+     registrationId Int?
+     registration   Registration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+
+     /// Il contenuto del QR firmato. Unico e indicizzato: è la chiave di ricerca
+     /// di `POST /tickets/verify`.
+     code String @unique
+
+     status TicketStatus @default(VALID)
+
+     holderName    String
+     holderSurname String
+     holderEmail   String?
+
+     /// Pass emesso in blocco senza nominativo: **al portatore, non trasferibile**.
+     bearer Boolean @default(false)
+
+     qrIssuedAt  DateTime  @default(now())
+     /// Valorizzato quando il QR è invalidato definitivamente (rimborso,
+     /// annullamento). Il TRASFERIMENTO non lo valorizza: emette un `code` nuovo,
+     /// e il precedente muore perché non corrisponde più ad alcun biglietto —
+     /// resta su `TicketTransfer.previousCode` come traccia storica.
+     qrRevokedAt DateTime?
+
+     pdfFileId Int?
+     pdfFile   File? @relation("TicketPdf", fields: [pdfFileId], references: [id], onDelete: SetNull)
+
+     transfers TicketTransfer[]
+     checkIns  CheckIn[]
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([eventId, status])
+     @@index([code])
+     @@index([registrationId])
+     @@index([ticketTypeId])
+     @@index([passIssuanceId])
+     @@index([orderLineId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 25 — TicketTransfer (§4.12)
+// -----------------------------------------------------------------------------
+
+/// Storico completo dei passaggi di titolarità — **sola lettura via API**: si
+/// crea soltanto attraverso `POST /tickets/:id/transfer` (§3.4).
+///
+/// `fromHolder` e `toHolder` sono fotografie del nominativo al momento del
+/// passaggio: restano leggibili anche se l'utente collegato viene poi cancellato,
+/// ed è la ragione per cui non sono ricostruite dalle chiavi esterne.
+model TicketTransfer {
+     id Int @id @default(autoincrement())
+
+     ticketId Int
+     ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+     fromUserId Int?
+     fromUser   User? @relation("TicketTransferFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+
+     toUserId Int?
+     toUser   User? @relation("TicketTransferTo", fields: [toUserId], references: [id], onDelete: SetNull)
+
+     /// `{ name, surname, email? }`
+     fromHolder Json
+     toHolder   Json
+
+     /// Il `code` invalidato dal passaggio: da qui in poi non apre più nulla.
+     previousCode String
+
+     transferredAt DateTime @default(now())
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     @@index([ticketId, transferredAt])
+     @@index([fromUserId])
+     @@index([toUserId])
+}
+
+// -----------------------------------------------------------------------------
+// Passo 26 — CheckIn (§4.13)
+// -----------------------------------------------------------------------------
+
+/// L'accesso a **una singola sessione**, registrato sulla coppia
+/// biglietto–sessione (`09` §7).
+///
+/// ── `RB7` ────────────────────────────────────────────────────────────────────
+/// Indice unico **parziale** su `(ticketId, sessionId)` quando `revokedAt` è
+/// nullo: *un QR vale una sola volta per sessione*. Prisma non sa esprimere un
+/// indice parziale, quindi `@@unique` qui sotto è ricreato a mano nella
+/// migrazione con la clausola `WHERE`.
+///
+/// ── `RB19` ───────────────────────────────────────────────────────────────────
+/// **Il check-in non consuma capienza.** Le quote governano l'ammissione, il
+/// contatore presenze governa la sicurezza: sono due assi distinti e questo
+/// modello non ha alcuna relazione con `CapacityQuota`.
+///
+/// ── `RF-CHK-6` ───────────────────────────────────────────────────────────────
+/// `conflictWithId` punta all'ingresso già registrato quando la sincronizzazione
+/// della coda offline rileva un doppio ingresso. La seconda riga **viene creata e
+/// lasciata allo staff**: i doppi ingressi sono conflitti da risolvere, mai
+/// risolti in silenzio.
+model CheckIn {
+     id Int @id @default(autoincrement())
+
+     ticketId Int
+     ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+
+     sessionId Int
+     session   Session @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+     registrationId Int
+     registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+
+     operatorUserId Int
+     operator       User @relation("CheckInOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+
+     kind CheckInKind @default(OPERATOR)
+
+     /// Momento della scansione **sul dispositivo**: offline può precedere di ore
+     /// la sincronizzazione, ed è questo il momento che vale come ingresso.
+     scannedAt DateTime @default(now())
+     /// Momento in cui la riga è arrivata al server. Nullo sugli ingressi online.
+     syncedAt  DateTime?
+
+     /// La «postazione» che `RF-CHK-4` chiede di nominare su `ALREADY_USED`.
+     deviceId String
+     offline  Boolean @default(false)
+
+     conflictWithId Int?
+     conflictWith   CheckIn?  @relation("CheckInConflict", fields: [conflictWithId], references: [id], onDelete: SetNull)
+     conflicts      CheckIn[] @relation("CheckInConflict")
+
+     /// Annullamento di un check-in errato (`RF-CHK-9`). Una riga revocata esce
+     /// dall'indice parziale: il biglietto può rientrare in quella sessione.
+     revokedAt DateTime?
+
+     deleted   Boolean  @default(false)
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+
+     /// Ricreato a mano nella migrazione come indice PARZIALE — vedi sopra.
+     @@unique([ticketId, sessionId])
+     @@index([sessionId, scannedAt])
+     @@index([deviceId])
+     @@index([registrationId])
+     @@index([conflictWithId])
 }

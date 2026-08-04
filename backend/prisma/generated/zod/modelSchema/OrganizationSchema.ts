@@ -7,6 +7,8 @@ import { FileWithRelationsSchema, FilePartialWithRelationsSchema, FileOptionalDe
 import type { FileWithRelations, FilePartialWithRelations, FileOptionalDefaultsWithRelations } from './FileSchema'
 import { OrganizationMemberWithRelationsSchema, OrganizationMemberPartialWithRelationsSchema, OrganizationMemberOptionalDefaultsWithRelationsSchema } from './OrganizationMemberSchema'
 import type { OrganizationMemberWithRelations, OrganizationMemberPartialWithRelations, OrganizationMemberOptionalDefaultsWithRelations } from './OrganizationMemberSchema'
+import { OrderWithRelationsSchema, OrderPartialWithRelationsSchema, OrderOptionalDefaultsWithRelationsSchema } from './OrderSchema'
+import type { OrderWithRelations, OrderPartialWithRelations, OrderOptionalDefaultsWithRelations } from './OrderSchema'
 import { VenueWithRelationsSchema, VenuePartialWithRelationsSchema, VenueOptionalDefaultsWithRelationsSchema } from './VenueSchema'
 import type { VenueWithRelations, VenuePartialWithRelations, VenueOptionalDefaultsWithRelations } from './VenueSchema'
 import { ArtistWithRelationsSchema, ArtistPartialWithRelationsSchema, ArtistOptionalDefaultsWithRelationsSchema } from './ArtistSchema'
@@ -81,6 +83,7 @@ export type OrganizationRelations = {
   address?: AddressWithRelations | null;
   logoFile?: FileWithRelations | null;
   members: OrganizationMemberWithRelations[];
+  orders: OrderWithRelations[];
   venues: VenueWithRelations[];
   artists: ArtistWithRelations[];
   refundPolicies: RefundPolicyWithRelations[];
@@ -94,6 +97,7 @@ export const OrganizationWithRelationsSchema: z.ZodType<OrganizationWithRelation
   address: z.lazy(() => AddressWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FileWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberWithRelationsSchema).array(),
+  orders: z.lazy(() => OrderWithRelationsSchema).array(),
   venues: z.lazy(() => VenueWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistWithRelationsSchema).array(),
   refundPolicies: z.lazy(() => RefundPolicyWithRelationsSchema).array(),
@@ -109,6 +113,7 @@ export type OrganizationOptionalDefaultsRelations = {
   address?: AddressOptionalDefaultsWithRelations | null;
   logoFile?: FileOptionalDefaultsWithRelations | null;
   members: OrganizationMemberOptionalDefaultsWithRelations[];
+  orders: OrderOptionalDefaultsWithRelations[];
   venues: VenueOptionalDefaultsWithRelations[];
   artists: ArtistOptionalDefaultsWithRelations[];
   refundPolicies: RefundPolicyOptionalDefaultsWithRelations[];
@@ -122,6 +127,7 @@ export const OrganizationOptionalDefaultsWithRelationsSchema: z.ZodType<Organiza
   address: z.lazy(() => AddressOptionalDefaultsWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FileOptionalDefaultsWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberOptionalDefaultsWithRelationsSchema).array(),
+  orders: z.lazy(() => OrderOptionalDefaultsWithRelationsSchema).array(),
   venues: z.lazy(() => VenueOptionalDefaultsWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistOptionalDefaultsWithRelationsSchema).array(),
   refundPolicies: z.lazy(() => RefundPolicyOptionalDefaultsWithRelationsSchema).array(),
@@ -137,6 +143,7 @@ export type OrganizationPartialRelations = {
   address?: AddressPartialWithRelations | null;
   logoFile?: FilePartialWithRelations | null;
   members?: OrganizationMemberPartialWithRelations[];
+  orders?: OrderPartialWithRelations[];
   venues?: VenuePartialWithRelations[];
   artists?: ArtistPartialWithRelations[];
   refundPolicies?: RefundPolicyPartialWithRelations[];
@@ -150,6 +157,7 @@ export const OrganizationPartialWithRelationsSchema: z.ZodType<OrganizationParti
   address: z.lazy(() => AddressPartialWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FilePartialWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  orders: z.lazy(() => OrderPartialWithRelationsSchema).array(),
   venues: z.lazy(() => VenuePartialWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistPartialWithRelationsSchema).array(),
   refundPolicies: z.lazy(() => RefundPolicyPartialWithRelationsSchema).array(),
@@ -163,6 +171,7 @@ export const OrganizationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<O
   address: z.lazy(() => AddressPartialWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FilePartialWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  orders: z.lazy(() => OrderPartialWithRelationsSchema).array(),
   venues: z.lazy(() => VenuePartialWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistPartialWithRelationsSchema).array(),
   refundPolicies: z.lazy(() => RefundPolicyPartialWithRelationsSchema).array(),
@@ -176,6 +185,7 @@ export const OrganizationWithPartialRelationsSchema: z.ZodType<OrganizationWithP
   address: z.lazy(() => AddressPartialWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FilePartialWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  orders: z.lazy(() => OrderPartialWithRelationsSchema).array(),
   venues: z.lazy(() => VenuePartialWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistPartialWithRelationsSchema).array(),
   refundPolicies: z.lazy(() => RefundPolicyPartialWithRelationsSchema).array(),

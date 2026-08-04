@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { PriceTierKindSchema } from '../inputTypeSchemas/PriceTierKindSchema'
 import { TicketTypeWithRelationsSchema, TicketTypePartialWithRelationsSchema, TicketTypeOptionalDefaultsWithRelationsSchema } from './TicketTypeSchema'
 import type { TicketTypeWithRelations, TicketTypePartialWithRelations, TicketTypeOptionalDefaultsWithRelations } from './TicketTypeSchema'
+import { OrderLineWithRelationsSchema, OrderLinePartialWithRelationsSchema, OrderLineOptionalDefaultsWithRelationsSchema } from './OrderLineSchema'
+import type { OrderLineWithRelations, OrderLinePartialWithRelations, OrderLineOptionalDefaultsWithRelations } from './OrderLineSchema'
 
 /////////////////////////////////////////
 // PRICE TIER SCHEMA
@@ -56,12 +58,14 @@ export type PriceTierOptionalDefaults = z.infer<typeof PriceTierOptionalDefaults
 
 export type PriceTierRelations = {
   ticketType: TicketTypeWithRelations;
+  orderLines: OrderLineWithRelations[];
 };
 
 export type PriceTierWithRelations = z.infer<typeof PriceTierSchema> & PriceTierRelations
 
 export const PriceTierWithRelationsSchema: z.ZodType<PriceTierWithRelations> = PriceTierSchema.merge(z.object({
   ticketType: z.lazy(() => TicketTypeWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLineWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -70,12 +74,14 @@ export const PriceTierWithRelationsSchema: z.ZodType<PriceTierWithRelations> = P
 
 export type PriceTierOptionalDefaultsRelations = {
   ticketType: TicketTypeOptionalDefaultsWithRelations;
+  orderLines: OrderLineOptionalDefaultsWithRelations[];
 };
 
 export type PriceTierOptionalDefaultsWithRelations = z.infer<typeof PriceTierOptionalDefaultsSchema> & PriceTierOptionalDefaultsRelations
 
 export const PriceTierOptionalDefaultsWithRelationsSchema: z.ZodType<PriceTierOptionalDefaultsWithRelations> = PriceTierOptionalDefaultsSchema.merge(z.object({
   ticketType: z.lazy(() => TicketTypeOptionalDefaultsWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLineOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -84,24 +90,28 @@ export const PriceTierOptionalDefaultsWithRelationsSchema: z.ZodType<PriceTierOp
 
 export type PriceTierPartialRelations = {
   ticketType?: TicketTypePartialWithRelations;
+  orderLines?: OrderLinePartialWithRelations[];
 };
 
 export type PriceTierPartialWithRelations = z.infer<typeof PriceTierPartialSchema> & PriceTierPartialRelations
 
 export const PriceTierPartialWithRelationsSchema: z.ZodType<PriceTierPartialWithRelations> = PriceTierPartialSchema.merge(z.object({
   ticketType: z.lazy(() => TicketTypePartialWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
 })).partial()
 
 export type PriceTierOptionalDefaultsWithPartialRelations = z.infer<typeof PriceTierOptionalDefaultsSchema> & PriceTierPartialRelations
 
 export const PriceTierOptionalDefaultsWithPartialRelationsSchema: z.ZodType<PriceTierOptionalDefaultsWithPartialRelations> = PriceTierOptionalDefaultsSchema.merge(z.object({
   ticketType: z.lazy(() => TicketTypePartialWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
 }).partial())
 
 export type PriceTierWithPartialRelations = z.infer<typeof PriceTierSchema> & PriceTierPartialRelations
 
 export const PriceTierWithPartialRelationsSchema: z.ZodType<PriceTierWithPartialRelations> = PriceTierSchema.merge(z.object({
   ticketType: z.lazy(() => TicketTypePartialWithRelationsSchema),
+  orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
 }).partial())
 
 export default PriceTierSchema;

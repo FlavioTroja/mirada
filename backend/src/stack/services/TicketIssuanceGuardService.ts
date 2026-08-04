@@ -1,40 +1,38 @@
 import { Service } from "fastify-decorators";
 import { Prisma } from "@prisma/client";
 import { Log } from "@utils/adapters/log";
+import { TicketRepository } from "@repositories/TicketRepository";
 
 /**
  * Presidio dei biglietti emessi — l'unico punto in cui il progetto chiede
  * «esistono biglietti emessi per questo titolo?».
  *
- * Il modello `Ticket` è del passo 24 del §2 (fase C) e **oggi non esiste**. Questo
- * servizio è il singolo innesto attraverso cui i controlli del §4.5 e del §4.7 —
+ * Attraverso questo servizio i controlli del §4.5 e del §4.7 —
  *
  *   - `setSessions` rifiuta la rimozione di una sessione se esistono biglietti
  *     emessi per quel titolo;
  *   - `resolveOrphanSessions` distingue i titoli venduti dagli invenduti;
  *   - la rimozione di uno scaglione già venduto è rifiutata;
  *
- * — diventeranno effettivi **senza toccare i servizi chiamanti**: basterà
- * sostituire il corpo di `countIssuedTickets` con la query su `Ticket`.
+ * — sono **effettivi dalla fase D1**. Fino al passo 24 del §2 il modello `Ticket`
+ * non esisteva e questo servizio dichiarava `0` nel log, perché nessun chiamante
+ * doveva credere di aver verificato qualcosa che non era verificabile. Ora è la
+ * query reale, e **nessun servizio chiamante è stato toccato**: era esattamente
+ * lo scopo dell'innesto.
  *
- * Finché `Ticket` non esiste il conteggio è `0` e il servizio lo **dichiara nel
- * log**: nessun chiamante deve credere di aver verificato qualcosa che non è
- * ancora verificabile.
+ * «Vivi» comprende i biglietti **trasferiti**: un biglietto passato di mano è un
+ * biglietto valido, e togliere una sessione a un titolo già venduto lederebbe il
+ * nuovo titolare esattamente come avrebbe leso il primo.
  */
 @Service()
 export class TicketIssuanceGuardService {
-    /**
-     * Numero di biglietti emessi per il titolo indicato.
-     *
-     * FASE C — sostituire con:
-     *   `return this.ticketRepository.count({ ticketTypeId, status: { in: [VALID, TRANSFERRED] } }, tx);`
-     */
-    public async countIssuedTickets(ticketTypeId: number, _tx?: Prisma.TransactionClient): Promise<number> {
-        Log.debug(
-            `[TicketIssuanceGuard Service]: issued ticket count requested for ticket type (id ${ticketTypeId}) — `
-            + `the Ticket model does not exist yet (backend-brief §2, step 24), the count is reported as 0`,
-        );
-        return 0;
+    constructor(private readonly ticketRepository: TicketRepository) {}
+
+    /** Numero di biglietti vivi emessi per il titolo indicato. */
+    public async countIssuedTickets(ticketTypeId: number, tx?: Prisma.TransactionClient): Promise<number> {
+        const count = await this.ticketRepository.countLiveByTicketType(ticketTypeId, tx);
+        Log.debug(`[TicketIssuanceGuard Service]: ticket type (id ${ticketTypeId}) has ${count} live ticket(s) issued`);
+        return count;
     }
 
     /** True quando il titolo ha già biglietti emessi e non è più liberamente modificabile. */

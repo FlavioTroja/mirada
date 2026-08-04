@@ -169,9 +169,12 @@ export class OrganizationPayoutComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.headerTitle.set('Incasso');
     await this.store.replaceQuery({});
-    const first = this.store.items()[0];
-    if (first) {
-      await this.store.loadOne(first.id);
+    // Conserva la selezione già attiva: ricaricare incondizionatamente
+    // `items()[0]` la sovrascriveva a ogni navigazione fra le schede
+    // dell'organizzazione. (keijo-fe-check, 4 agosto 2026, rilievo A2.)
+    const target = this.store.current()?.id ?? this.store.items()[0]?.id;
+    if (target) {
+      await this.store.loadOne(target);
       await this.refresh(false);
     }
     this.registerActions();

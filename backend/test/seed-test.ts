@@ -17,6 +17,22 @@ export async function seed(prisma: PrismaClient) {
     // added here by hand, in child-before-parent order, or the next test run
     // fails on a foreign key. Phase B tables come first because they all hang off
     // Event, which in turn hangs off Organization and Venue.
+    // Fase D1 — requisiti, biglietti, pass, check-in (e i gusci del checkout).
+    // CheckIn è Restrict da Ticket, Session e Registration: va per primo.
+    // Ticket è Restrict da Event e TicketType, SetNull da OrderLine/PassIssuance:
+    // va prima di tutti e quattro. TicketTransfer è Cascade da Ticket ma si
+    // cancella esplicitamente, così l'ordine resta leggibile.
+    await prisma.checkIn.deleteMany();
+    await prisma.ticketTransfer.deleteMany();
+    await prisma.ticket.deleteMany();
+    await prisma.passIssuance.deleteMany();
+    await prisma.requirementOutcome.deleteMany();
+    await prisma.payment.deleteMany();
+    await prisma.reservation.deleteMany();
+    await prisma.orderLine.deleteMany();
+    await prisma.order.deleteMany();
+    await prisma.purchase.deleteMany();
+
     // Fase C — il motore di capienza. QuotaConsumption discende da CapacityQuota e
     // Registration; Registration è Restrict da Event, quindi va PRIMA dell'evento.
     await prisma.quotaConsumption.deleteMany();

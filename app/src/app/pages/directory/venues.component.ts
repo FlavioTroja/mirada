@@ -185,9 +185,9 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
             <keijo-form-row [cols]="3">
               <keijo-checkbox
                 [formControl]="form.controls.airConditioning"
-                label="Climatizzata"
+                label="climatizzata"
               />
-              <keijo-checkbox [formControl]="form.controls.parking" label="Parcheggio" />
+              <keijo-checkbox [formControl]="form.controls.parking" label="parcheggio" />
               <keijo-input
                 [formControl]="form.controls.accessibility"
                 label="accessibilità"

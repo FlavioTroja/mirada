@@ -4,12 +4,18 @@ import httpErrors from "http-errors";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Log } from "@utils/adapters/log";
+import { readI18nText } from "@utils/helpers/i18nText";
 import { generateRandomString } from "@utils/helpers/crypto";
 import { EventRepository } from "@repositories/EventRepository";
 import { RegistrationRepository } from "@repositories/RegistrationRepository";
+import { CheckInRepository } from "@repositories/CheckInRepository";
+import { SessionRepository } from "@repositories/SessionRepository";
+import { TicketRepository } from "@repositories/TicketRepository";
 import { FileRepository } from "@repositories/FileRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import {
+    AttendanceExportColumn,
+    AttendanceExportColumnSchema,
     EventExportRequestDTO,
     EventExportResponseDTO,
     ExportKind,
@@ -41,18 +47,12 @@ const UNAVAILABLE: Partial<Record<ExportKind, { requires: string[]; reason: stri
             "L'esportazione dell'incasso non è producibile: senza Order, Payment e Refund non esiste alcun "
             + "importo incassato, alcun diritto di prevendita e alcun rimborso da rendicontare.",
     },
-    ATTENDANCE: {
-        requires: ["Ticket", "CheckIn"],
-        reason:
-            "L'esportazione delle presenze non è producibile: le presenze sono righe di CheckIn sulla coppia "
-            + "biglietto–sessione (RB7), e né Ticket né CheckIn esistono nel perimetro costruito.",
-    },
     SALES_BY_SESSION: {
-        requires: ["Order", "OrderLine", "Ticket", "TicketTypeSession"],
+        requires: ["Order", "OrderLine"],
         reason:
             "L'esportazione del venduto per sessione (RF-BKO-9) non è producibile: attribuire un incasso a una "
-            + "sessione richiede la riga d'ordine, il titolo acquistato e il peso di ripartizione delle sessioni "
-            + "incluse. Order, OrderLine e Ticket non esistono ancora. RF-BKO-9 è una delle tre condizioni che "
+            + "sessione richiede la riga d'ordine con il prezzo bloccato e lo scaglione applicato. Order e "
+            + "OrderLine non esistono ancora (§2, passi 19→20). RF-BKO-9 è una delle tre condizioni che "
             + "reggono il posizionamento fiscale della piattaforma: un tracciato vuoto sarebbe peggio di un errore.",
     },
 };
@@ -65,6 +65,9 @@ export class EventExportService {
     constructor(
         private readonly eventRepository: EventRepository,
         private readonly registrationRepository: RegistrationRepository,
+        private readonly checkInRepository: CheckInRepository,
+        private readonly sessionRepository: SessionRepository,
+        private readonly ticketRepository: TicketRepository,
         private readonly fileRepository: FileRepository,
         private readonly organizationScopeService: OrganizationScopeService,
     ) {}
@@ -91,6 +94,10 @@ export class EventExportService {
         }
 
         Log.info(`[EventExport Service]: building '${dto.kind}' export for event '${event.slug}' (id ${eventId})`);
+
+        if (dto.kind === "ATTENDANCE") {
+            return this.exportAttendance(event.id, event.slug, dto.columns);
+        }
 
         const columns = this.resolveRegistrationColumns(dto.columns);
         const registrations = await this.registrationRepository.findByEvent(eventId);
@@ -174,5 +181,111 @@ export class EventExportService {
             throw new httpErrors.InternalServerError("Errore durante la scrittura del file di esportazione.");
         }
         return { url: `${process.env.DOMAIN_URL}/${EXPORTS_DIR}/${filename}`, filePath };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // `ATTENDANCE` — le presenze (§3.7)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Le presenze sono righe di `CheckIn` sulla **coppia biglietto–sessione**
+     * (`RB7`): una riga per ingresso, non una per biglietto. Un Full Pass
+     * scansionato in dodici sessioni produce dodici righe, ed è esattamente ciò
+     * che l'organizzatore deve poter contare — l'affluenza per sessione, non il
+     * venduto.
+     *
+     * Le righe **revocate e in conflitto restano nel tracciato**, con le loro
+     * colonne: un'esportazione che le tacesse mostrerebbe come presenza un
+     * ingresso annullato, oppure nasconderebbe un doppio ingresso che nessuno ha
+     * ancora dirimito (`RF-CHK-6`, `RF-CHK-9`).
+     *
+     * `RB12` — nessun contatto, nessun dato dei requisiti, nessuna dieta.
+     */
+    private async exportAttendance(
+        eventId: number,
+        slug: string,
+        requested: string[],
+    ): Promise<EventExportResponseDTO> {
+        const columns = this.resolveAttendanceColumns(requested);
+
+        const sessions = await this.sessionRepository.findByEvent(eventId);
+        const sessionsById = new Map(sessions.map(session => [session.id, session]));
+
+        const entries = [] as Awaited<ReturnType<CheckInRepository["findBySession"]>>;
+        for (const session of sessions) {
+            entries.push(...await this.checkInRepository.findBySession(session.id));
+        }
+
+        const tickets = await this.ticketRepository.findByEvent(eventId);
+        const ticketsById = new Map(tickets.map(ticket => [ticket.id, ticket]));
+        const registrations = await this.registrationRepository.findByEvent(eventId);
+        const registrationsById = new Map(registrations.map(registration => [registration.id, registration]));
+
+        const rows = entries.map(entry => columns.map(column => {
+            const ticket = ticketsById.get(entry.ticketId);
+            const registration = registrationsById.get(entry.registrationId);
+            switch (column) {
+                case "checkInId": return String(entry.id);
+                case "sessionId": return String(entry.sessionId);
+                case "sessionName": return readI18nText(sessionsById.get(entry.sessionId)?.name, "") ?? "";
+                case "ticketId": return String(entry.ticketId);
+                case "ticketCode": return ticket?.code ?? "";
+                case "holderName": return ticket?.holderName ?? "";
+                case "holderSurname": return ticket?.holderSurname ?? "";
+                case "role": return registration?.assignedRole ?? "";
+                case "kind": return entry.kind;
+                case "scannedAt": return entry.scannedAt.toISOString();
+                case "deviceId": return entry.deviceId;
+                case "offline": return String(entry.offline);
+                case "syncedAt": return entry.syncedAt?.toISOString() ?? "";
+                case "revokedAt": return entry.revokedAt?.toISOString() ?? "";
+                case "conflictWithId": return entry.conflictWithId ? String(entry.conflictWithId) : "";
+                default: return "";
+            }
+        }));
+
+        const csv = this.toCsv(columns, rows);
+        const filename = `${slug}-attendance-${generateRandomString(8)}.csv`;
+        const { url, filePath } = await this.write(filename, csv);
+
+        const file = await this.fileRepository.save({
+            name: filename,
+            path: filePath,
+            url,
+            mimeType: "text/csv",
+            size: Buffer.byteLength(csv, "utf8"),
+        });
+
+        Log.info(
+            `[EventExport Service]: export 'ATTENDANCE' produced for event (id ${eventId}) — `
+            + `${rows.length} entr(y|ies) across ${sessions.length} session(s), file (id ${file.id}) at ${url}`,
+        );
+
+        return {
+            fileUrl: url,
+            fileId: file.id,
+            kind: "ATTENDANCE",
+            columns,
+            rows: rows.length,
+            generatedAt: new Date(),
+            basedOn: ["CheckIn", "Session", "Ticket", "Registration"],
+        };
+    }
+
+    private resolveAttendanceColumns(requested: string[]): AttendanceExportColumn[] {
+        const available = AttendanceExportColumnSchema.options;
+        if (!requested.length) {
+            return [...available];
+        }
+
+        const unknown = requested.filter(c => !(available as readonly string[]).includes(c));
+        if (unknown.length) {
+            Log.warn(`[EventExport Service]: attendance export refused — unknown column(s): ${unknown.join(", ")}`);
+            throw new httpErrors.BadRequest(
+                `Colonne non disponibili: ${unknown.join(", ")}. Colonne ammesse: ${available.join(", ")}.`,
+            );
+        }
+
+        return requested as AttendanceExportColumn[];
     }
 }

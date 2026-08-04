@@ -506,8 +506,15 @@ complementari.
 **`CheckIn`** — `ticketId`, `sessionId`, `registrationId`, `operatorUserId`,
 `kind: CheckInKind`, `scannedAt`, `syncedAt?`, `deviceId`, `offline: bool`,
 `conflictWithId?`, `revokedAt?`.
-**Unico su `(ticketId, sessionId)`** quando `revokedAt` è nullo — `RB7`: *un QR vale una sola
-volta per sessione*.
+**Unico su `(ticketId, sessionId)` quando `revokedAt IS NULL` *e* `conflictWithId IS NULL`** —
+`RB7`: *un QR vale una sola volta per sessione*.
+
+> Il predicato **deve** comprendere `conflictWithId`, altrimenti `RB7` e `RF-CHK-6` si
+> escludono a vicenda: la seconda scansione offline ha `revokedAt` nullo per definizione, e
+> con il solo `revokedAt IS NULL` il database la **respingerebbe** invece di consegnarla
+> allo staff come conflitto da risolvere. Il vincolo così esteso resta un **sovrainsieme**
+> di `RB7` — continua a garantire **un solo ingresso ammesso** per biglietto e sessione,
+> perché una riga di conflitto è un doppione segnalato, non un secondo ingresso.
 
 **`Refund`** — `orderId`, `registrationId?`, `ticketId?`, `amount: int`,
 `presaleRightsRefunded: int`, `reason`, `status: RefundStatus`, `requestedAt`,
@@ -541,7 +548,7 @@ volta per sessione*.
 | Endpoint | Semantica |
 |---|---|
 | `GET /api/tickets/:id/pdf` | → `{ fileUrl }` — conferma d'ordine con QR, **mai un titolo fiscale** (`RF-TCK-11`) |
-| `POST /api/tickets/:id/transfer` body `{ emailOrNickname }` | trasferisce il nominativo: invalida il QR precedente, ne emette uno nuovo, sposta l'iscrizione e **rivaluta i requisiti**; rifiuta se le quote del nuovo ruolo non lo permettono (`RF-TCK-5→7`, `RB8`) |
+| `POST /api/tickets/:id/transfer` body `{ emailOrNickname }` | trasferisce il nominativo: invalida il QR precedente, ne emette uno nuovo, sposta l'iscrizione e **rivaluta i requisiti**; rifiuta se le quote del nuovo ruolo non lo permettono (`RF-TCK-5→7`, `RB8`). Tre precisazioni: **(a)** il ruolo del nuovo titolare si legge da `DancerProfile.preferredRole` — `BOTH` o assente significa **nessun movimento di quota**, mai un'assegnazione arbitraria; **(b)** il trasferimento verso una persona **già iscritta all'evento** è rifiutato con `409`, perché `09` §7 impone *una iscrizione per persona per evento* e nessuna regola descrive la fusione di due iscrizioni; **(c)** un pass **al portatore** non è trasferibile (`RF-TCK-18`) |
 | `POST /api/tickets/verify` body `{ code, sessionId }` | verifica online → `{ result: CheckInResult, registration, ticketType, sessions[], services[], blockingRequirement? }` |
 | `GET /api/events/:id/checkin-manifest` | **lista firmata scaricabile** + chiave pubblica Ed25519 per la verifica offline (`RF-CHK-2`, `RF-CHK-3`) |
 | `POST /api/check-ins/sync` body `{ entries[] }` | → `{ accepted[], conflicts[] }` — i doppi ingressi rilevati in sincronizzazione sono **restituiti come conflitti da risolvere, mai risolti in silenzio** (`RF-CHK-6`) |

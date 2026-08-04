@@ -3,9 +3,12 @@ import {
     CapacityQuota,
     DanceRole,
     DeclaredDanceRole,
+    EventRequirement,
     QuotaScope,
     Registration,
     RegistrationStatus,
+    RequirementOutcomeStatus,
+    Session,
 } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
@@ -15,6 +18,13 @@ import { CapacityQuotaRepository } from "@repositories/CapacityQuotaRepository";
 import { QuotaConsumptionRepository } from "@repositories/QuotaConsumptionRepository";
 import { CoupleRepository } from "@repositories/CoupleRepository";
 import { TicketTypeRepository } from "@repositories/TicketTypeRepository";
+import { SessionRepository } from "@repositories/SessionRepository";
+import { CheckInRepository } from "@repositories/CheckInRepository";
+import { TicketRepository } from "@repositories/TicketRepository";
+import {
+    BLOCKING_OUTCOME_STATUSES,
+    RequirementOutcomeRepository,
+} from "@repositories/RequirementOutcomeRepository";
 import { EventServiceRepository } from "@repositories/EventServiceRepository";
 import { EventRequirementRepository } from "@repositories/EventRequirementRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
@@ -28,16 +38,16 @@ const ACTIVE: RegistrationStatus[] = [RegistrationStatus.CONFIRMED, Registration
  * è dichiarata indisponibile, mai riempita di zeri (`RB21`).
  */
 const MISSING_ENTITIES = [
-    "Purchase", "Order", "OrderLine", "Reservation", "Payment",
-    "PassIssuance", "Ticket", "TicketTransfer", "CheckIn", "Refund",
-    "RequirementOutcome",
+    "Purchase", "Order", "OrderLine", "Reservation", "Payment", "Refund",
 ];
 
 const PERIMETER_NOTE =
     "Il cruscotto è calcolato sulle sole entità costruite: Event, Registration, CapacityQuota, "
-    + "QuotaConsumption, Couple, TicketType, EventService, EventRequirement. Ciò che il motore di "
-    + "capienza registra è IMPEGNATO, non venduto né incassato: finché Order, Payment e Ticket non "
-    + "esistono le due grandezze non coincidono e non vanno confuse (RB21).";
+    + "QuotaConsumption, Couple, TicketType, EventService, EventRequirement, RequirementOutcome, "
+    + "Ticket, PassIssuance, CheckIn. Ciò che il motore di capienza registra è IMPEGNATO, non "
+    + "venduto né incassato: finché Order e Payment non esistono le due grandezze non coincidono e "
+    + "non vanno confuse (RB21). Le PRESENZE sono un asse a sé: il check-in non consuma capienza "
+    + "(RB19), e il contatore di sala non va sommato ai contatori di quota.";
 
 /**
  * `GET /events/:id/dashboard` — backend-brief §3.7 (`RF-BKO-1`, `RF-CPL-11`).
@@ -55,6 +65,10 @@ export class EventDashboardService {
         private readonly quotaConsumptionRepository: QuotaConsumptionRepository,
         private readonly coupleRepository: CoupleRepository,
         private readonly ticketTypeRepository: TicketTypeRepository,
+        private readonly sessionRepository: SessionRepository,
+        private readonly checkInRepository: CheckInRepository,
+        private readonly ticketRepository: TicketRepository,
+        private readonly requirementOutcomeRepository: RequirementOutcomeRepository,
         private readonly eventServiceRepository: EventServiceRepository,
         private readonly eventRequirementRepository: EventRequirementRepository,
         private readonly organizationScopeService: OrganizationScopeService,
@@ -70,13 +84,14 @@ export class EventDashboardService {
 
         Log.info(`[EventDashboard Service]: building dashboard for event '${event.slug}' (id ${eventId})`);
 
-        const [registrations, quotas, couples, ticketTypes, eventServices, requirements] = await Promise.all([
+        const [registrations, quotas, couples, ticketTypes, eventServices, requirements, sessions] = await Promise.all([
             this.registrationRepository.findByEvent(eventId),
             this.capacityQuotaRepository.findByEvent(eventId),
             this.coupleRepository.findByEvent(eventId),
             this.ticketTypeRepository.findByEvent(eventId),
             this.eventServiceRepository.findByEvent(eventId),
             this.eventRequirementRepository.findByEvent(eventId),
+            this.sessionRepository.findByEvent(eventId),
         ]);
 
         const active = registrations.filter(r => ACTIVE.includes(r.status));
@@ -96,10 +111,12 @@ export class EventDashboardService {
                 couples: this.buildCouples(couples, active),
                 requirements: this.buildRequirements(requirements),
                 registrationsTrend: this.buildTrend(active),
+                attendance: await this.buildAttendance(eventId, sessions),
+                missingRequirements: await this.buildMissingRequirements(requirements, active),
 
                 soldByTicketType: {
                     available: false,
-                    requires: ["Order", "OrderLine", "Payment", "Ticket"],
+                    requires: ["Order", "OrderLine", "Payment"],
                     reason:
                         "Il venduto per titolo è il pagato, non l'impegnato. Senza Order/Payment non esiste "
                         + "alcun incasso da attribuire a un titolo. La sezione 'committedByTicketType' riporta "
@@ -111,21 +128,6 @@ export class EventDashboardService {
                     reason:
                         "L'incasso netto è subtotale meno rimborsi al netto dei diritti di prevendita: tutte e "
                         + "tre le grandezze vivono su entità non ancora costruite (§2, passi 18→27).",
-                },
-                missingRequirements: {
-                    available: false,
-                    requires: ["RequirementOutcome"],
-                    reason:
-                        "'Mancante' è uno stato di RequirementOutcome (TO_PROVIDE / UNDER_REVIEW / REJECTED) per "
-                        + "iscrizione: l'entità è il passo 17 del §2 e non esiste ancora. La sezione 'requirements' "
-                        + "riporta i requisiti CONFIGURATI sull'evento, che è un dato diverso.",
-                },
-                attendance: {
-                    available: false,
-                    requires: ["Ticket", "CheckIn"],
-                    reason:
-                        "Le presenze si contano sulle righe di CheckIn (coppia biglietto–sessione, RB7). "
-                        + "Nessuna delle due entità esiste nel perimetro attuale.",
                 },
             },
         };
@@ -343,6 +345,122 @@ export class EventDashboardService {
                 + "vendita: senza Order non esiste una data di incasso.",
             granularity: "DAY",
             points,
+        };
+    }
+
+    /**
+     * **Presenze** — `RB19`: un asse distinto dalle quote. Le quote governano
+     * l'ammissione, questo contatore governa la sicurezza, e sommarli sarebbe un
+     * errore con conseguenze fuori dal software.
+     *
+     * Si contano le righe **valide**: revocate escluse (`RF-CHK-9`, un ingresso
+     * annullato non è mai avvenuto) e righe di conflitto escluse — ma i conflitti
+     * aperti sono riportati a parte, perché un cruscotto che li nascondesse
+     * mostrerebbe un numero plausibile su un dato che nessuno ha ancora dirimito
+     * (`RF-CHK-6`).
+     */
+    private async buildAttendance(
+        eventId: number,
+        sessions: Session[],
+    ): Promise<EventDashboardDTO["sections"]["attendance"]> {
+        const bySession: EventDashboardDTO["sections"]["attendance"]["bySession"] = [];
+        let totalEntries = 0;
+        const tickets = new Set<number>();
+
+        for (const session of sessions) {
+            const entries = await this.checkInRepository.findBySession(session.id);
+            const valid = entries.filter(entry => !entry.revokedAt && !entry.conflictWithId);
+            for (const entry of valid) {
+                tickets.add(entry.ticketId);
+            }
+            totalEntries += valid.length;
+            bySession.push({
+                sessionId: session.id,
+                name: session.name,
+                startAt: session.startAt,
+                entries: valid.length,
+            });
+        }
+
+        const openConflicts = (await this.checkInRepository.findOpenConflictsByEvent(eventId)).length;
+
+        return {
+            available: true,
+            basedOn: ["CheckIn", "Session", "Ticket"],
+            note:
+                "Il check-in NON consuma capienza (RB19): questo contatore misura le persone presenti, "
+                + "le quote misurano i posti impegnati. Le due grandezze non vanno sommate.",
+            totalEntries,
+            distinctTickets: tickets.size,
+            openConflicts,
+            bySession,
+        };
+    }
+
+    /**
+     * **Requisiti mancanti** — `RF-BKO-1`.
+     *
+     * «Mancante» è uno stato di `RequirementOutcome` **oppure l'assenza
+     * dell'esito**: un requisito obbligatorio su cui nessuno ha dichiarato nulla
+     * manca esattamente come uno rifiutato, e trattarlo come soddisfatto sarebbe
+     * il modo più semplice per non accorgersene mai.
+     *
+     * `RB12` — nome del requisito e conteggio. Mai il contenuto degli esiti.
+     */
+    private async buildMissingRequirements(
+        requirements: EventRequirement[],
+        active: Registration[],
+    ): Promise<EventDashboardDTO["sections"]["missingRequirements"]> {
+        const mandatory = requirements.filter(requirement => requirement.mandatory);
+        const registrationIds = active.map(registration => registration.id);
+
+        if (!mandatory.length || !registrationIds.length) {
+            return {
+                available: true,
+                basedOn: ["EventRequirement", "RequirementOutcome", "Registration"],
+                registrationsWithMissing: 0,
+                byRequirement: mandatory.map(requirement => ({
+                    eventRequirementId: requirement.id,
+                    label: requirement.label,
+                    blocking: requirement.blocking,
+                    mandatory: requirement.mandatory,
+                    missing: registrationIds.length,
+                })),
+            };
+        }
+
+        const outcomes = await this.requirementOutcomeRepository.findByRegistrations(registrationIds);
+        const byRegistration = new Map<number, Map<number, RequirementOutcomeStatus>>();
+        for (const outcome of outcomes) {
+            const map = byRegistration.get(outcome.registrationId) ?? new Map<number, RequirementOutcomeStatus>();
+            map.set(outcome.eventRequirementId, outcome.status);
+            byRegistration.set(outcome.registrationId, map);
+        }
+
+        const withMissing = new Set<number>();
+        const byRequirement = mandatory.map(requirement => {
+            let missing = 0;
+            for (const registrationId of registrationIds) {
+                const status = byRegistration.get(registrationId)?.get(requirement.id);
+                if (!status || BLOCKING_OUTCOME_STATUSES.includes(status)) {
+                    missing += 1;
+                    withMissing.add(registrationId);
+                }
+            }
+            return {
+                eventRequirementId: requirement.id,
+                label: requirement.label,
+                blocking: requirement.blocking,
+                mandatory: requirement.mandatory,
+                missing,
+            };
+        });
+
+        return {
+            available: true,
+            basedOn: ["EventRequirement", "RequirementOutcome", "Registration"],
+            registrationsWithMissing: withMissing.size,
+            byRequirement,
         };
     }
 }

@@ -11,6 +11,8 @@ import { ArtistWithRelationsSchema, ArtistPartialWithRelationsSchema, ArtistOpti
 import type { ArtistWithRelations, ArtistPartialWithRelations, ArtistOptionalDefaultsWithRelations } from './ArtistSchema'
 import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptionalDefaultsWithRelationsSchema } from './EventSchema'
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
+import { TicketWithRelationsSchema, TicketPartialWithRelationsSchema, TicketOptionalDefaultsWithRelationsSchema } from './TicketSchema'
+import type { TicketWithRelations, TicketPartialWithRelations, TicketOptionalDefaultsWithRelations } from './TicketSchema'
 
 /////////////////////////////////////////
 // FILE SCHEMA
@@ -62,6 +64,7 @@ export type FileRelations = {
   eventPostersVertical: EventWithRelations[];
   eventPostersHorizontal: EventWithRelations[];
   eventPostersSquare: EventWithRelations[];
+  ticketPdfs: TicketWithRelations[];
 };
 
 export type FileWithRelations = z.infer<typeof FileSchema> & FileRelations
@@ -75,6 +78,7 @@ export const FileWithRelationsSchema: z.ZodType<FileWithRelations> = FileSchema.
   eventPostersVertical: z.lazy(() => EventWithRelationsSchema).array(),
   eventPostersHorizontal: z.lazy(() => EventWithRelationsSchema).array(),
   eventPostersSquare: z.lazy(() => EventWithRelationsSchema).array(),
+  ticketPdfs: z.lazy(() => TicketWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -90,6 +94,7 @@ export type FileOptionalDefaultsRelations = {
   eventPostersVertical: EventOptionalDefaultsWithRelations[];
   eventPostersHorizontal: EventOptionalDefaultsWithRelations[];
   eventPostersSquare: EventOptionalDefaultsWithRelations[];
+  ticketPdfs: TicketOptionalDefaultsWithRelations[];
 };
 
 export type FileOptionalDefaultsWithRelations = z.infer<typeof FileOptionalDefaultsSchema> & FileOptionalDefaultsRelations
@@ -103,6 +108,7 @@ export const FileOptionalDefaultsWithRelationsSchema: z.ZodType<FileOptionalDefa
   eventPostersVertical: z.lazy(() => EventOptionalDefaultsWithRelationsSchema).array(),
   eventPostersHorizontal: z.lazy(() => EventOptionalDefaultsWithRelationsSchema).array(),
   eventPostersSquare: z.lazy(() => EventOptionalDefaultsWithRelationsSchema).array(),
+  ticketPdfs: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -118,6 +124,7 @@ export type FilePartialRelations = {
   eventPostersVertical?: EventPartialWithRelations[];
   eventPostersHorizontal?: EventPartialWithRelations[];
   eventPostersSquare?: EventPartialWithRelations[];
+  ticketPdfs?: TicketPartialWithRelations[];
 };
 
 export type FilePartialWithRelations = z.infer<typeof FilePartialSchema> & FilePartialRelations
@@ -131,6 +138,7 @@ export const FilePartialWithRelationsSchema: z.ZodType<FilePartialWithRelations>
   eventPostersVertical: z.lazy(() => EventPartialWithRelationsSchema).array(),
   eventPostersHorizontal: z.lazy(() => EventPartialWithRelationsSchema).array(),
   eventPostersSquare: z.lazy(() => EventPartialWithRelationsSchema).array(),
+  ticketPdfs: z.lazy(() => TicketPartialWithRelationsSchema).array(),
 })).partial()
 
 export type FileOptionalDefaultsWithPartialRelations = z.infer<typeof FileOptionalDefaultsSchema> & FilePartialRelations
@@ -144,6 +152,7 @@ export const FileOptionalDefaultsWithPartialRelationsSchema: z.ZodType<FileOptio
   eventPostersVertical: z.lazy(() => EventPartialWithRelationsSchema).array(),
   eventPostersHorizontal: z.lazy(() => EventPartialWithRelationsSchema).array(),
   eventPostersSquare: z.lazy(() => EventPartialWithRelationsSchema).array(),
+  ticketPdfs: z.lazy(() => TicketPartialWithRelationsSchema).array(),
 }).partial())
 
 export type FileWithPartialRelations = z.infer<typeof FileSchema> & FilePartialRelations
@@ -157,6 +166,7 @@ export const FileWithPartialRelationsSchema: z.ZodType<FileWithPartialRelations>
   eventPostersVertical: z.lazy(() => EventPartialWithRelationsSchema).array(),
   eventPostersHorizontal: z.lazy(() => EventPartialWithRelationsSchema).array(),
   eventPostersSquare: z.lazy(() => EventPartialWithRelationsSchema).array(),
+  ticketPdfs: z.lazy(() => TicketPartialWithRelationsSchema).array(),
 }).partial())
 
 export default FileSchema;

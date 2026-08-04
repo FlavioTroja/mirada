@@ -16,3 +16,24 @@ export type I18nText = z.infer<typeof I18nTextSchema>;
 
 /** Variante nullable, per i campi `I18nText?` del §3.6. */
 export const I18nTextNullishSchema = I18nTextSchema.nullish();
+
+/**
+ * Legge il testo di un campo `I18nText` **per uso interno** — nome di una
+ * sessione in un PDF, etichetta di una quota in un messaggio d'errore.
+ *
+ * Non è la via con cui l'API espone i testi: verso il client si restituisce
+ * **sempre l'oggetto intero**, perché è il frontend a mostrare l'originale con
+ * l'indicazione della lingua quando la traduzione manca (`RF-PUB-10`). Qui il
+ * destinatario è un documento o un log, dove un oggetto non si può stampare.
+ */
+export function readI18nText(value: unknown, fallback?: string): string | undefined {
+    if (value && typeof value === "object") {
+        const text = value as { it?: unknown; en?: unknown };
+        if (typeof text.it === "string" && text.it) return text.it;
+        if (typeof text.en === "string" && text.en) return text.en;
+    }
+    if (typeof value === "string" && value) {
+        return value;
+    }
+    return fallback;
+}
