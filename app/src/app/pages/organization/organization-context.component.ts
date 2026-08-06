@@ -62,13 +62,28 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
 
         <nav class="links">
           @for (link of links; track link.id) {
+            <!--
+              La scheda corrente NON è disabilitata: è corrente.
+
+              Prima la voce attiva veniva passata come disabilitata, e la
+              conseguenza era che la pagina in cui ti trovi diventava la meno
+              visibile del gruppo invece della più visibile — attenuata come un
+              comando inerte. Non era solo un problema di colore: la toglieva
+              dal giro della tastiera e la faceva annunciare come «non
+              disponibile» invece che come «pagina corrente».
+
+              aria-current="page" è ciò che quello stato significa davvero, e la
+              classe is-current gli dà il risalto che gli spetta.
+            -->
             <keijo-navigation-button
               variant="row"
+              class="link"
+              [class.is-current]="current() === link.id"
+              [attr.aria-current]="current() === link.id ? 'page' : null"
               [label]="link.label"
               [leadingIcon]="link.icon"
               [trailingIcon]="current() === link.id ? undefined : chevronIcon"
-              [disabled]="current() === link.id"
-              (action)="go(link.path)"
+              (action)="go(link.path, link.id)"
             />
           }
         </nav>
@@ -93,6 +108,19 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
         display: flex;
         flex-wrap: wrap;
         gap: 0.375rem;
+      }
+      /* La voce corrente si riconosce **senza dipendere dal colore**: ha un
+         bordo pieno d'accento e il testo in grassetto. Chi non distingue i
+         colori vede comunque quale delle cinque è quella aperta (1.4.1). */
+      .link.is-current ::ng-deep button {
+        border: 1px solid rgb(var(--accent-rgb)) !important;
+        background: rgba(var(--accent-rgb), 0.14) !important;
+        font-weight: 600;
+      }
+      .link.is-current ::ng-deep button,
+      .link.is-current ::ng-deep button * {
+        color: rgb(var(--text-rgb)) !important;
+        opacity: 1 !important;
       }
       .links {
         display: grid;
@@ -147,7 +175,13 @@ export class OrganizationContextComponent {
     if (id) await this.store.loadOne(Number(id));
   }
 
-  go(path: string): void {
+  /**
+   * La voce corrente resta premibile — è così che smette di essere annunciata
+   * come «non disponibile» — ma premerla non ricarica la pagina su cui sei già:
+   * sarebbe una navigazione a vuoto che azzera lo stato di un modulo aperto.
+   */
+  go(path: string, id: string): void {
+    if (this.current() === id) return;
     void this.router.navigateByUrl(path);
   }
 }

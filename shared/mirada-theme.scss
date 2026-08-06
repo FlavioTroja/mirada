@@ -246,9 +246,38 @@ body {
 .progress-background {
   background: rgba(var(--text-rgb), 0.1) !important;
 }
+/* --- I chip dei filtri ---------------------------------------------------- *
+ * «+ Stato», «+ Tipo evento», «+ Location» comparivano come scritte spente su
+ * una pastiglia chiara: un filtro che si può premere e non si legge.
+ *
+ * Le regole sono scritte per intero e non solo dove la libreria sbaglia,
+ * perché il chip prende il colore da tre punti diversi — la regola base, il
+ * `:hover` con `#f2f2f2` cablato e `--disabled` con `opacity: .5` — e correggerne
+ * uno solo lascia gli altri a riemergere. Qui il colore viene dalla nostra
+ * palette in tutti gli stati.
+ *
+ * Il bordo non è decorazione: un chip è un comando, e senza confine visibile
+ * non si distingue da un'etichetta (1.4.11). */
+.keijo-chip {
+  background: rgb(var(--foreground-color)) !important;
+  color: rgb(var(--text-rgb)) !important; /* 14,4:1 scuro · 15,4:1 chiaro */
+  border: 1px solid rgba(var(--text-rgb), 0.55) !important; /* ≥ 3:1 in entrambi */
+}
+.keijo-chip:not(.keijo-chip--disabled):hover {
+  /* Era `#f2f2f2`: sul tema scuro una pastiglia bianca in mezzo al prugna. */
+  background: rgba(var(--accent-rgb), 0.14) !important;
+  border-color: rgb(var(--accent-rgb)) !important;
+}
 .keijo-chip--selected {
   background: rgba(var(--accent-rgb), 0.18) !important;
-  color: rgb(var(--text-rgb));
+  color: rgb(var(--text-rgb)) !important;
+  border-color: rgb(var(--accent-rgb)) !important;
+}
+/* `opacity: .5` portava l'avorio a 4,55:1 — nominalmente al limite, e su un
+   testo di 14px sostanzialmente illeggibile. Un chip disattivato deve *sembrare*
+   spento, non sparire: 0.72 lo attenua restando sopra 8:1. */
+.keijo-chip--disabled {
+  opacity: 0.72 !important;
 }
 .keijo-dtp-panel,
 .keijo-calendar {
