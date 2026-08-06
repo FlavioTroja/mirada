@@ -25,6 +25,7 @@ import { RoleToUserUpdateDTO } from "@DTOs/role_to_user/RoleToUserUpdateDTO";
 import { splitLinkableEntities } from "@utils/helpers/mergeEntities";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { generateRandomString } from "@utils/helpers/crypto";
+import { regionForProvince } from "@utils/helpers/italianProvinces";
 import { FileService } from "@services/FileService";
 import { MultipartFile } from "@fastify/multipart";
 import { AuditLog } from "@utils/adapters/decorators/AuditLog";
@@ -64,7 +65,9 @@ export class UserService {
 
             const addressesDTO = userCreationDTOSplit.addresses(savedPerson.id) ?? [];
             for (const addressDTO of addressesDTO) {
-                await this.addressRepository.save(addressDTO);
+                // §3.4 — la regione si deriva dalla provincia su ogni strada che
+                // scrive un indirizzo, non solo su `POST /addresses/create`.
+                await this.addressRepository.save({ ...addressDTO, region: regionForProvince(addressDTO.province) });
             }
 
             const userDTO = userCreationDTOSplit.user(savedPerson.id!);
@@ -106,7 +109,7 @@ export class UserService {
 
             await this.roleToUserRepository.save({ roleName: RoleName.DANCER, userId: savedUser.id! }, prisma);
 
-            Log.info(`[${UserService.name}][register][${savedUser.id}] nuovo utente registrato`);
+            Log.info(`[User Service]: self-registered dancer '${savedUser.username}' (id ${savedUser.id}) — Contact, Person and User created in one transaction, role DANCER assigned (§3.7, AS2)`);
 
             return this.userRepository.findById(savedUser.id!, {populate: "person person.contact"}, prisma);
         }) as UserWithRelations;

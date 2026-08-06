@@ -28,6 +28,35 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
         return this.findMany({ id: { in: ids } }, { orderBy: { id: "asc" } }, tx);
     }
 
+    /**
+     * Cancellazione **reale** delle iscrizioni di un carrello abbandonato o
+     * scaduto — `RF-PAY-24`, §4.11.
+     *
+     * ── Perché reale e non soft, che è l'eccezione di questo repository ──────
+     * `@@unique([eventId, personUserId])` è un indice **del database**, e il
+     * database non sa cosa sia `deleted`: una riga cancellata a metà continua a
+     * occupare la coppia `(evento, persona)`. Un `safeDelete` qui produrrebbe
+     * quindi il difetto peggiore del checkout — *chi abbandona il carrello non
+     * può più iscriversi a quell'evento, per sempre*, con un errore che parla di
+     * un'iscrizione che l'utente non vede da nessuna parte.
+     *
+     * È sicura perché si applica **solo** a iscrizioni che non hanno mai
+     * prodotto nulla: i consumi di capienza sono già stati rilasciati dal
+     * chiamante, `QuotaConsumption` e `RequirementOutcome` scendono in cascata, e
+     * il chiamante verifica prima che non esistano biglietti né ingressi. Un
+     * carrello abbandonato non è un'iscrizione da conservare: è un'iscrizione
+     * che non c'è mai stata.
+     */
+    async hardDeleteByIds(ids: number[], tx?: Prisma.TransactionClient): Promise<number> {
+        if (!ids.length) {
+            return 0;
+        }
+        const result = await this.exec(() =>
+            (this.getDelegate(tx) as Prisma.RegistrationDelegate).deleteMany({ where: { id: { in: ids } } }),
+        );
+        return result.count;
+    }
+
     /** Le due iscrizioni di una coppia (§4.10): sono loro a puntare alla coppia. */
     async findByCouple(coupleId: number, tx?: Prisma.TransactionClient): Promise<Registration[]> {
         return this.findMany({ coupleId, deleted: false }, { orderBy: { id: "asc" } }, tx);

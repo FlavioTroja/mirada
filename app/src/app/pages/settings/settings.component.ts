@@ -6,12 +6,13 @@ import {
   PillComponent,
   SectionActionButton,
 } from '@keijo/ui';
-import { badge, language, logout as logoutIcon, translate } from '@keijo/ui/icons';
+import { badge, contrast, darkMode, language, lightMode, logout as logoutIcon, translate } from '@keijo/ui/icons';
 import { Router } from '@angular/router';
 import { HeaderTitleService } from '../../services/header-title.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { LocaleService, UI_LANG_LABEL } from '../../core/i18n/i18n-text';
 import { ORG_MEMBER_ROLE_LABEL } from '../../core/auth/roles';
+import { ThemeChoice, ThemeService } from '../../core/theme/theme.service';
 
 /**
  * Preferenze utente — **fuori dalla sidebar** (`KEIJO-SIDEBAR-NO-SETTINGS`):
@@ -62,6 +63,25 @@ import { ORG_MEMBER_ROLE_LABEL } from '../../core/auth/roles';
       </keijo-page-section-wrapper>
 
       <keijo-page-section-wrapper
+        title="Aspetto"
+        [buttons]="themeButtons()"
+        (buttonClick)="onTheme($event)"
+      >
+        <p class="mirada-hint">
+          Il tema scuro è quello di Mirada, ereditato dalla proiezione in sala: là non è
+          una scelta estetica ma di sicurezza, perché un maxischermo chiaro abbaglia chi
+          balla al buio. Il tema chiaro serve al back-office, che si usa di giorno e
+          spesso su schermi non calibrati.
+        </p>
+        <p class="mirada-value">
+          Attualmente: {{ themeLabel() }}
+          @if (theme.choice() === 'auto') {
+            <span class="mirada-muted"> — segue l’impostazione del sistema</span>
+          }
+        </p>
+      </keijo-page-section-wrapper>
+
+      <keijo-page-section-wrapper
         title="Sessione"
         [buttons]="sessionButtons"
         (buttonClick)="onLogout()"
@@ -93,6 +113,7 @@ export class SettingsComponent implements OnInit {
   private readonly router = inject(Router);
   readonly auth = inject(AuthService);
   readonly locale = inject(LocaleService);
+  readonly theme = inject(ThemeService);
 
   readonly badgeIcon = badge;
 
@@ -115,9 +136,32 @@ export class SettingsComponent implements OnInit {
     },
   ]);
 
+  readonly themeLabel = computed(() =>
+    this.theme.resolved() === 'dark' ? 'tema scuro' : 'tema chiaro',
+  );
+
+  /**
+   * Tre scelte, non due: `auto` segue il sistema e resta reattivo, gli altri due
+   * sono una decisione dell'utente che il sistema non sovrascrive. La primaria
+   * — indice 0, resa più a destra — è il tema opposto a quello attivo, perché è
+   * l'azione che si cerca.
+   */
+  readonly themeButtons = computed<SectionActionButton[]>(() => {
+    const opposto: SectionActionButton = this.theme.resolved() === 'dark'
+      ? { id: 'light', icon: lightMode, label: 'Passa al chiaro', variant: 'accent' }
+      : { id: 'dark', icon: darkMode, label: 'Passa allo scuro', variant: 'accent' };
+    return this.theme.choice() === 'auto'
+      ? [opposto]
+      : [opposto, { id: 'auto', icon: contrast, label: 'Segui il sistema', variant: 'default' }];
+  });
+
   readonly sessionButtons: SectionActionButton[] = [
     { id: 'logout', icon: logoutIcon, label: 'Esci', variant: 'error' },
   ];
+
+  onTheme(button: SectionActionButton): void {
+    this.theme.set(button.id as ThemeChoice);
+  }
 
   ngOnInit(): void {
     this.headerTitle.set('Preferenze');

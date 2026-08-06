@@ -10,10 +10,7 @@ import { RegistrationRepository } from "@repositories/RegistrationRepository";
 import { EventRepository } from "@repositories/EventRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { CapacityEngineService, CommitOutcome } from "@services/CapacityEngineService";
-import { OrganizationAudienceService } from "@services/OrganizationAudienceService";
-import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
-import { Events } from "@websocket/events/Events";
-import { RegistrationCreatedPayloadDTO } from "@websocket/dtos/RegistrationCreatedPayloadDTO";
+import { RegistrationNotifierService } from "@services/RegistrationNotifierService";
 import { RegistrationCreateDTO } from "@DTOs/registration/RegistrationCreateDTO";
 import { RegistrationUpdateDTO } from "@DTOs/registration/RegistrationUpdateDTO";
 import { RegistrationQueryDTO } from "@DTOs/registration/RegistrationQueryDTO";
@@ -39,8 +36,7 @@ export class RegistrationService {
         private readonly eventRepository: EventRepository,
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly capacityEngineService: CapacityEngineService,
-        private readonly organizationAudienceService: OrganizationAudienceService,
-        private readonly wsPublisher: WsPublisherService,
+        private readonly registrationNotifierService: RegistrationNotifierService,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -67,7 +63,7 @@ export class RegistrationService {
 
         // §3.9 — dopo la scrittura, mai dentro: `registration/created` ai membri
         // dell'organizzazione, uno per uno, mai in broadcast per ruolo.
-        await this.publishRegistrationCreated(event, registration);
+        await this.registrationNotifierService.registrationsCreated(event, [registration.id]);
 
         return registration;
     }
@@ -182,25 +178,6 @@ export class RegistrationService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-
-    private async publishRegistrationCreated(event: Event, registration: Registration): Promise<void> {
-        try {
-            const wsCodes = await this.organizationAudienceService.resolveMemberWsCodes(event.organizationId);
-            if (!wsCodes.length) {
-                return;
-            }
-            const payload: RegistrationCreatedPayloadDTO = {
-                eventId: event.id,
-                organizationId: event.organizationId,
-                registrationId: registration.id,
-            };
-            await this.wsPublisher.sendToUsers(wsCodes, Events.REGISTRATION_CREATED, payload);
-        } catch (err) {
-            // Il segnale è un trigger di refetch: la sua perdita non può far
-            // fallire un'iscrizione già scritta.
-            Log.error(`[Registration Service]: failed to publish 'registration/created' for registration (id ${registration.id}): ${(err as Error).message}`);
-        }
-    }
 
     private async assertWritableEvent(principalId: number, eventId: number): Promise<Event> {
         const scope = await this.organizationScopeService.resolve(principalId);

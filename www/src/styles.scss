@@ -1,0 +1,300 @@
+/* Mirada Tango — app pubblica `www`.
+ *
+ * Le direttive Tailwind e l'import di `@keijo/ui` restano qui perché si
+ * risolvono sul `node_modules` di questa app; la palette e le sovrascritture
+ * della libreria vivono invece in `shared/mirada-theme.scss`, comune al
+ * back-office. **Il tema condiviso non si duplica e non si modifica**: quello
+ * che serve solo al pubblico sta sotto, in questo file. */
+@import '@keijo/ui/src/lib/styles/keijo-ui';
+
+/* --- Il reset che qui non arrivava da nessuno --------------------------- *
+ * Lo scaffold aveva lasciato `@tailwind base/components/utilities`, ma in
+ * questa app **il pacchetto `tailwindcss` non è installato**: le direttive non
+ * producevano una riga di CSS e la build lo diceva a ogni giro. Il guaio non
+ * era il warning — era che con loro spariva anche **Preflight**, e con
+ * Preflight il `box-sizing: border-box`.
+ *
+ * In `content-box` un campo dichiarato `width: 100%` che ha pure
+ * `padding: 0.55rem 0.7rem` e un bordo è largo *più* della sua cella: nella
+ * griglia a due colonne del modulo d'iscrizione Nome e Cognome si
+ * **sovrapponevano di 12px**. Non è una preferenza estetica, è un campo che
+ * copre quello accanto.
+ *
+ * Le direttive morte sono rimosse e il reset è scritto qui. `www` non usa una
+ * sola utility Tailwind né un componente `@keijo/ui`, quindi non c'è nulla da
+ * recuperare installando il pacchetto; l'import qui sopra resta perché porta i
+ * `@font-face` di Poppins e Space Mono.
+ *
+ * Volutamente **solo** `box-sizing`: le spaziature di questo foglio sono state
+ * tarate a occhio sopra i margini di serie del browser, e un reset dei margini
+ * le sposterebbe tutte. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+@import 'mirada-theme';
+
+/* ===========================================================================
+   Primitive del percorso pubblico — solo `www`.
+
+   `www` non ha la shell keijo: niente sidebar, niente testata di pagina, nessun
+   componente di lista. Le poche primitive che servono — contenitore, riquadro,
+   pulsante, campo, etichetta di stato — sono scritte qui in termini delle
+   **variabili semantiche del tema condiviso**, così i due temi si ribaltano
+   senza una riga duplicata.
+   =========================================================================== */
+
+:root {
+  --www-radius: 14px;
+  --www-radius-sm: 9px;
+  --www-max: 76rem;
+  --www-line: rgba(var(--text-rgb), 0.14);
+  --www-panel: rgba(var(--text-rgb), 0.04);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+.www-wrap {
+  max-width: var(--www-max);
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+.www-narrow {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem;
+}
+
+/* --- Titoli ------------------------------------------------------------- */
+.www-h1 {
+  font-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.8rem);
+  line-height: 1.15;
+  font-weight: 600;
+  color: rgb(var(--text-rgb));
+  margin: 0 0 0.5rem;
+}
+.www-h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: rgb(var(--text-rgb));
+  margin: 0 0 0.75rem;
+}
+.www-h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgb(var(--text-rgb));
+  margin: 0 0 0.35rem;
+}
+.www-lead {
+  color: rgba(var(--text-rgb), 0.78);
+  line-height: 1.65;
+}
+.www-muted {
+  color: rgba(var(--text-rgb), 0.66);
+  font-size: 0.9rem;
+}
+.www-hint {
+  color: rgba(var(--text-rgb), 0.62);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+/* --- Riquadri ----------------------------------------------------------- */
+/* Riquadri e avvisi sono **blocchi impilati**: la scheda evento ne mette cinque
+ * di fila, il percorso d'iscrizione alterna avviso e riquadro. Senza margine
+ * proprio si toccavano, bordo contro bordo, e due contenuti distinti leggevano
+ * come uno solo. Il margine sta sulla classe e non sul contenitore di pagina
+ * perché è una proprietà del blocco, e perché i margini adiacenti collassano
+ * fra loro: due riquadri di fila restano a 1rem, non a 2. */
+.www-panel {
+  background: rgb(var(--foreground-color));
+  border: 1px solid var(--www-line);
+  border-radius: var(--www-radius);
+  padding: 1.25rem;
+  margin: 1rem 0;
+}
+
+.www-section {
+  margin-top: 2.5rem;
+}
+
+/* --- Pulsanti ----------------------------------------------------------- */
+.www-btn,
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.6rem 1.1rem;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.www-btn {
+  background: rgb(var(--accent-rgb));
+  color: rgb(var(--mirada-black));
+}
+.www-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.www-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.www-btn-secondary {
+  background: transparent;
+  color: rgb(var(--text-rgb));
+  border-color: rgba(var(--text-rgb), 0.28);
+}
+.www-btn-secondary:hover:not(:disabled) {
+  border-color: rgb(var(--accent-rgb));
+  color: rgb(var(--accent-rgb));
+}
+
+.ghost-btn {
+  background: transparent;
+  color: rgba(var(--text-rgb), 0.86);
+  border-color: rgba(var(--text-rgb), 0.22);
+  padding: 0.35rem 0.8rem;
+  font-size: 0.9rem;
+}
+.ghost-btn:hover {
+  color: rgb(var(--accent-rgb));
+  border-color: rgb(var(--accent-rgb));
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid rgb(var(--accent-rgb));
+  outline-offset: 2px;
+}
+
+/* --- Campi -------------------------------------------------------------- */
+.www-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.www-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(var(--text-rgb), 0.72);
+}
+.www-input,
+.www-select {
+  width: 100%;
+  background: rgba(var(--background-color), 0.6);
+  color: rgb(var(--text-rgb));
+  border: 1px solid rgba(var(--text-rgb), 0.22);
+  border-radius: var(--www-radius-sm);
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+}
+.www-input::placeholder {
+  color: rgba(var(--text-rgb), 0.45);
+}
+.www-input:focus,
+.www-select:focus {
+  border-color: rgb(var(--accent-rgb));
+  outline: none;
+}
+
+/* --- Etichette di stato ------------------------------------------------- */
+.www-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  font-size: 0.78rem;
+  border: 1px solid rgba(var(--text-rgb), 0.2);
+  color: rgba(var(--text-rgb), 0.82);
+  white-space: nowrap;
+}
+.www-chip-accent {
+  border-color: rgba(var(--accent-rgb), 0.6);
+  color: rgb(var(--accent-rgb));
+}
+.www-chip-ok {
+  border-color: rgba(var(--keijo-success), 0.6);
+  color: rgb(var(--keijo-success));
+}
+.www-chip-warn {
+  border-color: rgba(var(--keijo-warning), 0.65);
+  color: rgb(var(--keijo-warning));
+}
+.www-chip-off {
+  border-color: rgba(var(--keijo-error), 0.6);
+  color: rgb(var(--keijo-error));
+}
+
+/* --- Riquadri di avviso ------------------------------------------------- */
+.www-notice {
+  border-radius: var(--www-radius);
+  border: 1px solid;
+  padding: 0.9rem 1rem;
+  line-height: 1.55;
+  margin: 1rem 0;
+}
+.www-notice-info {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+.www-notice-warn {
+  border-color: rgba(var(--keijo-warning), 0.55);
+  background: rgba(var(--keijo-warning), 0.1);
+}
+.www-notice-error {
+  border-color: rgba(var(--keijo-error), 0.55);
+  background: rgba(var(--keijo-error), 0.1);
+}
+.www-notice-ok {
+  border-color: rgba(var(--keijo-success), 0.5);
+  background: rgba(var(--keijo-success), 0.1);
+}
+.www-notice strong {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: rgb(var(--text-rgb));
+}
+
+/* --- La dicitura di lingua di `RF-PUB-10` -------------------------------- */
+.www-lang-note {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px dashed rgba(var(--text-rgb), 0.35);
+  color: rgba(var(--text-rgb), 0.7);
+  vertical-align: middle;
+}
+
+.www-skip {
+  position: absolute;
+  left: -9999px;
+}

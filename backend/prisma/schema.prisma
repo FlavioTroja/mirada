@@ -253,6 +253,16 @@ model Address {
      default  Boolean? @default(false)
      billing  Boolean? @default(false)
 
+     /// **Non si digita** (§3.4): il servizio la deriva dalla sigla di provincia
+     /// con la tabella delle province italiane (`@utils/helpers/italianProvinces`),
+     /// su `create` e su `update`. Non compare in alcun DTO di scrittura.
+     ///
+     /// È una colonna e non un calcolo in lettura perché il filtro geografico
+     /// della ricerca pubblica dev'essere una condizione INDICIZZATA, e perché un
+     /// campo libero produrrebbe «Puglia», «PUGLIA» e «Apulia» come tre regioni
+     /// diverse.
+     region String?
+
      personId Int?
      person   Person? @relation(fields: [personId], references: [id], onDelete: Cascade)
 
@@ -261,6 +271,11 @@ model Address {
 
      createdAt DateTime @default(now())
      updatedAt DateTime @updatedAt
+
+     /// Le due colonne del filtro pubblico di `POST /api/public/events/` (§3.7):
+     /// la ricerca per città e per regione passa da qui attraverso `Venue`.
+     @@index([region])
+     @@index([city])
 }
 
 model File {
@@ -1403,7 +1418,11 @@ enum OrderStatus {
      CANCELLED
 }
 
+/// §3.5. `NONE` = ordine a **importo zero** o **saldato fuori piattaforma**: è il
+/// percorso di `POST /orders/:id/confirm-free`, non una scorciatoia per saltare
+/// il pagamento. `STRIPE` arriva con la fase D2.
 enum PaymentProvider {
+     NONE
      STRIPE
 }
 

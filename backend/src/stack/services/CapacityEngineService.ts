@@ -33,6 +33,24 @@ export type CommitItem = {
     registrationId: number;
     /** Titolo acquistato. Nullo sugli accrediti senza titolo. */
     ticketTypeId?: number | null;
+    /**
+     * **Sovrapposizione fra titoli** (`RF-PAY-26`, §4.11) — gli **altri** titoli
+     * che la stessa persona acquista nello stesso ordine.
+     *
+     * Esiste perché *una iscrizione per persona per evento* è un vincolo del
+     * modello: chi compra un Full Pass e un Workshop ha **una** `Registration`,
+     * e quindi **un solo** `CommitItem`. Se lo si spezzasse in due, l'unicità di
+     * `QuotaConsumption(capacityQuotaId, registrationId)` respingerebbe la
+     * seconda scrittura sulla quota di una sessione inclusa in entrambi i titoli
+     * — l'ordine fallirebbe per una condizione che è invece **normale e da non
+     * bloccare**.
+     *
+     * Tenendoli su una riga sola, la deduplica per id di
+     * `resolveApplicableQuotas` fa già la cosa giusta: *la quota di quella
+     * sessione non viene consumata due volte per la stessa persona*, **senza una
+     * riga di codice dedicata alle sovrapposizioni**.
+     */
+    ticketTypeIds?: number[];
     /** Servizi accessori acquistati con questa iscrizione. */
     serviceIds?: number[];
     /** Normalmente 1 (`05` §2.2). */
@@ -228,6 +246,8 @@ export class CapacityEngineService {
             channel: RegistrationChannel;
             role: DanceRole | null;
             ticketTypeId?: number | null;
+            /** Più titoli della stessa persona nello stesso ordine (`RF-PAY-26`). */
+            ticketTypeIds?: number[];
             sessionIds?: number[];
             serviceIds?: number[];
         },
@@ -256,8 +276,17 @@ export class CapacityEngineService {
         if (params.channel === RegistrationChannel.COMPLIMENTARY) {
             applicable.push(find(QuotaScope.EVENT, null, null, QuotaReservedFor.COMPLIMENTARY));
         } else {
-            if (params.ticketTypeId) {
-                applicable.push(find(QuotaScope.TICKET_TYPE, params.ticketTypeId, null, null));
+            // Ogni titolo acquistato dalla stessa persona porta la propria quota
+            // di titolo: sono inventari commerciali distinti e vanno consumati
+            // entrambi. Sono invece le quote di SESSIONE, condivise fra due
+            // titoli che includono la stessa serata, che non vanno consumate due
+            // volte — e a quello pensa la deduplica per id in coda al metodo.
+            const ticketTypeIds = [
+                ...(params.ticketTypeId ? [params.ticketTypeId] : []),
+                ...(params.ticketTypeIds ?? []),
+            ];
+            for (const ticketTypeId of new Set(ticketTypeIds)) {
+                applicable.push(find(QuotaScope.TICKET_TYPE, ticketTypeId, null, null));
             }
             if (params.channel === RegistrationChannel.EXTERNAL_CHANNEL) {
                 applicable.push(find(QuotaScope.EVENT, null, null, QuotaReservedFor.EXTERNAL_CHANNEL));
@@ -1048,7 +1077,13 @@ export class CapacityEngineService {
         const registrations = await this.registrationRepository.findByIds(items.map(i => i.registrationId), tx);
         const byId = new Map(registrations.map(r => [r.id, r]));
 
-        const ticketTypeIds = [...new Set(items.map(i => i.ticketTypeId).filter((id): id is number => !!id))];
+        const ticketTypeIds = [
+            ...new Set(
+                items
+                    .flatMap(i => [i.ticketTypeId, ...(i.ticketTypeIds ?? [])])
+                    .filter((id): id is number => !!id),
+            ),
+        ];
         const sessionsByTicketType = await this.loadIncludedSessions(ticketTypeIds, tx);
 
         // Ruoli già decisi in QUESTO ordine: due flessibili non finiscono
@@ -1077,11 +1112,25 @@ export class CapacityEngineService {
                 pending.follower += 1;
             }
 
+            // L'UNIONE delle sessioni di tutti i titoli della persona: due titoli
+            // che includono la stessa serata la nominano una volta sola, e la
+            // deduplica per quota fa il resto (`RF-PAY-26`).
+            const itemTicketTypeIds = [
+                ...new Set(
+                    [item.ticketTypeId, ...(item.ticketTypeIds ?? [])]
+                        .filter((id): id is number => !!id),
+                ),
+            ];
+            const sessionIds = [
+                ...new Set(itemTicketTypeIds.flatMap(id => sessionsByTicketType.get(id) ?? [])),
+            ];
+
             const applicable = this.resolveApplicableQuotas(quotas, {
                 channel: registration.channel,
                 role,
                 ticketTypeId: item.ticketTypeId ?? null,
-                sessionIds: item.ticketTypeId ? sessionsByTicketType.get(item.ticketTypeId) ?? [] : [],
+                ticketTypeIds: item.ticketTypeIds ?? [],
+                sessionIds,
                 serviceIds: item.serviceIds ?? [],
             });
 

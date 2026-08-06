@@ -26,6 +26,19 @@ export const Events = {
      * live presence counter, and a safety figure that arrives late is a wrong figure.
      */
     CHECKIN_REGISTERED: "checkin/registered",
+    /**
+     * The 15-minute hold of an order lapsed and the scheduler released it (§4.11,
+     * `RF-PAY-24`). Sent to the BUYER — nobody else has anything to do about it.
+     * The buyer's cart page must stop counting down and say why, instead of letting
+     * the user pay for seats that are no longer held.
+     */
+    ORDER_RESERVATION_EXPIRED: "order/reservation-expired",
+    /**
+     * An order was paid (§4.11). Sent to the BUYER. In phase D2 it is the Stripe
+     * webhook that publishes it; today `POST /orders/:id/confirm-free` does, on the
+     * very same code path minus the adapter.
+     */
+    PAYMENT_SUCCEEDED: "payment/succeeded",
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

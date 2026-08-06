@@ -65,6 +65,35 @@ export class CapacityQuotaRepository extends BaseRepository<"capacityQuota"> {
         );
     }
 
+    /**
+     * Le quote di **ambito `EVENT`** di tutti gli eventi che soddisfano un filtro,
+     * in **una sola query** — è ciò su cui si regge il facet `role` della ricerca
+     * pubblica (`RF-PUB-2`, §3.7).
+     *
+     * Il filtro `role` non può essere una condizione SQL: «ha ancora capienza per
+     * un leader» è `consumed + 1 <= limit + overbookAllowance` **più** il cancello
+     * di tolleranza sullo sbilancio, cioè un confronto fra colonne e una
+     * valutazione a due righe che nessun `WHERE` di Prisma esprime. La scelta è
+     * quindi fra un `$queryRaw` che duplica la regola del motore e **una query che
+     * porta a casa le quote di ambito evento**, lasciando la decisione alle
+     * funzioni pure di `CapacityEngineService`. La seconda è quella giusta: la
+     * regola resta scritta in un posto solo, e le righe sono poche — le quote di
+     * ambito `EVENT` sono al più cinque per evento (sala, due ruoli, due
+     * contingenti riservati).
+     *
+     * **Non è un N+1**: una query per l'intera pagina, non una per riga.
+     */
+    async findEventScopeQuotasForEvents(
+        eventFilter: Prisma.EventWhereInput,
+        tx?: Prisma.TransactionClient,
+    ): Promise<CapacityQuota[]> {
+        return this.findMany(
+            { deleted: false, scope: QuotaScope.EVENT, event: eventFilter },
+            { orderBy: { id: "asc" } },
+            tx,
+        );
+    }
+
     /** La quota che porta esattamente quella identità, o `null` se non è configurata. */
     async findByIdentity(
         eventId: number,

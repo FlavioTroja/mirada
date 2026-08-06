@@ -1,0 +1,378 @@
+/* ===========================================================================
+   Mirada Tango — TEMA CONDIVISO fra le applicazioni.
+
+   Questo file è incluso da `app/` (back-office) e da `www/` (pubblico) tramite
+   `stylePreprocessorOptions.includePaths`, così la palette e le sovrascritture
+   di `@keijo/ui` esistono in **un solo posto**. La `wall` lo erediterà.
+
+   Non contiene le direttive `@tailwind` né l'import di `@keijo/ui`: quelli
+   restano nel `styles.scss` di ciascuna app, perché si risolvono sul suo
+   `node_modules`.
+   =========================================================================== */
+
+/* ===========================================================================
+   Mirada Tango — due temi.
+
+   **scuro** — la palette calda ereditata dalla wall (§5, `RF-WALL-31`): nero e
+   bordeaux come superficie, oro e avorio come testo. Per la wall non è una
+   scelta estetica ma di sicurezza — un maxischermo chiaro abbaglia chi balla in
+   una sala buia — e il back-office la eredita per identità.
+
+   **chiaro** — per il back-office usato di giorno, spesso su schermi non
+   calibrati. Non è un grigio freddo: resta caldo, avorio e bordeaux, così i due
+   temi sono lo stesso prodotto in due luci diverse.
+
+   Il tema si sceglie con `data-theme` su `<html>`; senza attributo vale lo
+   scuro. **Le regole di questo file non sono duplicate**: sono scritte in
+   termini di variabili semantiche, e sono quelle a ribaltarsi.
+
+   Ogni coppia testo/fondo è verificata **WCAG 2.1 AA** (≥ 4,5:1 per il testo
+   normale) e il rapporto misurato è annotato a fianco.
+   =========================================================================== */
+
+:root {
+  /* --- Costanti di marca: non dipendono dal tema ------------------------- */
+  --mirada-black: 15, 10, 12; /* #0F0A0C */
+  --mirada-surface: 32, 16, 21; /* #201015 */
+  --mirada-bordeaux: 106, 26, 45; /* #6A1A2D */
+  --mirada-gold: 224, 184, 79; /* #E0B84F */
+  --mirada-ivory: 243, 233, 220; /* #F3E9DC */
+}
+
+/* ---------------------------------------------------------------------------
+   TEMA SCURO — predefinito, e quello che vale anche senza attributo.
+   --------------------------------------------------------------------------- */
+:root,
+:root[data-theme='dark'] {
+  /* Variabili semantiche: è su queste che è scritto tutto il resto del file.
+     `--text-rgb` è «il testo corrente», `--accent-rgb` «l'accento leggibile». */
+  --text-rgb: var(--mirada-ivory);
+  --accent-rgb: var(--mirada-gold);
+  --scheme: dark;
+
+  --background-color: var(--mirada-black);
+  --foreground-color: var(--mirada-surface);
+  --primary-color: var(--mirada-ivory); /* avorio su #201015 → 15,1:1 */
+
+  --keijo-accent: var(--mirada-gold);
+  --keijo-accent-light: 42, 26, 18;
+  --keijo-error: 255, 138, 128;
+  --keijo-error-light: 44, 17, 19;
+  --keijo-warning: 240, 184, 96;
+  --keijo-warning-light: 44, 32, 19;
+  --keijo-success: 123, 214, 160;
+  --keijo-success-light: 18, 36, 26;
+
+  /* `.pill-remove` (bottone distruttivo della modale) ha il testo **bianco
+     cablato** (`color: #ffffffe5`). Un rosso chiaro come fondo darebbe 2,2:1:
+     qui il fondo è un rosso profondo, e il bianco torna a 8,8:1.
+     Vale identico nei due temi, appunto perché il testo è cablato. */
+  --modal-remove-element: #8e1f2e;
+
+  /* Pill, info-box, banner e bottoni: fondo scuro tinto + testo saturo */
+  --color-accent-light: #2a1a12;
+  --color-accent: #e0b84f; /* 8,9:1 */
+  --color-error-light: #2c1113;
+  --color-error: #ff8a80; /* 7,7:1 */
+  --color-warning-light: #2c2013;
+  --color-warning: #f0b860; /* 8,9:1 */
+  --color-success-light: #12241a;
+  --color-success: #7bd6a0; /* 9,6:1 */
+  --color-info-light: #241a1e;
+  --color-info: #5a4048;
+  --color-info-text: #f3e9dc; /* 14,4:1 */
+  --color-default-light: #241a1e;
+  --color-default-border: #7a6058;
+  --color-default-text: #f3e9dc; /* 14,4:1 */
+  --color-draft-light: #221a2c;
+  --color-draft: #c9a7f5; /* 8,4:1 */
+  /* `filled` = pill di riferimento a un'altra entità, cliccabile: bordeaux pieno */
+  --color-filled-light: #6a1a2d;
+  --color-filled: #f3e9dc; /* 9,8:1 */
+  --color-circle-button-light: #2a1a20;
+  --color-circle-button: #f3e9dc;
+  --color-white: #201015;
+
+  /* Le ombre chiare non si vedono sul nero: servono ombre più profonde */
+  --keijo-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+  --keijo-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.6), 0 1px 2px 0 rgba(0, 0, 0, 0.45);
+  --keijo-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.65), 0 2px 4px -1px rgba(0, 0, 0, 0.5);
+  --keijo-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7), 0 4px 6px -2px rgba(0, 0, 0, 0.5);
+  --keijo-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.75), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+  --keijo-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+}
+
+/* ---------------------------------------------------------------------------
+   TEMA CHIARO.
+
+   Due avvertenze che il tema scuro non aveva:
+
+   · **L'oro non regge sul chiaro.** `#E0B84F` su bianco dà 1,9:1 — invisibile.
+     L'accento diventa perciò un bronzo scuro `#8A600C` (6,4:1), che è lo stesso
+     colore visto in un'altra luce, non un colore diverso.
+   · **Il testo non è nero.** È un prugna profondo `#2A1219`, così la pagina
+     resta calda e imparentata con il tema scuro invece di diventare un
+     grigio d'ufficio.
+   --------------------------------------------------------------------------- */
+:root[data-theme='light'] {
+  --text-rgb: 42, 18, 25; /* #2A1219 — prugna profondo, il «testo corrente» */
+  --accent-rgb: 138, 96, 12; /* #8A600C — bronzo, l'oro leggibile sul chiaro */
+  --scheme: light;
+
+  --background-color: 250, 246, 241; /* #FAF6F1 — avorio pallido, fondo pagina */
+  --foreground-color: 255, 255, 255; /* #FFFFFF — superficie di card e sidebar */
+  --primary-color: 42, 18, 25; /* #2A1219 su #FFF → 15,4:1 */
+
+  --keijo-accent: 138, 96, 12;
+  --keijo-accent-light: 250, 243, 227;
+  --keijo-error: 178, 38, 30;
+  --keijo-error-light: 253, 236, 234;
+  --keijo-warning: 138, 90, 0;
+  --keijo-warning-light: 255, 246, 229;
+  --keijo-success: 27, 110, 60;
+  --keijo-success-light: 232, 245, 236;
+
+  --modal-remove-element: #8e1f2e;
+
+  --color-accent-light: #faf3e3;
+  --color-accent: #8a600c; /* 6,4:1 su bianco */
+  --color-error-light: #fdecea;
+  --color-error: #b2261e; /* 6,5:1 */
+  --color-warning-light: #fff6e5;
+  --color-warning: #8a5a00; /* 6,1:1 */
+  --color-success-light: #e8f5ec;
+  --color-success: #1b6e3c; /* 6,0:1 */
+  --color-info-light: #f3edef;
+  --color-info: #e3d7db;
+  --color-info-text: #2a1219; /* 15,4:1 */
+  --color-default-light: #f3edef;
+  --color-default-border: #c9b6bc;
+  --color-default-text: #2a1219; /* 15,4:1 */
+  --color-draft-light: #f1ecf9;
+  --color-draft: #5b3e86; /* 7,4:1 */
+  /* `filled` resta il bordeaux pieno con testo avorio: è l'unica superficie che
+     non si schiarisce, perché la pill di riferimento a un'altra entità deve
+     saltare all'occhio in entrambi i temi. */
+  --color-filled-light: #6a1a2d;
+  --color-filled: #f3e9dc; /* 9,8:1 */
+  --color-circle-button-light: #f3edef;
+  --color-circle-button: #2a1219;
+  --color-white: #ffffff;
+
+  /* Sul chiaro le ombre profonde sporcano: qui tornano quelle di serie */
+  --keijo-shadow-sm: 0 1px 2px 0 rgba(42, 18, 25, 0.08);
+  --keijo-shadow: 0 1px 3px 0 rgba(42, 18, 25, 0.12), 0 1px 2px 0 rgba(42, 18, 25, 0.08);
+  --keijo-shadow-md: 0 4px 6px -1px rgba(42, 18, 25, 0.12), 0 2px 4px -1px rgba(42, 18, 25, 0.07);
+  --keijo-shadow-lg: 0 10px 15px -3px rgba(42, 18, 25, 0.12), 0 4px 6px -2px rgba(42, 18, 25, 0.06);
+  --keijo-shadow-xl: 0 20px 25px -5px rgba(42, 18, 25, 0.12), 0 10px 10px -5px rgba(42, 18, 25, 0.05);
+  --keijo-shadow-2xl: 0 25px 50px -12px rgba(42, 18, 25, 0.2);
+}
+
+/* ---------------------------------------------------------------------------
+   `--color-info` fa due mestieri in `@keijo/ui`: è la **superficie** della pill
+   informativa e, tramite `.border-ui-info`, il **contorno** del pulsante di
+   variante `default`. Sul tema scuro una tinta media serve bene a entrambi; sul
+   chiaro no — una superficie pallida come bordo dà 1,4:1 su bianco, e il
+   pulsante risulta senza contorno.
+
+   Le icone restano leggibilissime (17,5:1), quindi il contenuto si vede: è il
+   *bordo del controllo* a mancare, e `WCAG 1.4.11` chiede 3:1 per quello. Qui
+   il solo bordo viene irrobustito, lasciando la pill al suo tono chiaro.
+   --------------------------------------------------------------------------- */
+:root[data-theme='light'] .border-ui-info {
+  border-color: #9b8189 !important; /* 3,6:1 su bianco */
+}
+
+body {
+  margin: 0;
+  font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background-color: rgb(var(--background-color));
+  color: rgb(var(--primary-color));
+}
+
+/* ---------------------------------------------------------------------------
+   Alcune classi tipografiche sono cablate dentro i componenti di @keijo/ui
+   (`text-gray-900`, `text-gray-500`, `text-gray-400`, `bg-white`) e assumono un
+   tema chiaro. Su superficie scura darebbero un contrasto fuori norma: qui
+   vengono ricondotte alla palette, senza toccare la libreria.
+   --------------------------------------------------------------------------- */
+.text-gray-900 {
+  color: rgb(var(--text-rgb)) !important; /* 15,1:1 */
+}
+.text-gray-500 {
+  color: rgba(var(--text-rgb), 0.78) !important; /* 10,9:1 */
+}
+.text-gray-400 {
+  color: rgba(var(--text-rgb), 0.68) !important; /* 8,6:1 */
+}
+.bg-white {
+  background-color: rgb(var(--foreground-color)) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Alcune superfici di @keijo/ui hanno il bianco cablato nel CSS del componente
+   (pannello dei select, footer della modale, corpo della toast, traccia della
+   progress bar, chip selezionata). Su tema scuro darebbero avorio su bianco:
+   contrasto 1,1:1, illeggibile. Qui vengono riportate sulla superficie della
+   palette; il rapporto torna quello dichiarato sopra (15,1:1).
+   --------------------------------------------------------------------------- */
+.keijo-select-panel,
+.keijo-mat-select-panel {
+  background: rgb(var(--foreground-color)) !important;
+  border: 1px solid rgba(var(--text-rgb), 0.14);
+}
+.keijo-mat-select-trigger {
+  background: rgb(var(--foreground-color)) !important;
+  color: rgb(var(--text-rgb));
+}
+.keijo-select-option:hover,
+.keijo-mat-select-option:hover {
+  background: rgba(var(--accent-rgb), 0.12);
+}
+.toast-wrapper {
+  background: rgb(var(--foreground-color)) !important;
+}
+/* Settima superficie con il bianco cablato, trovata aprendo un dialogo di
+   conferma: `.keijo-modal-panel { background: white }` in `keijo-ui.scss`.
+   Il corpo della modale ereditava l'avorio su bianco — 1,1:1, illeggibile. */
+.keijo-modal-panel {
+  background: rgb(var(--foreground-color)) !important;
+  border: 1px solid rgba(var(--text-rgb), 0.14);
+}
+.modal-footer {
+  background: rgb(var(--foreground-color)) !important;
+  border-top: 1px solid rgba(var(--text-rgb), 0.14) !important;
+}
+.progress-background {
+  background: rgba(var(--text-rgb), 0.1) !important;
+}
+.keijo-chip--selected {
+  background: rgba(var(--accent-rgb), 0.18) !important;
+  color: rgb(var(--text-rgb));
+}
+.keijo-dtp-panel,
+.keijo-calendar {
+  border-color: rgba(var(--text-rgb), 0.14) !important;
+}
+
+/* Decima superficie con il bianco cablato: il pulsante dei filtri della barra
+   di ricerca (`background: #fff` + `text-gray-900`). Non era solo stonato —
+   l'icona ereditava l'avorio del tema e finiva **avorio su bianco**, circa
+   1,1:1: il pulsante appariva come un quadrato vuoto e la sua funzione era
+   invisibile. Qui rientra nella palette e l'icona torna leggibile. */
+keijo-search-bar div.aspect-square {
+  background: rgba(var(--text-rgb), 0.06) !important;
+  border: 1px solid rgba(var(--text-rgb), 0.18);
+  color: rgb(var(--text-rgb)) !important;
+}
+
+/* Campi di form: cursore e widget nativi coerenti con il tema scuro */
+input,
+textarea,
+select {
+  color-scheme: var(--scheme);
+}
+
+/* ---------------------------------------------------------------------------
+   Superficie dei campi — ottava e nona sorgente di colore freddo cablato.
+
+   `color-scheme: dark` (sopra) serve ai widget nativi — calendario, barre di
+   scorrimento — ma lascia a Chrome il **fondo** del campo, che diventa un grigio
+   NEUTRO `#3b3b3b`: nessuna regola CSS lo imponeva, era il colore di sistema.
+   Su una superficie prugna calda stona per costruzione, perché è privo di tinta.
+
+   Il bordo arrivava da due sorgenti, entrambe fredde e non tematizzabili:
+     · il preflight di Tailwind — `border-color: #e5e7eb` su `*, ::before, ::after`
+     · `.border-input` di keijo-ui — `border: 1px solid #e2e8f0`
+   cioè un contorno quasi bianco attorno a ogni campo della pagina.
+
+   Qui i campi rientrano nella palette: fondo prugna sollevato, bordo avorio a
+   bassa opacità, e oro al focus — che è anche il solo segnale di messa a fuoco
+   visibile, dato che i componenti dichiarano `focus:outline-none`.
+   --------------------------------------------------------------------------- */
+.border-input,
+.border-input-error,
+input:not([type='checkbox']):not([type='radio']),
+textarea,
+select {
+  background-color: rgba(var(--text-rgb), 0.06) !important;
+  border-color: rgba(var(--text-rgb), 0.18) !important;
+}
+
+.border-input:focus,
+input:not([type='checkbox']):not([type='radio']):focus,
+textarea:focus,
+select:focus {
+  background-color: rgba(var(--text-rgb), 0.09) !important;
+  border-color: rgba(var(--accent-rgb), 0.6) !important;
+}
+
+/* Il trigger della select è un div, non un `input`: senza questo i menù a
+   tendina resterebbero a filo della card mentre gli altri campi sono sollevati,
+   e la riga di form apparirebbe disallineata. */
+.keijo-mat-select-trigger {
+  background: rgba(var(--text-rgb), 0.06) !important;
+  border-color: rgba(var(--text-rgb), 0.18) !important;
+}
+
+::placeholder {
+  color: rgba(var(--text-rgb), 0.45);
+}
+
+/* Classi di appoggio delle pagine — nessuna palette parallela, solo alias */
+.mirada-muted {
+  color: rgba(var(--text-rgb), 0.72); /* 10,3:1 */
+}
+.mirada-gold {
+  color: rgb(var(--accent-rgb)); /* 8,9:1 su superficie */
+}
+.mirada-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(var(--text-rgb), 0.68);
+}
+.mirada-value {
+  font-size: 0.875rem;
+  color: rgb(var(--text-rgb));
+}
+.mirada-hint {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: rgba(var(--text-rgb), 0.72);
+}
+/* Messaggio d'errore di form.
+ *
+ * Il colore da solo non bastava: `--color-error` su superficie dà 8:1 nominali,
+ * ma a 12 px e peso 400 il testo chiaro su fondo scuro si assottiglia
+ * nell'antialiasing e in sala macchine risultava quasi nero sul prugna.
+ * Il rapporto passava e la leggibilità no.
+ *
+ * Un errore deve *sembrare* un errore: corpo e peso maggiori, e la superficie
+ * d'errore della palette con un bordo sul lato, così legge come un avviso e non
+ * come una postilla. */
+.mirada-error {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-error);
+  background: var(--color-error-light);
+  border-left: 3px solid var(--color-error);
+  border-radius: 0 4px 4px 0;
+  padding: 0.375rem 0.625rem;
+  margin: 0.25rem 0;
+}
+.mirada-divider {
+  border-top: 1px solid rgba(var(--text-rgb), 0.12);
+}
+
+/* Nessuna transizione a stacco né lampeggio (§5, accessibilità). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

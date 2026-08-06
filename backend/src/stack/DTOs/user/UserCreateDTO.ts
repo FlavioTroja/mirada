@@ -20,7 +20,9 @@ export const UserCreateSchema = z.object({
 
     // Relations
     roles: z.array(withoutMetadata(RoleToUserSchema.omit({ userId: true }))).optional(),
-    addresses: z.array(withoutMetadata(AddressSchema.omit({ personId: true }))).optional(),
+    // `region` fuori: è derivata dalla sigla di provincia dal servizio (§3.4),
+    // mai digitata dal client.
+    addresses: z.array(withoutMetadata(AddressSchema.omit({ personId: true, region: true }))).optional(),
     contact: withoutMetadata(ContactSchema),
     person: withoutMetadata(PersonSchema.omit({ contactId: true })),
 });

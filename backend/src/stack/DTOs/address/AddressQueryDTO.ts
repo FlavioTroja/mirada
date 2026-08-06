@@ -5,6 +5,8 @@ export const AddressQuerySchema = z.object({
     value: z.string().optional(),
     city: z.string().optional(),
     province: z.string().optional(),
+    /** Derivata dalla provincia e **indicizzata**: è il facet del filtro pubblico (§3.4). */
+    region: z.string().optional(),
     country: z.string().optional(),
     personId: z.number().int().optional(),
 });

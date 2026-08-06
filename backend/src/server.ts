@@ -54,6 +54,11 @@ import { TicketController } from "@controllers/TicketController";
 import { TicketTransferController } from "@controllers/TicketTransferController";
 import { PassIssuanceController } from "@controllers/PassIssuanceController";
 import { CheckInController } from "@controllers/CheckInController";
+import { OrderController } from "@controllers/OrderController";
+import { PurchaseController } from "@controllers/PurchaseController";
+import { ReservationController } from "@controllers/ReservationController";
+import { PaymentController } from "@controllers/PaymentController";
+import { ReservationExpiryJob } from "@utils/adapters/cron/ReservationExpiryJob";
 
 export class APIServer {
     private readonly server: FastifyApplication;
@@ -327,6 +332,11 @@ export class APIServer {
                 TicketTransferController,
                 PassIssuanceController,
                 CheckInController,
+                // --- Mirada Tango, fase D2 — checkout (passi 18→22) ---
+                OrderController,
+                PurchaseController,
+                ReservationController,
+                PaymentController,
             ].sort((curr, next) => curr.name < next.name ? -1 : 1 ),
             prefix: "/api"
         });
@@ -334,6 +344,20 @@ export class APIServer {
 
     private registerCronJobs() {
         Log.info("Register Cron Jobs!");
+
+        // Nella suite di test il tempo non passa davvero e il database viene
+        // troncato fra un file e l'altro: un tick al minuto che rilascia
+        // prenotazioni mentre un test le sta osservando renderebbe la suite non
+        // deterministica. Il job resta comunque collaudabile: la rotta manuale
+        // `POST /api/cron/release-expired-reservations` esegue lo stesso metodo.
+        if (process.env.NODE_ENV === "test") {
+            Log.info("Cron jobs are not scheduled in the test environment — use POST /api/cron/<job> instead.");
+            return;
+        }
+
+        // §4.11, `RF-PAY-24`, rischio `R1b`: senza questa passata, in apertura
+        // vendite i posti restano bloccati da ordini abbandonati.
+        ReservationExpiryJob.runJob(this.server);
     }
 
     private setupWebSocketServer() {

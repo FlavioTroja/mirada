@@ -369,6 +369,68 @@ const MATRIX: ResourceMatrix[] = [
             ]),
         ],
     },
+
+    // ─── Fase D2 — il checkout (passi 18→22) ─────────────────────────────────
+    {
+        // | PURCHASE · ORDER | ∀ | READ#OWN | READ#OWN | – | CREATE/READ#OWN |
+        //
+        // Il `CREATE` del DANCER è la terna delle **cinque rotte d'azione** di
+        // `OrderController` — `reserve`, `rearm`, `abandon`, `confirm-partial`,
+        // `confirm-free` — che il §4.11 dichiara letteralmente come
+        // `CREATE#ORDER#OWN`. Non è un `POST /orders/create`: quello non esiste,
+        // perché un ordine impegna capienza e nasce solo da `reserve`, che è
+        // atomico per costruzione.
+        //
+        // Lo staff ha la sola lettura: un `OWNER` legge gli ordini che incassa e
+        // non può abbandonare quello di un partecipante — abbandonare è liberare
+        // un posto altrui.
+        resource: PermissionResource.PURCHASE,
+        grants: [
+            own(RoleName.OWNER, READ_ONLY),
+            own(RoleName.EVENT_MANAGER, READ_ONLY),
+            own(RoleName.DANCER, CREATE_READ),
+        ],
+    },
+    {
+        resource: PermissionResource.ORDER,
+        grants: [
+            own(RoleName.OWNER, READ_ONLY),
+            own(RoleName.EVENT_MANAGER, READ_ONLY),
+            own(RoleName.DANCER, CREATE_READ),
+        ],
+    },
+    {
+        // | RESERVATION | ∀ | READ#OWN | READ#OWN | – | CREATE/READ/DELETE#OWN |
+        //
+        // SOLA LETTURA via API (§3.4): la prenotazione nasce dentro `reserve` e
+        // muore con `abandon`, con la conferma o con lo scheduler. Le celle
+        // `CREATE` e `DELETE` del DANCER sono seminate perché la matrice §3.8 le
+        // dichiara, ma **nessuna rotta dichiara quelle terne**: una prenotazione
+        // creabile da fuori sarebbe un modo per togliere posti dalla sala senza
+        // comprare nulla, e una cancellabile da fuori lascerebbe i consumi
+        // orfani. L'abbandono passa da `POST /orders/:id/abandon`, che rilascia
+        // la capienza nella stessa transazione.
+        resource: PermissionResource.RESERVATION,
+        grants: [
+            own(RoleName.OWNER, READ_ONLY),
+            own(RoleName.EVENT_MANAGER, READ_ONLY),
+            own(RoleName.DANCER, [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.DELETE]),
+        ],
+    },
+    {
+        // | PAYMENT | ∀ | READ#OWN | – | – | READ#OWN |
+        //
+        // L'`EVENT_MANAGER` non vede gli incassi: costruisce e pubblica eventi,
+        // non amministra il denaro dell'organizzazione. SOLA LETTURA per tutti:
+        // le righe nascono dentro la chiusura di un ordine, e `idempotencyKey`
+        // unica non sarebbe una difesa se un pagamento si potesse scrivere con
+        // una `POST`.
+        resource: PermissionResource.PAYMENT,
+        grants: [
+            own(RoleName.OWNER, READ_ONLY),
+            own(RoleName.DANCER, READ_ONLY),
+        ],
+    },
 ];
 
 /** Terne di rotta prodotte da una singola azione della matrice. */

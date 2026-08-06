@@ -1,11 +1,13 @@
 import { Service } from "fastify-decorators";
-import { Organization, Prisma } from "@prisma/client";
+import { OrgMemberRole, Organization, Prisma } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { createObjectWithoutThrow } from "@utils/helpers/query";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
+import { getPrismaClient } from "@utils/adapters/prisma";
 import { OrganizationRepository } from "@repositories/OrganizationRepository";
+import { OrganizationMemberRepository } from "@repositories/OrganizationMemberRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { OrganizationCreateDTO } from "@DTOs/organization/OrganizationCreateDTO";
 import { OrganizationUpdateDTO } from "@DTOs/organization/OrganizationUpdateDTO";
@@ -15,6 +17,7 @@ import { OrganizationQueryDTO } from "@DTOs/organization/OrganizationQueryDTO";
 export class OrganizationService {
     constructor(
         private readonly organizationRepository: OrganizationRepository,
+        private readonly organizationMemberRepository: OrganizationMemberRepository,
         private readonly organizationScopeService: OrganizationScopeService,
     ) {}
 
@@ -22,10 +25,36 @@ export class OrganizationService {
      * Nel primo taglio le organizzazioni sono create a mano da `GOD`: non esiste
      * coda di approvazione self-service (§4.2).
      */
-    public async save(dto: OrganizationCreateDTO): Promise<Organization> {
+    public async save(principalId: number, dto: OrganizationCreateDTO): Promise<Organization> {
         Log.info(`[Organization Service]: creating organization '${dto.name}'`);
-        const organization = await this.organizationRepository.save(dto);
-        Log.info(`[Organization Service]: organization created '${organization.name}' (id ${organization.id})`);
+
+        // ── L'organizzazione e il suo proprietario nascono insieme ────────────
+        // Un'organizzazione senza `OrganizationMember` è **irraggiungibile**: lo
+        // scope `#OWN` del §1.5 si realizza sulle membership, quindi nessuno la
+        // vedrebbe, e `OrganizationAudienceService` non troverebbe alcun `wsCode`
+        // a cui mandare i segnali del §3.9 — il cruscotto resterebbe muto mentre
+        // le iscrizioni entrano. Chi la crea ne è `OWNER`, nella stessa
+        // transazione: non esiste un istante in cui esista senza proprietario.
+        const organization = await getPrismaClient().$transaction(async prisma => {
+            const created = await this.organizationRepository.save(dto, prisma);
+            await this.organizationMemberRepository.save(
+                {
+                    organizationId: created.id,
+                    userId: principalId,
+                    role: OrgMemberRole.OWNER,
+                    invitedAt: new Date(),
+                    // Non c'è invito da accettare: se l'hai creata, sei dentro.
+                    acceptedAt: new Date(),
+                },
+                prisma,
+            );
+            return created;
+        });
+
+        Log.info(
+            `[Organization Service]: organization created '${organization.name}' (id ${organization.id}) `
+            + `with user (id ${principalId}) as OWNER`,
+        );
         return organization;
     }
 

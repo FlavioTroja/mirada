@@ -16,6 +16,7 @@ import { getPrismaClient } from "@utils/adapters/prisma";
 import { splitLinkableEntities } from "@utils/helpers/mergeEntities";
 import { InternalServerError, NotFound } from "http-errors";
 import { PersonWithRelations } from "@prisma-gen/zod";
+import { regionForProvince } from "@utils/helpers/italianProvinces";
 
 @Service()
 export class PersonService {
@@ -131,8 +132,15 @@ export class PersonService {
         const { toCreate, toDisconnect, toUpdate } = splitLinkableEntities(newAddresses);
 
         return getPrismaClient().$transaction(async prisma => {
+            // `region` è derivata dalla provincia anche su questa strada (§3.4):
+            // la sub-risorsa scrive righe di `Address` come qualunque altro
+            // percorso, e una riga che entrasse da qui senza regione sarebbe una
+            // riga invisibile al filtro geografico della ricerca pubblica.
             for (const address of toCreate) {
-                await this.addressRepository.save({ ...address, id: undefined, personId }, prisma);
+                await this.addressRepository.save(
+                    { ...address, id: undefined, personId, region: regionForProvince(address.province) },
+                    prisma,
+                );
             }
 
             for (const address of toDisconnect) {
@@ -140,7 +148,13 @@ export class PersonService {
             }
 
             for (const address of toUpdate) {
-                await this.addressRepository.update({ id: address.id }, address, undefined, undefined, prisma);
+                await this.addressRepository.update(
+                    { id: address.id },
+                    { ...address, region: regionForProvince(address.province) },
+                    undefined,
+                    undefined,
+                    prisma,
+                );
             }
 
             return this.personRepository.findById(personId, { populate: "addresses" }, prisma);

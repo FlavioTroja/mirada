@@ -11,6 +11,8 @@ import { z } from "zod";
  * scalare della **base REST** `/addresses` (§3.4).
  */
 export const AddressSubResourceUpdateSchema = withToBeDisconnected(
-    AddressSchema.omit({ updatedAt: true, createdAt: true, personId: true })
+    // `region` fuori anche qui: è derivata dalla provincia dal servizio, non
+    // scritta dal client (§3.4).
+    AddressSchema.omit({ updatedAt: true, createdAt: true, personId: true, region: true })
 ).array();
 export type AddressSubResourceUpdateDTO = z.infer<typeof AddressSubResourceUpdateSchema>;

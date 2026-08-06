@@ -59,6 +59,7 @@ import { DashboardStore } from '../../stores/dashboard.store';
 import { EventStore } from '../../stores/event.store';
 import { OrganizationStore } from '../../stores/organization.store';
 import { StatusPillComponent } from '../../shared/status-pill.component';
+import { LiveRegistrationsComponent } from '../../shared/live-registrations.component';
 import { UnavailableSectionComponent } from '../../shared/unavailable-section.component';
 
 /**
@@ -95,6 +96,7 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
     ListItemWrapperComponent,
     LabeledProgressComponent,
     StatusPillComponent,
+    LiveRegistrationsComponent,
     UnavailableSectionComponent,
   ],
   template: `
@@ -237,6 +239,8 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
         </keijo-page-section-wrapper>
 
         <!-- ------------------------------------------------- capienza ----->
+        <app-live-registrations [eventId]="selectedEvent()?.id ?? null" />
+
         <keijo-page-section-wrapper title="Capienza">
           @if (capacity(); as section) {
             @if (section.room; as room) {

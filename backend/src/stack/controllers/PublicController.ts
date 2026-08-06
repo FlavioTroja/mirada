@@ -10,6 +10,11 @@ import {
     EventAvailabilityRequestDTO,
     EventAvailabilityRequestSchema,
 } from "@DTOs/availability/EventAvailabilityDTO";
+import { PublicEventSearchService } from "@services/PublicEventSearchService";
+import {
+    PublicEventSearchDTO,
+    PublicEventSearchSchema,
+} from "@DTOs/public_event/PublicEventSearchDTO";
 
 const SlugParamSchema = z.object({
     slug: z.string().min(1).describe("Event slug — globally unique"),
@@ -38,7 +43,39 @@ export class PublicController {
         private readonly eventService: EventService,
         private readonly ticketTypeService: TicketTypeService,
         private readonly capacityEngineService: CapacityEngineService,
+        private readonly publicEventSearchService: PublicEventSearchService,
     ) {}
+
+    /**
+     * **La ricerca pubblica** (§3.7) — `POST /{plural}/` è la lista nel dialetto
+     * §3.2, e la lista pubblica non fa eccezione.
+     *
+     * Il **rate limiting** è lo stesso presidio dell'endpoint di disponibilità e
+     * per la stessa ragione: la rotta è pubblica, anonima, e in SSR ogni
+     * visitatore ne è un chiamante. Il limite è però più stretto (dodici al
+     * minuto contro trenta) perché qui **non c'è polling**: una ricerca è un atto
+     * dell'utente, non un timer, e dodici ricerche al minuto sono già più di
+     * quante una persona ne faccia. La query costa anche di più — full-text sul
+     * cast e quote di capienza — quindi vale meno lasciarla correre.
+     */
+    @POST("/events/", {
+        schema: {
+            operationId: "searchPublicEvents",
+            summary: "Search the published events",
+            description: "Paginated public search over PUBLISHED events whose sales are still open. 'value' is full-text on title, description, venue name and cast names; 'from'/'to' filter on the OVERLAP with the event interval, so a festival already under way still shows up; 'role' restricts to the events that still have headroom for that dance role (RF-PUB-2). No authentication, rate limited.",
+            body: PublicEventSearchSchema,
+        },
+        onRequest: [
+            rateLimit({ name: "public-event-search", max: 12, windowMs: 60_000 }),
+        ],
+    })
+    async search(
+        req: FastifyRequest<{ Body: PublicEventSearchDTO }>,
+        reply: FastifyReply,
+    ) {
+        const { query, options } = req.body;
+        reply.status(200).send(await this.publicEventSearchService.search(query, options));
+    }
 
     @GET("/events/:slug", {
         schema: {

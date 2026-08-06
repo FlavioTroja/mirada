@@ -22,6 +22,17 @@ export const AddressSchema = z.object({
   note: z.string().nullish(),
   default: z.boolean(),
   billing: z.boolean(),
+  /**
+   * **Non si digita** (§3.4): il servizio la deriva dalla sigla di provincia
+   * con la tabella delle province italiane (`@utils/helpers/italianProvinces`),
+   * su `create` e su `update`. Non compare in alcun DTO di scrittura.
+   * 
+   * È una colonna e non un calcolo in lettura perché il filtro geografico
+   * della ricerca pubblica dev'essere una condizione INDICIZZATA, e perché un
+   * campo libero produrrebbe «Puglia», «PUGLIA» e «Apulia» come tre regioni
+   * diverse.
+   */
+  region: z.string().nullish(),
   personId: z.number().int().nullish(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

@@ -5,6 +5,7 @@ import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { createObjectWithoutThrow } from "@utils/helpers/query";
+import { regionForProvince } from "@utils/helpers/italianProvinces";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { AddressRepository } from "@repositories/AddressRepository";
 import { AddressCreateDTO } from "@DTOs/address/AddressCreateDTO";
@@ -49,8 +50,13 @@ export class AddressService {
     }
 
     public async save(dto: AddressCreateDTO): Promise<Address> {
-        Log.info(`[Address Service]: creating address '${dto.address ?? "-"} ${dto.number ?? ""}' in '${dto.city ?? "-"}'`);
-        const address = await this.addressRepository.save(dto);
+        const region = regionForProvince(dto.province);
+
+        Log.info(
+            `[Address Service]: creating address '${dto.address ?? "-"} ${dto.number ?? ""}' in '${dto.city ?? "-"}' `
+            + `(${dto.province ?? "no province"} → ${region ?? "no region"})`,
+        );
+        const address = await this.addressRepository.save({ ...dto, region });
         Log.info(`[Address Service]: address created (id ${address.id})`);
         return address;
     }
@@ -63,11 +69,28 @@ export class AddressService {
         return this.addressRepository.paginate(this.createQueryFromPayload(query), options);
     }
 
+    /**
+     * La regione si **ricalcola a ogni aggiornamento che tocca la provincia**
+     * (§3.4). Un `PATCH { province: "RM" }` su un indirizzo pugliese che lasciasse
+     * `region = "Puglia"` produrrebbe una riga che mente sul proprio territorio —
+     * e la colonna è indicizzata, quindi mentirebbe anche nel filtro geografico
+     * della ricerca pubblica, che è precisamente ciò per cui esiste.
+     *
+     * Se `province` non compare nel `PATCH`, la regione resta quella che è: non si
+     * ricalcola ciò che non è cambiato.
+     */
     public async updateById(id: number, dto: AddressUpdateDTO): Promise<Address> {
         await this.findByIdOrThrow(id);
 
-        Log.info(`[Address Service]: updating address (id ${id})`);
-        return this.addressRepository.update({ id }, dto);
+        const derived = "province" in dto
+            ? { region: regionForProvince(dto.province) }
+            : {};
+
+        Log.info(
+            `[Address Service]: updating address (id ${id})`
+            + ("region" in derived ? ` — province '${dto.province ?? "none"}' derives region '${derived.region ?? "none"}'` : ""),
+        );
+        return this.addressRepository.update({ id }, { ...dto, ...derived });
     }
 
     /**
@@ -107,6 +130,7 @@ export class AddressService {
             createObjectWithoutThrow(payload.value, { city: { contains: payload.value, mode: "insensitive" } }),
             createObjectWithoutThrow(payload.value, { address: { contains: payload.value, mode: "insensitive" } }),
             createObjectWithoutThrow(payload.value, { province: { contains: payload.value, mode: "insensitive" } }),
+            createObjectWithoutThrow(payload.value, { region: { contains: payload.value, mode: "insensitive" } }),
             createObjectWithoutThrow(payload.value, { country: { contains: payload.value, mode: "insensitive" } }),
             createObjectWithoutThrow(payload.value, { zipCode: { contains: payload.value, mode: "insensitive" } }),
         ].filter(o => Object.values(o).length > 0);
@@ -115,6 +139,7 @@ export class AddressService {
             createObjectWithoutThrow(valueQuery.length, { OR: valueQuery }),
             createObjectWithoutThrow(payload.city, { city: { equals: payload.city, mode: "insensitive" as const } }),
             createObjectWithoutThrow(payload.province, { province: { equals: payload.province, mode: "insensitive" as const } }),
+            createObjectWithoutThrow(payload.region, { region: { equals: payload.region, mode: "insensitive" as const } }),
             createObjectWithoutThrow(payload.country, { country: { equals: payload.country, mode: "insensitive" as const } }),
             createObjectWithoutThrow(payload.personId, { personId: payload.personId }),
         ].filter(o => Object.values(o).length > 0);

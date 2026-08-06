@@ -34,3 +34,7 @@ public/logs
 /public/images/
 /public/pdf/
 /docker/postgres/populate-staging-db.sh
+
+# Output di runtime: ricevute e locandine generate dal server
+# (il Dockerfile monta /app/public come volume).
+public/receipts/

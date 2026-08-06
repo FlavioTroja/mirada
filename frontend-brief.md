@@ -260,6 +260,11 @@ attività staff) e `RF-ADM-9` (audit log immutabile).
 - **`Address` espone la base REST piena** `/addresses` con i cinque verbi del dialetto. Il
   template ne spedisce **solo `GET /addresses/cities`**, ma `Venue.addressId` è
   obbligatorio: senza una creazione, una location non è creabile. Permessi come `VENUE`.
+  Porta inoltre **`region?`**, che **non si digita**: il servizio la deriva dalla sigla di
+  provincia con la tabella delle 110 province italiane (`BT` → `Puglia`). È una colonna e
+  non un calcolo in lettura perché il filtro geografico della ricerca pubblica dev'essere
+  una condizione indicizzata — e perché un campo libero produrrebbe «Puglia», «PUGLIA» e
+  «Apulia» come tre regioni diverse.
   **Unica eccezione al soft delete del §3.2**: `Address` è l'unica entità del dialetto
   **priva della colonna `deleted`** — la foundation non gliela dà, e i suoi lettori
   (`GET /addresses/cities`, il populate `person.addresses`, la sub-risorsa
@@ -341,7 +346,7 @@ RequirementVerification = "AUTOMATIC" | "MANUAL"
 RequirementOutcomeStatus = "TO_PROVIDE" | "UNDER_REVIEW" | "VALID" | "REJECTED" | "EXPIRED"
 
 OrderStatus          = "PENDING_PAYMENT" | "PAID" | "FAILED" | "EXPIRED" | "CANCELLED"
-PaymentProvider      = "STRIPE"
+PaymentProvider      = "NONE" | "STRIPE"   // NONE = ordine a importo zero o saldato fuori piattaforma
 PaymentStatus        = "PENDING" | "SUCCEEDED" | "FAILED" | "REFUNDED" | "PARTIALLY_REFUNDED"
 
 TicketStatus         = "VALID" | "TRANSFERRED" | "CANCELLED" | "REFUNDED"
@@ -530,6 +535,8 @@ complementari.
 | `GET /api/public/events/:slug` | scheda evento completa: sessioni, cast, titoli con disponibilità per ruolo, requisiti, servizi, policy di rimborso, organizzatore (`RF-PUB-5`, `RF-PUB-6`) |
 | `POST /api/public/events/:id/availability` | `{ ticketTypes: [{ id, remaining, soldOut, roleOnHold, rolesOnHold: { leader, follower }, activeTier: { price, expiresAt?, remainingAtThisPrice? } }], roles: { leader, follower }, imbalance, imbalanceTolerance }` — **è la sorgente del polling a 10–15 s** (`RF-PUB-8`, `RF-EVT-26`). `roleOnHold` è il booleano di sintesi «questo titolo è bloccato per almeno un ruolo»; `rolesOnHold` dice **quale**, perché un titolo senza vincolo di ruolo può essere bloccato solo per i leader. `remaining` conta le sole quote `publiclyVisible`, ma **`soldOut` guarda tutte le quote limitanti**: nascondere un numero non può produrre un biglietto vendibile che non esiste |
 | `POST /api/public/ticket-types/:id/unlock` body `{ accessCode }` | sblocca un titolo `CODE_RESTRICTED` (`RF-EVT-7`) |
+| `POST /api/public/events/` body `{ query, options }` | **ricerca pubblica paginata** → `PaginateDatasource<PublicEventCard>`. Restituisce **solo** eventi `PUBLISHED` con vendita aperta. `query` = `{ value?, city?, province?, region?, country?, eventTypeId?, from?, to?, role? }`: `value` è full-text su titolo, descrizione, cast e location; `from`/`to` filtrano sulla sovrapposizione con l'intervallo dell'evento, non sul solo `startAt`, altrimenti un festival già iniziato sparirebbe dai risultati; `role` restringe a ciò che ha ancora capienza **per quel ruolo di ballo**, che è la ricerca che un tanghero fa davvero (`RF-PUB-2`) |
+| `POST /api/users/register` body `{ username, password, name, surname, email, … }` | **auto-registrazione del ballerino**, senza autenticazione. Crea `Contact`, `Person` e `User` in una sola transazione e assegna il ruolo `DANCER`. Esisteva nel template e non era dichiarata: `AS2` la richiede, perché l'acquisto vuole un account creato contestualmente al checkout |
 
 **Ordine, prenotazione, pagamento:**
 
@@ -539,6 +546,7 @@ complementari.
 | `POST /api/orders/:id/rearm` | riarma la prenotazione ad almeno 10 minuti residui, all'avvio del pagamento (`RF-PAY-22`) |
 | `POST /api/orders/:id/abandon` | rilascio immediato dell'impegno (`RF-PAY-24`) |
 | `POST /api/orders/:id/checkout` | crea il PaymentIntent Stripe **sull'account connesso** con `application_fee_amount` → `{ clientSecret, publishableKey, connectedAccountId }` |
+| `POST /api/orders/:id/confirm-free` | **chiude un ordine senza prestatore di pagamento**: risolve i ruoli flessibili, conferma le `Registration`, emette i `Ticket`, rilascia la `Reservation` con `releaseReason = COMPLETED` e registra un `Payment` con `provider = NONE`. Ammesso **solo** se il totale è zero o se l'organizzatore ha dichiarato l'incasso fuori piattaforma: **non è una scorciatoia per saltare il pagamento**, è il percorso degli ingressi gratuiti e delle iscrizioni raccolte prima che il prestatore sia collegato. Percorre esattamente lo stesso codice di `checkout`, meno l'adapter |
 | `POST /api/payments/stripe/webhook` | **nessun JWT**, autenticato dalla firma Stripe. Idempotente su `event.id` (`RF-PAY-10`) |
 | `POST /api/orders/:id/confirm-partial` body `{ removeLineIds[] }` | conferma esplicita dopo `PARTIAL_AVAILABILITY`, ricalcola il totale (`RF-PAY-15`, `RB17`) |
 | `GET /api/orders/:id/receipt` | → `{ fileUrl }` — ricevuta all'acquirente. Come il PDF del biglietto, **non è un titolo fiscale**: nessuna numerazione progressiva (`RF-PAY-12`, `RF-TCK-11`) |

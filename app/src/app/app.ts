@@ -18,6 +18,7 @@ import { sidebarRoutesFor } from './shell/sidebar-routes';
 import { HeaderTitleService } from './services/header-title.service';
 import { PageAction, PageActionsService } from './services/page-actions.service';
 import { ToastService } from './services/toast.service';
+import { ThemeService } from './core/theme/theme.service';
 import { AuthService } from './core/auth/auth.service';
 
 @Component({
@@ -191,6 +192,14 @@ export class App {
   readonly headerTitle = inject(HeaderTitleService);
   readonly pageActions = inject(PageActionsService);
   readonly toastService = inject(ToastService);
+  /**
+   * Iniettato qui e non altrove **di proposito**: `providedIn: 'root'` istanzia
+   * il servizio alla prima iniezione, e finché a farlo era la sola pagina
+   * Preferenze il tema non veniva applicato su nessuna altra rotta — si tornava
+   * allo scuro a ogni ricaricamento. La shell è l'unico punto attraversato
+   * sempre.
+   */
+  private readonly theme = inject(ThemeService);
 
   readonly isDesktop = signal(window.innerWidth >= 1100);
   readonly sidebarCollapsed = signal(false);

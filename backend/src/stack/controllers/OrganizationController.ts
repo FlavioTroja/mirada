@@ -44,7 +44,7 @@ export class OrganizationController {
         req: FastifyRequest<{ Body: OrganizationCreateDTO }>,
         reply: FastifyReply,
     ) {
-        reply.status(200).send(await this.organizationService.save(req.body));
+        reply.status(200).send(await this.organizationService.save(req.user.id, req.body));
     }
 
     @GET("/:id/payout-status", {
