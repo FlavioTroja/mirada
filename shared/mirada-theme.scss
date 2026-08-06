@@ -205,6 +205,17 @@ body {
 .text-gray-900 {
   color: rgb(var(--text-rgb)) !important; /* 15,1:1 */
 }
+/* `text-black` era l'unico superstite della famiglia, e si nascondeva nel posto
+   peggiore: il **messaggio** di una notifica —
+   `class="text-left text-sm text-black flex-auto"` nel template della toast.
+   Il titolo non dichiara colore e quindi eredita l'avorio; il messaggio no.
+   Avendo noi già riportato il fondo della toast sulla superficie scura, il
+   risultato era **nero su prugna**: si vedeva il titolo e spariva la frase che
+   spiega cosa è andato storto — proprio quando serve leggerla.
+   Nessuno dei nostri template usa questa classe: la si può ribaltare tutta. */
+.text-black {
+  color: rgb(var(--text-rgb)) !important; /* 15,3:1 scuro · 17,5:1 chiaro */
+}
 .text-gray-500 {
   color: rgba(var(--text-rgb), 0.78) !important; /* 10,9:1 */
 }
