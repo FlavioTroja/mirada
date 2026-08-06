@@ -139,10 +139,25 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
         color: rgb(var(--text-rgb)) !important;
         opacity: 1 !important;
       }
+      /* auto-fit, non auto-fill — ed è la differenza fra i due che spiegava
+         l'altezza ballerina.
+
+         Con auto-fill il browser crea tutte le colonne che ci stanno, anche
+         quelle senza contenuto: su uno schermo largo 1641px ne generava SETTE
+         per CINQUE voci. Le due colonne fantasma si prendevano il loro spazio,
+         le altre restavano a 229px, e a quella larghezza «Policy di rimborso»
+         andava a capo su due righe. In una griglia una cella alta alza tutta la
+         riga: le voci diventavano 74px invece di 50. Sull'altra pagina la
+         colonna era 2px più larga, l'etichetta ci stava, e l'altezza cambiava
+         sotto gli occhi passando da una scheda all'altra.
+
+         auto-fit fa collassare le tracce vuote: le cinque voci si dividono
+         tutta la larghezza, nessuna etichetta va più a capo, e l'altezza non
+         dipende più da dove ti trovi. */
       .links {
         display: grid;
         gap: 0.375rem;
-        grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
       }
     `,
   ],
