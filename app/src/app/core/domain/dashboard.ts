@@ -80,6 +80,17 @@ export interface CapacityQuotaLine {
   id: number;
   scope: QuotaScope;
   scopeId: number | null;
+  /**
+   * Il nome dell'entità a cui la quota si riferisce — `I18nText`, oppure `null`
+   * per l'ambito `EVENT`, che un nome non ce l'ha perché è l'evento stesso.
+   *
+   * Senza, il cruscotto elencava ventotto righe che dicevano «Sessione 0 / 30»
+   * venti volte identiche: il `scopeId` da solo non è un'informazione che un
+   * organizzatore possa usare.
+   */
+  scopeName?: unknown;
+  /** Inizio della sessione — solo per l'ambito `SESSION`, dove il nome si ripete. */
+  scopeStartAt?: string | null;
   role: DanceRole | null;
   reservedFor: QuotaReservedFor | null;
   limit: number;

@@ -98,6 +98,27 @@ export const CapacitySnapshotSchema = availableSection({
             id: z.number().int(),
             scope: z.string(),
             scopeId: z.number().int().nullable(),
+            /**
+             * **Il nome dell'entità a cui la quota si riferisce.**
+             *
+             * Senza, il cruscotto elencava ventotto righe che dicevano
+             * «Sessione 0 / 30 — 30 residui», venti volte identiche: il `scopeId`
+             * da solo non è un'informazione che un organizzatore possa usare, e
+             * un elenco che non si può leggere è peggio di un elenco assente.
+             *
+             * `null` per le quote di ambito `EVENT`, che un nome non ce l'hanno
+             * — sono l'evento stesso — e per un riferimento rimasto orfano.
+             */
+            scopeName: z.unknown().nullable(),
+            /**
+             * L'inizio della sessione, quando l'ambito è `SESSION`.
+             *
+             * Il nome da solo non basta: nel programma di un festival la stessa
+             * masterclass si ripete su più giorni, e quattro sessioni chiamate
+             * tutte «Masterclass con i maestri» restano indistinguibili. La data
+             * è ciò che le separa.
+             */
+            scopeStartAt: z.date().nullable(),
             role: DanceRoleSchema.nullable(),
             reservedFor: z.string().nullable(),
             limit: z.number().int(),

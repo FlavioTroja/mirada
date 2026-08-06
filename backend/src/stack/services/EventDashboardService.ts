@@ -110,7 +110,7 @@ export class EventDashboardService {
             perimeter: { note: PERIMETER_NOTE, missingEntities: MISSING_ENTITIES },
             sections: {
                 registrationsByRole: this.buildRoles(active, quotas),
-                capacity: this.buildCapacity(quotas),
+                capacity: this.buildCapacity(quotas, { ticketTypes, sessions, services: eventServices }),
                 committedByTicketType: this.buildTicketTypes(ticketTypes, quotas, committedByQuota),
                 committedServices: this.buildServices(eventServices, quotas, committedByQuota),
                 couples: this.buildCouples(couples, active),
@@ -175,10 +175,40 @@ export class EventDashboardService {
         };
     }
 
-    private buildCapacity(quotas: CapacityQuota[]): EventDashboardDTO["sections"]["capacity"] {
+    /**
+     * @param named  I nomi delle entità a cui le quote si riferiscono, già
+     *   caricati per le altre sezioni: nessuna lettura in più, e soprattutto
+     *   nessuna lettura *per riga*.
+     */
+    private buildCapacity(
+        quotas: CapacityQuota[],
+        named: {
+            ticketTypes: { id: number; name: unknown }[];
+            sessions: { id: number; name: unknown; startAt: Date }[];
+            services: { id: number; name: unknown }[];
+        },
+    ): EventDashboardDTO["sections"]["capacity"] {
         const room = quotas.find(
             q => q.scope === QuotaScope.EVENT && q.role === null && q.reservedFor === null,
         );
+
+        // Una mappa per ambito: `scopeId` è univoco solo *dentro* il suo ambito,
+        // e un titolo e una sessione possono benissimo avere lo stesso id.
+        const byScope: Record<string, Map<number, unknown>> = {
+            [QuotaScope.TICKET_TYPE]: new Map(named.ticketTypes.map(t => [t.id, t.name])),
+            [QuotaScope.SESSION]: new Map(named.sessions.map(s => [s.id, s.name])),
+            [QuotaScope.SERVICE]: new Map(named.services.map(s => [s.id, s.name])),
+        };
+        const nameOf = (scope: string, scopeId: number | null) =>
+            scopeId === null ? null : (byScope[scope]?.get(scopeId) ?? null);
+
+        // Solo per le sessioni: è l'unico ambito in cui lo stesso nome ricorre
+        // legittimamente più volte nel programma.
+        const sessionStart = new Map(named.sessions.map(s => [s.id, s.startAt]));
+        const startOf = (scope: string, scopeId: number | null) =>
+            scope === QuotaScope.SESSION && scopeId !== null
+                ? (sessionStart.get(scopeId) ?? null)
+                : null;
 
         return {
             available: true,
@@ -198,6 +228,8 @@ export class EventDashboardService {
                 id: q.id,
                 scope: q.scope,
                 scopeId: q.scopeId,
+                scopeName: nameOf(q.scope, q.scopeId),
+                scopeStartAt: startOf(q.scope, q.scopeId),
                 role: q.role,
                 reservedFor: q.reservedFor,
                 limit: q.limit,

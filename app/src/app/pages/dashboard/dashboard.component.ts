@@ -42,6 +42,7 @@ import { ToastService } from '../../services/toast.service';
 import { AuthService } from '../../core/auth/auth.service';
 import {
   AttendanceSection,
+  CapacityQuotaLine,
   CapacitySection,
   CommittedSection,
   CouplesSection,
@@ -270,14 +271,21 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
             }
 
             @if (section.quotas.length) {
-              <keijo-list-items-wrapper>
-                @for (quota of section.quotas; track quota.id) {
+              <p class="mirada-hint">
+                Le quote sono raggruppate per ambito. Quelle a zero non sono un errore: una
+                quota configurata e mai toccata dice che quel posto è ancora tutto disponibile.
+              </p>
+              @for (gruppo of quotaGroups(); track gruppo.scope) {
+                <p class="mirada-label">{{ gruppo.title }} — {{ gruppo.quotas.length }}</p>
+                <keijo-list-items-wrapper>
+                  @for (quota of gruppo.quotas; track quota.id) {
                   <keijo-list-item-wrapper direction="row">
                     <div class="row">
-                      <keijo-pill variant="default" [icon]="seatIcon">
-                        {{ quotaLabel(quota.scope, quota.role, quota.reservedFor) }}
-                      </keijo-pill>
-                      <span class="mirada-value">
+                      <span class="mirada-value quota-name">{{ quotaName(quota) }}</span>
+                      @if (quotaQualifier(quota); as qual) {
+                        <keijo-pill variant="default" [icon]="seatIcon">{{ qual }}</keijo-pill>
+                      }
+                      <span class="mirada-hint">
                         {{ quota.consumed }} / {{ quota.limit }} — {{ quota.remaining }} residui
                       </span>
                       @if (quota.limiting) {
@@ -291,8 +299,9 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
                       }
                     </div>
                   </keijo-list-item-wrapper>
-                }
-              </keijo-list-items-wrapper>
+                  }
+                </keijo-list-items-wrapper>
+              }
             }
             <p class="mirada-hint">Calcolato su: {{ section.basedOn.join(', ') }}.</p>
           } @else {
@@ -897,6 +906,61 @@ export class DashboardComponent implements OnInit {
     if (value == null) return '—';
     if (typeof value === 'string') return value;
     return i18nPlain(value as I18nText, this.locale.lang());
+  }
+
+  /**
+   * Le quote **raggruppate per ambito**, nell'ordine in cui un organizzatore le
+   * legge: prima l'evento, poi i titoli, le sessioni, i servizi.
+   *
+   * Ventotto righe di fila che dicono «Sessione 0 / 30 — 30 residui» venti volte
+   * non sono un elenco, sono rumore: non si capisce quali siano né se ce ne sia
+   * una che non dovrebbe esserci. Raggruppate e nominate, le stesse ventotto
+   * righe diventano quattro blocchi leggibili.
+   */
+  readonly quotaGroups = computed(() => {
+    const section = this.capacity();
+    if (!section) return [];
+    const order: { scope: string; title: string }[] = [
+      { scope: 'EVENT', title: 'Evento' },
+      { scope: 'TICKET_TYPE', title: 'Titoli d’ingresso' },
+      { scope: 'SESSION', title: 'Sessioni' },
+      { scope: 'SERVICE', title: 'Servizi accessori' },
+    ];
+    return order
+      .map((g) => ({ ...g, quotas: section.quotas.filter((q) => q.scope === g.scope) }))
+      .filter((g) => g.quotas.length);
+  });
+
+  /**
+   * Il nome della quota. Per l'ambito `EVENT` un nome non esiste — la quota è
+   * l'evento stesso — e il qualificatore (ruolo, riservata a…) diventa allora
+   * l'unica cosa che la distingue.
+   */
+  quotaName(quota: CapacityQuotaLine): string {
+    if (quota.scopeName != null) {
+      const label = this.name(quota.scopeName);
+      // Nel programma di un festival la stessa masterclass si ripete su più
+      // giorni: senza la data quattro sessioni omonime restano indistinguibili,
+      // ed è esattamente il caso dell'ITT.
+      return quota.scopeStartAt ? `${label} — ${this.time(quota.scopeStartAt)}` : label;
+    }
+    if (quota.scope === 'EVENT') return 'Capienza della sala';
+    // Un riferimento rimasto orfano: si dice, non si nasconde dietro un id.
+    return quota.scopeId !== null ? `(elemento #${quota.scopeId} non trovato)` : '—';
+  }
+
+  /** Ruolo e destinazione riservata: ciò che distingue due quote dello stesso oggetto. */
+  quotaQualifier(quota: CapacityQuotaLine): string | null {
+    const roles: Record<string, string> = { LEADER: 'leader', FOLLOWER: 'follower' };
+    const reserved: Record<string, string> = {
+      COMPLIMENTARY: 'accrediti',
+      EXTERNAL_CHANNEL: 'canali esterni',
+    };
+    const parts = [
+      quota.role ? (roles[quota.role] ?? quota.role) : null,
+      quota.reservedFor ? `riservata a ${reserved[quota.reservedFor] ?? quota.reservedFor}` : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : null;
   }
 
   quotaLabel(scope: string, role: string | null, reservedFor: string | null): string {
