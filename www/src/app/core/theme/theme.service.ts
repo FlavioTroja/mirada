@@ -2,6 +2,13 @@ import { DOCUMENT, Injectable, PLATFORM_ID, afterNextRender, computed, inject, s
 import { isPlatformBrowser } from '@angular/common';
 
 export type ThemeChoice = 'auto' | 'dark' | 'light';
+
+/**
+ * **Il tema di partenza è lo scuro**, non «segui il sistema»: è il tema di
+ * marca, e una scheda evento vista per la prima volta deve avere l'aspetto che
+ * l'organizzatore si aspetta. `auto` resta una scelta esplicita.
+ */
+const DEFAULT_CHOICE: ThemeChoice = 'dark';
 export type ResolvedTheme = 'dark' | 'light';
 
 const KEY = 'mirada.theme';
@@ -21,7 +28,7 @@ export class ThemeService {
   private readonly doc = inject(DOCUMENT);
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
-  private readonly _choice = signal<ThemeChoice>('auto');
+  private readonly _choice = signal<ThemeChoice>(DEFAULT_CHOICE);
   private readonly _systemPrefersLight = signal(false);
 
   readonly choice = this._choice.asReadonly();
@@ -76,9 +83,9 @@ export class ThemeService {
   private readStored(): ThemeChoice {
     try {
       const v = localStorage.getItem(KEY);
-      return v === 'light' || v === 'dark' || v === 'auto' ? v : 'auto';
+      return v === 'light' || v === 'dark' || v === 'auto' ? v : DEFAULT_CHOICE;
     } catch {
-      return 'auto';
+      return DEFAULT_CHOICE;
     }
   }
 }

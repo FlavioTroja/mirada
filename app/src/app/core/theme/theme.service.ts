@@ -13,6 +13,17 @@ export type ResolvedTheme = 'dark' | 'light';
 const KEY = 'mirada.theme';
 
 /**
+ * **Il tema di partenza è lo scuro**, non «segui il sistema».
+ *
+ * Il buio è il tema di marca — viene dalla wall, dove per la proiezione in sala
+ * non è una scelta estetica — e chi apre Mirada per la prima volta deve vedere
+ * il prodotto com'è pensato, non come il suo sistema operativo lo interpreta.
+ * `auto` resta disponibile come scelta **esplicita**: chi la vuole la sceglie,
+ * ma non se la ritrova addosso senza averla chiesta.
+ */
+const DEFAULT_CHOICE: ThemeChoice = 'dark';
+
+/**
  * Tema dell'interfaccia — `data-theme` su `<html>`, letto da `src/styles.scss`.
  *
  * Il tema **scuro** è quello di marca, ereditato dalla wall (`RF-WALL-31`): per
@@ -79,9 +90,9 @@ export class ThemeService {
 function readStored(): ThemeChoice {
   try {
     const v = localStorage.getItem(KEY);
-    return v === 'light' || v === 'dark' || v === 'auto' ? v : 'auto';
+    return v === 'light' || v === 'dark' || v === 'auto' ? v : DEFAULT_CHOICE;
   } catch {
-    return 'auto';
+    return DEFAULT_CHOICE;
   }
 }
 

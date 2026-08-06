@@ -1,8 +1,12 @@
 <!doctype html>
-<html lang="en">
+<!-- `data-theme` è scritto qui e non lasciato al solo `ThemeService`: fra il
+     primo pixel e l'avvio di Angular passa qualche centinaio di millisecondi, e
+     senza attributo quel tratto lo disegna il browser. `lang` è italiano perché
+     l'applicazione lo è: lo leggono la sintesi vocale e la sillabazione. -->
+<html lang="it" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <title>App</title>
+  <title>Mirada Tango</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
