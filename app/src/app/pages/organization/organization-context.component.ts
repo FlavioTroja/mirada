@@ -109,11 +109,28 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
         flex-wrap: wrap;
         gap: 0.375rem;
       }
-      /* La voce corrente si riconosce **senza dipendere dal colore**: ha un
-         bordo pieno d'accento e il testo in grassetto. Chi non distingue i
-         colori vede comunque quale delle cinque è quella aperta (1.4.1). */
+      /* Il bordo sta su TUTTE e cinque, non solo sulla corrente, e per due
+         ragioni distinte.
+
+         La prima è che il pulsante di serie nasce senza bordo e con il fondo
+         uguale alla superficie della card — misurano 1,07:1 fra loro. Le voci
+         non selezionate erano quindi tono su tono e si confondevano con la
+         pagina: un comando deve avere un confine (1.4.11).
+
+         La seconda è geometrica, ed era un difetto che avevo introdotto io: il
+         pulsante della libreria usa box-sizing border-box ma NON ha un'altezza
+         fissa, quindi un bordo messo alla sola voce corrente le aggiungeva 2px
+         di altezza e la fila si spostava a ogni cambio di scheda. Con il bordo
+         su tutte, l'ingombro non cambia mai: cambia solo il colore. */
+      .link ::ng-deep button {
+        border: 1px solid rgba(var(--text-rgb), 0.55) !important; /* 5,3 · 4,0:1 */
+      }
+
+      /* La voce corrente si riconosce **senza dipendere dal colore**: bordo
+         d'accento e testo in grassetto. Chi non distingue i colori vede
+         comunque quale delle cinque è quella aperta (1.4.1). */
       .link.is-current ::ng-deep button {
-        border: 1px solid rgb(var(--accent-rgb)) !important;
+        border-color: rgb(var(--accent-rgb)) !important;
         background: rgba(var(--accent-rgb), 0.14) !important;
         font-weight: 600;
       }
