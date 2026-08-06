@@ -526,7 +526,12 @@ describe("Rotte di biglietti e check-in (fase D1)", () => {
         expect(body.perimeter.missingEntities).not.toContain("Ticket");
         expect(body.perimeter.missingEntities).not.toContain("CheckIn");
         expect(body.perimeter.missingEntities).not.toContain("RequirementOutcome");
-        expect(body.perimeter.missingEntities).toContain("Order");
+        // Il percorso d'acquisto è costruito: dichiararlo mancante era una
+        // bugia del cruscotto su sé stesso.
+        expect(body.perimeter.missingEntities).not.toContain("Order");
+        expect(body.perimeter.missingEntities).not.toContain("Payment");
+        // `Refund` invece manca davvero, ed è l'unica che deve restare elencata.
+        expect(body.perimeter.missingEntities).toEqual(["Refund"]);
 
         expect(body.sections.attendance.available).toBe(true);
         expect(body.sections.attendance.totalEntries).toBe(1);
@@ -539,9 +544,22 @@ describe("Rotte di biglietti e check-in (fase D1)", () => {
         expect(body.sections.missingRequirements.byRequirement[0].missing).toBe(1);
         expect(registrationId).toBeGreaterThan(0);
 
-        // Ciò che davvero manca resta dichiarato indisponibile, non azzerato.
-        expect(body.sections.netRevenue.available).toBe(false);
-        expect(body.sections.soldByTicketType.available).toBe(false);
+        // Venduto e incassato sono ora calcolabili. In questo scenario il
+        // biglietto nasce da `PassIssuance` e non da un ordine: le sezioni sono
+        // quindi **disponibili e a zero**, che è un'affermazione diversa da
+        // «non calcolabili» — ed è esattamente la distinzione di `RB21` fra un
+        // dato assente e un dato pari a zero.
+        expect(body.sections.soldByTicketType.available).toBe(true);
+        expect(body.sections.soldByTicketType.items.every((i: { sold: number }) => i.sold === 0)).toBe(true);
+        expect(body.sections.soldByTicketType.servicesGross).toBe(0);
+
+        expect(body.sections.netRevenue.available).toBe(true);
+        expect(body.sections.netRevenue.paidOrders).toBe(0);
+        expect(body.sections.netRevenue.total).toBe(0);
+        expect(body.sections.netRevenue.cashed).toBe(0);
+
+        // L'impegnato esiste comunque: il posto è occupato anche senza un ordine.
+        expect(body.sections.committedByTicketType.available).toBe(true);
     });
 
     it("POST /events/:id/exports — ATTENDANCE è producibile e non contiene contatti (RB12)", async () => {

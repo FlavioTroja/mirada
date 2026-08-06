@@ -41,18 +41,22 @@ import { PageAction, PageActionsService } from '../../services/page-actions.serv
 import { ToastService } from '../../services/toast.service';
 import { AuthService } from '../../core/auth/auth.service';
 import {
+  AttendanceSection,
   CapacitySection,
   CommittedSection,
   CouplesSection,
+  MissingRequirementsSection,
   RegistrationsByRole,
   RequirementsSection,
+  RevenueSection,
+  SoldSection,
   TrendSection,
   isAvailable,
   unavailableOf,
 } from '../../core/domain/dashboard';
 import { EVENT_STATUS_UI, PAYOUT_STATUS_UI } from '../../core/domain/enums';
 import { MiradaEvent } from '../../core/domain/models';
-import { formatDate, formatDateTime, formatImbalance } from '../../core/i18n/format';
+import { formatCents, formatDate, formatDateTime, formatImbalance } from '../../core/i18n/format';
 import { I18nText, LocaleService, i18nPlain } from '../../core/i18n/i18n-text';
 import { REALTIME_EVENTS, RealtimeService } from '../../core/realtime/realtime.service';
 import { DashboardStore } from '../../stores/dashboard.store';
@@ -74,8 +78,8 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
  * Due nomi che non vanno confusi:
  *  - `committedByTicketType` è ciò che il motore di capienza ha **impegnato**,
  *    non venduto e non incassato;
- *  - `soldByTicketType` esiste **vuota e motivata**, perché il venduto è il
- *    pagato e senza `Order`/`Payment` non esiste.
+ *  - `soldByTicketType` è ciò che è stato **saldato**. Le due divergono per
+ *    tutta la durata di una prenotazione e non vanno mai sommate.
  *
  * È anche l'unico posto dove si vede il **realtime**: alla ricezione di un
  * frame WebSocket (§3.9) **si rifà la GET**, il payload non entra mai nello
@@ -165,7 +169,7 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
           <p class="mirada-hint">{{ data.perimeter.note }}</p>
           @if (data.perimeter.missingEntities.length) {
             <div class="pills">
-              <span class="mirada-label">Non ancora costruite</span>
+              <p class="mirada-label">Non ancora costruite</p>
               @for (entity of data.perimeter.missingEntities; track entity) {
                 <keijo-pill
                   variant="default"
@@ -306,7 +310,7 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
             </p>
             @if (section.items.length) {
               <keijo-list-items-wrapper>
-                @for (item of section.items; track item.id) {
+                @for (item of section.items; track item.ticketTypeId) {
                   <keijo-list-item-wrapper direction="row">
                     <div class="row">
                       <span class="mirada-value">{{ name(item.name) }}</span>
@@ -343,22 +347,37 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
         <!-- ------------------------------------------- venduto per titolo -->
         <keijo-page-section-wrapper title="Venduto per titolo d’ingresso">
           @if (sold(); as section) {
-            @if (section.items.length) {
+            <p class="mirada-hint">
+              È il <strong>saldato</strong>, non l’impegnato: finché una prenotazione è in
+              corso i posti sono già sottratti agli altri, ma nessuno li ha ancora comprati.
+              I due contatori divergono per quindici minuti e non vanno sommati.
+            </p>
+            @if (soldTotal() > 0) {
               <keijo-list-items-wrapper>
-                @for (item of section.items; track item.id) {
-                  <keijo-list-item-wrapper direction="row">
-                    <div class="row">
-                      <span class="mirada-value">{{ name(item.name) }}</span>
-                      <keijo-pill variant="success" [icon]="sellIcon">
-                        {{ item.committed }} venduti
-                      </keijo-pill>
-                    </div>
-                  </keijo-list-item-wrapper>
+                @for (item of section.items; track item.ticketTypeId) {
+                  @if (item.sold > 0) {
+                    <keijo-list-item-wrapper direction="row">
+                      <div class="row">
+                        <span class="mirada-value">{{ name(item.name) }}</span>
+                        <keijo-pill variant="success" [icon]="sellIcon">
+                          {{ item.sold }} venduti
+                        </keijo-pill>
+                        <span class="mirada-hint">{{ cents(item.gross) }}</span>
+                      </div>
+                    </keijo-list-item-wrapper>
+                  }
                 }
               </keijo-list-items-wrapper>
+              @if (section.servicesGross) {
+                <p class="mirada-hint">
+                  Più {{ cents(section.servicesGross) }} di servizi accessori, che biglietti
+                  non sono e restano fuori dai conteggi per titolo.
+                </p>
+              }
             } @else {
-              <p class="mirada-hint">Nessuna vendita registrata.</p>
+              <p class="mirada-muted">Nessun titolo d’ingresso è ancora stato saldato.</p>
             }
+            <p class="mirada-hint">Calcolato su: {{ section.basedOn.join(', ') }}.</p>
           } @else {
             <app-unavailable-section
               label="Venduto per titolo"
@@ -368,14 +387,37 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
         </keijo-page-section-wrapper>
 
         <!-- ------------------------------------------------ incasso netto -->
-        <keijo-page-section-wrapper title="Incasso netto">
-          @if (unavailable('netRevenue'); as info) {
-            <app-unavailable-section label="Incasso netto" [section]="info" />
+        <keijo-page-section-wrapper title="Incasso">
+          @if (revenue(); as section) {
+            <div class="tiles">
+              <div class="tile">
+                <p class="mirada-label">All’organizzatore</p>
+                <p class="mirada-value big">{{ cents(section.subtotal) }}</p>
+              </div>
+              <div class="tile">
+                <p class="mirada-label">Diritti di prevendita</p>
+                <p class="mirada-value big">{{ cents(section.presaleRights) }}</p>
+              </div>
+              <div class="tile">
+                <p class="mirada-label">Pagato dai compratori</p>
+                <p class="mirada-value big">{{ cents(section.total) }}</p>
+              </div>
+              <div class="tile">
+                <p class="mirada-label">Realmente incassato</p>
+                <p class="mirada-value big">{{ cents(section.cashed) }}</p>
+              </div>
+            </div>
+
+            <p class="mirada-hint">{{ revenueLabel() }}</p>
+            @if (!section.presaleRights && section.total) {
+              <p class="mirada-hint">
+                I diritti di prevendita sono a zero perché la tariffa non è ancora stata
+                decisa: su questo evento la piattaforma non trattiene nulla.
+              </p>
+            }
+            <p class="mirada-hint">{{ section.note }}</p>
           } @else {
-            <p class="mirada-hint">
-              La sezione è dichiarata calcolabile dal backend ma questa applicazione non ne
-              conosce ancora la forma: aggiornare la pagina quando il §3 la descriverà.
-            </p>
+            <app-unavailable-section label="Incasso" [section]="unavailable('netRevenue')" />
           }
         </keijo-page-section-wrapper>
 
@@ -410,7 +452,7 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
           @if (requirements(); as section) {
             @if (section.configured.length) {
               <keijo-list-items-wrapper>
-                @for (req of section.configured; track req.id) {
+                @for (req of section.configured; track req.eventRequirementId) {
                   <keijo-list-item-wrapper direction="row">
                     <div class="row">
                       <span class="mirada-value">{{ name(req.label) }}</span>
@@ -431,21 +473,87 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
             <app-unavailable-section label="Requisiti" [section]="unavailable('requirements')" />
           }
 
-          <app-unavailable-section
-            label="Requisiti mancanti"
-            [section]="unavailable('missingRequirements')"
-          />
+          @if (missingRequirements(); as section) {
+            <h3 class="mirada-value">Requisiti mancanti</h3>
+            @if (section.registrationsWithMissing) {
+              <p class="mirada-hint">
+                {{ section.registrationsWithMissing }} iscrizioni hanno almeno un requisito da
+                sistemare. Di ciascun requisito si riporta il nome e il conteggio, mai il
+                contenuto dichiarato.
+              </p>
+              <keijo-list-items-wrapper>
+                @for (req of section.byRequirement; track req.eventRequirementId) {
+                  <keijo-list-item-wrapper direction="row">
+                    <div class="row">
+                      <span class="mirada-value">{{ name(req.label) }}</span>
+                      <keijo-pill variant="warning" [icon]="checklistIcon">
+                        {{ req.missing }} mancanti
+                      </keijo-pill>
+                      @if (req.mandatory) {
+                        <keijo-pill variant="error" [icon]="checklistIcon">obbligatorio</keijo-pill>
+                      }
+                    </div>
+                  </keijo-list-item-wrapper>
+                }
+              </keijo-list-items-wrapper>
+            } @else {
+              <p class="mirada-muted">Nessuna iscrizione ha requisiti in sospeso.</p>
+            }
+          } @else {
+            <app-unavailable-section
+              label="Requisiti mancanti"
+              [section]="unavailable('missingRequirements')"
+            />
+          }
         </keijo-page-section-wrapper>
 
         <!-- ------------------------------------------------- presenze ---->
         <keijo-page-section-wrapper title="Presenze">
-          @if (unavailable('attendance'); as info) {
-            <app-unavailable-section label="Presenze" [section]="info" />
-          } @else {
+          @if (attendance(); as section) {
             <p class="mirada-hint">
-              La sezione è dichiarata calcolabile dal backend ma questa applicazione non ne
-              conosce ancora la forma.
+              Le presenze sono un <strong>asse a sé</strong>: il check-in non consuma capienza,
+              e questo contatore non va sommato a quelli di quota. Uno misura l’ammissione,
+              l’altro chi è dentro adesso.
             </p>
+            <div class="tiles">
+              <div class="tile">
+                <p class="mirada-label">Ingressi registrati</p>
+                <p class="mirada-value big">{{ section.totalEntries }}</p>
+              </div>
+              <div class="tile">
+                <p class="mirada-label">Biglietti distinti</p>
+                <p class="mirada-value big">{{ section.distinctTickets }}</p>
+              </div>
+              <div class="tile">
+                <p class="mirada-label">Conflitti aperti</p>
+                <p class="mirada-value big">{{ section.openConflicts }}</p>
+              </div>
+            </div>
+            @if (section.openConflicts) {
+              <p class="mirada-hint">
+                Doppi ingressi rilevati in sincronizzazione e <strong>non risolti</strong>: vanno
+                dirimiti a mano, il sistema non decide al posto dello staff.
+              </p>
+            }
+            @if (section.bySession.length) {
+              <keijo-list-items-wrapper>
+                @for (s of section.bySession; track s.sessionId) {
+                  <keijo-list-item-wrapper direction="row">
+                    <div class="row">
+                      <span class="mirada-value">{{ name(s.name) }}</span>
+                      <span class="mirada-hint">{{ time(s.startAt) }}</span>
+                      <keijo-pill variant="info" [icon]="checkInIcon">
+                        {{ s.entries }} ingressi
+                      </keijo-pill>
+                    </div>
+                  </keijo-list-item-wrapper>
+                }
+              </keijo-list-items-wrapper>
+            } @else {
+              <p class="mirada-muted">Nessun ingresso registrato: l’evento non è ancora iniziato.</p>
+            }
+          } @else {
+            <app-unavailable-section label="Presenze" [section]="unavailable('attendance')" />
           }
         </keijo-page-section-wrapper>
 
@@ -532,6 +640,7 @@ export class DashboardComponent implements OnInit {
   readonly liveIcon = wifi;
   readonly payoutIcon = payments;
   readonly coupleIcon = favorite;
+  readonly checkInIcon = howToReg;
 
   readonly eventControl = new FormControl<number | null>(null);
   private readonly selectable = signal<MiradaEvent[]>([]);
@@ -570,7 +679,38 @@ export class DashboardComponent implements OnInit {
     return isAvailable(section) ? section : null;
   });
   readonly sold = computed(() => {
-    const section = this.store.section<CommittedSection>('soldByTicketType');
+    const section = this.store.section<SoldSection>('soldByTicketType');
+    return isAvailable(section) ? section : null;
+  });
+  /** Quanti titoli sono stati davvero saldati: distingue «zero vendite» da «nessun titolo». */
+  readonly soldTotal = computed(() =>
+    (this.sold()?.items ?? []).reduce((total, item) => total + item.sold, 0),
+  );
+  readonly revenue = computed(() => {
+    const section = this.store.section<RevenueSection>('netRevenue');
+    return isAvailable(section) ? section : null;
+  });
+  /**
+   * La frase sugli ordini saldati, composta qui e non nel template: un `@if`
+   * a metà periodo lascia gli spazi del sorgente attorno alla virgola e al
+   * punto finale, e in pagina si legge «6 ordini saldati , di cui … .».
+   */
+  readonly revenueLabel = computed(() => {
+    const section = this.revenue();
+    if (!section) return '';
+    const orders = `${section.paidOrders} ${section.paidOrders === 1 ? 'ordine saldato' : 'ordini saldati'}`;
+    if (!section.zeroAmountOrders) return `${orders}.`;
+    return (
+      `${orders}, di cui ${section.zeroAmountOrders} a importo zero: iscritti veri, ricavo nullo. `
+      + 'È la ragione per cui «realmente incassato» può essere inferiore a «pagato dai compratori».'
+    );
+  });
+  readonly attendance = computed(() => {
+    const section = this.store.section<AttendanceSection>('attendance');
+    return isAvailable(section) ? section : null;
+  });
+  readonly missingRequirements = computed(() => {
+    const section = this.store.section<MissingRequirementsSection>('missingRequirements');
     return isAvailable(section) ? section : null;
   });
   readonly couples = computed(() => {
@@ -738,12 +878,18 @@ export class DashboardComponent implements OnInit {
     return `${formatDate(ev.startAt)} – ${formatDate(ev.endAt)}`;
   }
 
-  time(value: Date): string {
+  /** Accetta anche la stringa ISO: dal JSON le date arrivano così, non come `Date`. */
+  time(value: Date | string): string {
     return formatDateTime(value);
   }
 
   day(value: string): string {
     return formatDate(value);
+  }
+
+  /** Gli importi viaggiano in **centesimi interi**: si formattano solo qui (§5). */
+  cents(value: number | null | undefined): string {
+    return formatCents(value);
   }
 
   /** I nomi delle entità sono `I18nText`: si mostrano nella lingua corrente. */

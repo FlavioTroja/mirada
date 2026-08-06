@@ -95,9 +95,15 @@ export interface CapacitySection {
   quotas: CapacityQuotaLine[];
 }
 
-/** Unità **impegnate** dal motore, mai «vendute». `null` = nessuna quota configurata. */
+/**
+ * Unità **impegnate** dal motore, mai «vendute». `null` = nessuna quota configurata.
+ *
+ * La chiave è `ticketTypeId` e non `id`: è il nome che il §3 usa, e dichiararlo
+ * `id` non era un dettaglio di stile — `@for … track item.id` produceva la
+ * stessa chiave vuota su ogni riga e Angular rifiutava l'elenco con `NG0955`.
+ */
 export interface CommittedLine {
-  id: number;
+  ticketTypeId: number;
   name?: unknown;
   limit: number | null;
   committed: number | null;
@@ -108,6 +114,84 @@ export interface CommittedSection {
   items: CommittedLine[];
 }
 
+/** Servizi accessori impegnati: stessa forma dei titoli, chiave diversa. */
+export interface ServiceLine {
+  eventServiceId: number;
+  name?: unknown;
+  price: number;
+  limit: number | null;
+  committed: number | null;
+  remaining: number | null;
+}
+
+export interface ServicesSection {
+  items: ServiceLine[];
+}
+
+/**
+ * Venduto per titolo — **il saldato**, non l'impegnato.
+ *
+ * Le due grandezze divergono per tutta la durata di una prenotazione di quindici
+ * minuti, e il cruscotto non le somma mai (`RB21`).
+ */
+export interface SoldLine {
+  ticketTypeId: number;
+  name?: unknown;
+  basePrice: number;
+  sold: number;
+  /** Centesimi, al lordo dei rimborsi finché `Refund` non esiste. */
+  gross: number;
+}
+
+export interface SoldSection {
+  items: SoldLine[];
+  servicesGross: number;
+}
+
+/**
+ * Il denaro. Tre destinatari diversi, tre numeri diversi: `subtotal`
+ * all'organizzatore, `presaleRights` alla piattaforma, `total` pagato dal
+ * compratore. `cashed` è ciò che è davvero transitato e può essere minore di
+ * `total`, perché un ordine a importo zero si chiude senza pagamento.
+ */
+export interface RevenueSection {
+  paidOrders: number;
+  zeroAmountOrders: number;
+  subtotal: number;
+  presaleRights: number;
+  total: number;
+  cashed: number;
+}
+
+/** Presenze — asse distinto dalle quote (`RB19`), mai sommato ai contatori. */
+export interface AttendanceSessionLine {
+  sessionId: number;
+  name?: unknown;
+  startAt: string;
+  entries: number;
+}
+
+export interface AttendanceSection {
+  totalEntries: number;
+  distinctTickets: number;
+  openConflicts: number;
+  bySession: AttendanceSessionLine[];
+}
+
+/** Requisiti mancanti — solo nome e conteggio, mai il contenuto (`RB12`). */
+export interface MissingRequirementLine {
+  eventRequirementId: number;
+  label?: unknown;
+  blocking: string;
+  mandatory: boolean;
+  missing: number;
+}
+
+export interface MissingRequirementsSection {
+  registrationsWithMissing: number;
+  byRequirement: MissingRequirementLine[];
+}
+
 export interface CouplesSection {
   complete: number;
   incomplete: number;
@@ -116,7 +200,7 @@ export interface CouplesSection {
 }
 
 export interface ConfiguredRequirement {
-  id: number;
+  eventRequirementId: number;
   label?: unknown;
   mandatory?: boolean;
   blocking?: string;

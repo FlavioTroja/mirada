@@ -34,6 +34,11 @@ export const DashboardDataSourceSchema = z.enum([
     "Ticket",
     "CheckIn",
     "RequirementOutcome",
+    // Fase D2 — il percorso d'acquisto (passi 18→26 del §2).
+    "Purchase",
+    "Order",
+    "OrderLine",
+    "Payment",
 ]);
 export type DashboardDataSource = z.infer<typeof DashboardDataSourceSchema>;
 
@@ -210,6 +215,57 @@ export const MissingRequirementsSchema = availableSection({
         .array(),
 });
 
+/**
+ * **Il venduto per titolo** — da non confondere con l'impegnato.
+ *
+ * `committedByTicketType` conta ciò che il motore di capienza ha sottratto alla
+ * disponibilità: comprende le prenotazioni in corso, che alla scadenza tornano
+ * indietro. Questa sezione conta ciò che è stato **saldato**. Le due grandezze
+ * divergono per tutta la durata di una finestra di quindici minuti, e `RB21`
+ * chiede che il cruscotto non le fonda mai in un numero solo.
+ *
+ * `servicesGross` sta a parte perché una riga d'ordine può riguardare un
+ * servizio accessorio invece di un titolo: sommarlo ai titoli gonfierebbe il
+ * venduto di cose che biglietti non sono.
+ */
+export const SoldByTicketTypeSchema = availableSection({
+    items: z
+        .object({
+            ticketTypeId: z.number().int(),
+            name: z.unknown(),
+            basePrice: z.number().int(),
+            /** Unità saldate. */
+            sold: z.number().int(),
+            /** Somma dei totali di riga, in centesimi (§3.1). */
+            gross: z.number().int(),
+        })
+        .array(),
+    /** Righe saldate che riguardano servizi accessori, non titoli. */
+    servicesGross: z.number().int(),
+});
+
+/**
+ * **Il denaro** — chi ha incassato che cosa.
+ *
+ * `subtotal` è ciò che spetta all'organizzatore, `presaleRights` ciò che la
+ * piattaforma trattiene, `total` ciò che il compratore ha pagato: tre numeri
+ * distinti che non vanno confusi, tanto meno quando il secondo è a zero perché
+ * la tariffa non è ancora stata decisa.
+ *
+ * `cashed` è la somma dei pagamenti **riusciti** e può essere minore di `total`:
+ * un ordine a importo zero chiuso con `confirm-free` è saldato senza che un solo
+ * centesimo sia transitato. La differenza è informazione, non un errore.
+ */
+export const NetRevenueSchema = availableSection({
+    paidOrders: z.number().int(),
+    /** Ordini saldati a importo zero: iscritti veri, ricavo nullo. */
+    zeroAmountOrders: z.number().int(),
+    subtotal: z.number().int(),
+    presaleRights: z.number().int(),
+    total: z.number().int(),
+    cashed: z.number().int(),
+});
+
 export const EventDashboardSchema = z.object({
     eventId: z.number().int(),
     slug: z.string(),
@@ -237,8 +293,8 @@ export const EventDashboardSchema = z.object({
         missingRequirements: MissingRequirementsSchema,
         attendance: AttendanceSchema,
 
-        soldByTicketType: UnavailableSectionSchema,
-        netRevenue: UnavailableSectionSchema,
+        soldByTicketType: SoldByTicketTypeSchema,
+        netRevenue: NetRevenueSchema,
     }),
 });
 export type EventDashboardDTO = z.infer<typeof EventDashboardSchema>;

@@ -1,15 +1,5 @@
 import { Service } from "fastify-decorators";
-import {
-    CapacityQuota,
-    DanceRole,
-    DeclaredDanceRole,
-    EventRequirement,
-    QuotaScope,
-    Registration,
-    RegistrationStatus,
-    RequirementOutcomeStatus,
-    Session,
-} from "@prisma/client";
+import { CapacityQuota, DanceRole, DeclaredDanceRole, EventRequirement, Order, OrderLine, Payment, QuotaScope, Registration, RegistrationStatus, RequirementOutcomeStatus, Session } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { EventRepository } from "@repositories/EventRepository";
@@ -27,6 +17,9 @@ import {
 } from "@repositories/RequirementOutcomeRepository";
 import { EventServiceRepository } from "@repositories/EventServiceRepository";
 import { EventRequirementRepository } from "@repositories/EventRequirementRepository";
+import { OrderRepository } from "@repositories/OrderRepository";
+import { OrderLineRepository } from "@repositories/OrderLineRepository";
+import { PaymentRepository } from "@repositories/PaymentRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { EventDashboardDTO } from "@DTOs/event/EventDashboardDTO";
 
@@ -37,17 +30,17 @@ const ACTIVE: RegistrationStatus[] = [RegistrationStatus.CONFIRMED, Registration
  * Entità del §2 non ancora costruite. Ogni sezione che dipende da una di queste
  * è dichiarata indisponibile, mai riempita di zeri (`RB21`).
  */
-const MISSING_ENTITIES = [
-    "Purchase", "Order", "OrderLine", "Reservation", "Payment", "Refund",
-];
+const MISSING_ENTITIES = ["Refund"];
 
 const PERIMETER_NOTE =
     "Il cruscotto è calcolato sulle sole entità costruite: Event, Registration, CapacityQuota, "
     + "QuotaConsumption, Couple, TicketType, EventService, EventRequirement, RequirementOutcome, "
-    + "Ticket, PassIssuance, CheckIn. Ciò che il motore di capienza registra è IMPEGNATO, non "
-    + "venduto né incassato: finché Order e Payment non esistono le due grandezze non coincidono e "
-    + "non vanno confuse (RB21). Le PRESENZE sono un asse a sé: il check-in non consuma capienza "
-    + "(RB19), e il contatore di sala non va sommato ai contatori di quota.";
+    + "Ticket, PassIssuance, CheckIn, Purchase, Order, OrderLine, Reservation, Payment. "
+    + "IMPEGNATO e VENDUTO restano due grandezze distinte e sono riportate separatamente (RB21): "
+    + "il motore di capienza sottrae i posti anche a una prenotazione in corso, che alla scadenza "
+    + "torna disponibile senza aver venduto nulla. Refund NON è ancora costruita, quindi gli "
+    + "importi sono AL LORDO dei rimborsi. Le PRESENZE sono un asse a sé: il check-in non consuma "
+    + "capienza (RB19), e il contatore di sala non va sommato ai contatori di quota.";
 
 /**
  * `GET /events/:id/dashboard` — backend-brief §3.7 (`RF-BKO-1`, `RF-CPL-11`).
@@ -71,6 +64,9 @@ export class EventDashboardService {
         private readonly requirementOutcomeRepository: RequirementOutcomeRepository,
         private readonly eventServiceRepository: EventServiceRepository,
         private readonly eventRequirementRepository: EventRequirementRepository,
+        private readonly orderRepository: OrderRepository,
+        private readonly orderLineRepository: OrderLineRepository,
+        private readonly paymentRepository: PaymentRepository,
         private readonly organizationScopeService: OrganizationScopeService,
     ) {}
 
@@ -97,6 +93,15 @@ export class EventDashboardService {
         const active = registrations.filter(r => ACTIVE.includes(r.status));
         const committedByQuota = await this.quotaConsumptionRepository.sumByQuota(quotas.map(q => q.id));
 
+        // Il denaro: solo ordini saldati, e su quelli le righe e gli incassi
+        // riusciti. Tre letture, non una per ordine.
+        const paidOrders = await this.orderRepository.findPaidByEvent(eventId);
+        const paidOrderIds = paidOrders.map(o => o.id);
+        const [paidLines, succeededPayments] = await Promise.all([
+            this.orderLineRepository.findByOrders(paidOrderIds),
+            this.paymentRepository.findSucceededByOrders(paidOrderIds),
+        ]);
+
         const dashboard: EventDashboardDTO = {
             eventId: event.id,
             slug: event.slug,
@@ -114,21 +119,8 @@ export class EventDashboardService {
                 attendance: await this.buildAttendance(eventId, sessions),
                 missingRequirements: await this.buildMissingRequirements(requirements, active),
 
-                soldByTicketType: {
-                    available: false,
-                    requires: ["Order", "OrderLine", "Payment"],
-                    reason:
-                        "Il venduto per titolo è il pagato, non l'impegnato. Senza Order/Payment non esiste "
-                        + "alcun incasso da attribuire a un titolo. La sezione 'committedByTicketType' riporta "
-                        + "l'unica grandezza reale disponibile: le unità impegnate dal motore di capienza.",
-                },
-                netRevenue: {
-                    available: false,
-                    requires: ["Order", "Payment", "Refund"],
-                    reason:
-                        "L'incasso netto è subtotale meno rimborsi al netto dei diritti di prevendita: tutte e "
-                        + "tre le grandezze vivono su entità non ancora costruite (§2, passi 18→27).",
-                },
+                soldByTicketType: this.buildSold(ticketTypes, paidLines),
+                netRevenue: this.buildRevenue(paidOrders, succeededPayments),
             },
         };
 
@@ -213,6 +205,84 @@ export class EventDashboardService {
                 remaining: Math.max(0, q.limit + q.overbookAllowance - q.consumed),
                 limiting: q.limiting,
             })),
+        };
+    }
+
+    /**
+     * **Venduto per titolo.** Un giro sulle righe degli ordini saldati,
+     * raggruppate per titolo.
+     *
+     * Un titolo mai venduto compare comunque, a zero: un elenco che salta le
+     * righe vuote fa sembrare che quel titolo non esista, quando invece la
+     * notizia è proprio che non lo compra nessuno.
+     */
+    private buildSold(
+        ticketTypes: { id: number; name: unknown; basePrice: number }[],
+        paidLines: OrderLine[],
+    ): EventDashboardDTO["sections"]["soldByTicketType"] {
+        const sold = new Map<number, { sold: number; gross: number }>();
+        let servicesGross = 0;
+
+        for (const line of paidLines) {
+            if (line.ticketTypeId === null) {
+                // Riga di servizio accessorio: è denaro incassato, ma non è un
+                // biglietto e non va attribuito ad alcun titolo.
+                servicesGross += line.lineTotal;
+                continue;
+            }
+            const current = sold.get(line.ticketTypeId) ?? { sold: 0, gross: 0 };
+            current.sold += line.quantity;
+            current.gross += line.lineTotal;
+            sold.set(line.ticketTypeId, current);
+        }
+
+        return {
+            available: true,
+            basedOn: ["TicketType", "Order", "OrderLine"],
+            note:
+                "Unità SALDATE (ordini in stato PAID), non impegnate: la sezione 'committedByTicketType' "
+                + "riporta l'altra grandezza e le due divergono per tutta la durata di una prenotazione. "
+                + "Importi in centesimi e AL LORDO dei rimborsi, che l'entità Refund non modella ancora.",
+            items: ticketTypes.map(tt => ({
+                ticketTypeId: tt.id,
+                name: tt.name,
+                basePrice: tt.basePrice,
+                sold: sold.get(tt.id)?.sold ?? 0,
+                gross: sold.get(tt.id)?.gross ?? 0,
+            })),
+            servicesGross,
+        };
+    }
+
+    /**
+     * **Il denaro.** `subtotal` all'organizzatore, `presaleRights` alla
+     * piattaforma, `total` pagato dal compratore, `cashed` realmente transitato.
+     *
+     * `cashed` si legge dai `Payment` riusciti e non dai totali degli ordini,
+     * perché sono due fatti diversi: un ordine a importo zero chiuso con
+     * `confirm-free` è saldato senza che un centesimo si muova. Sommare i totali
+     * e chiamarli incasso significherebbe annunciare denaro che non è mai
+     * arrivato.
+     */
+    private buildRevenue(
+        paidOrders: Order[],
+        succeededPayments: Payment[],
+    ): EventDashboardDTO["sections"]["netRevenue"] {
+        const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+
+        return {
+            available: true,
+            basedOn: ["Order", "Payment"],
+            note:
+                "Solo ordini PAID. Importi in centesimi e AL LORDO dei rimborsi: Refund non è ancora "
+                + "costruita, quindi nessuna restituzione è sottratta. 'cashed' può essere minore di "
+                + "'total' perché gli ordini a importo zero si chiudono senza pagamento.",
+            paidOrders: paidOrders.length,
+            zeroAmountOrders: paidOrders.filter(o => o.total === 0).length,
+            subtotal: sum(paidOrders.map(o => o.subtotal)),
+            presaleRights: sum(paidOrders.map(o => o.presaleRights)),
+            total: sum(paidOrders.map(o => o.total)),
+            cashed: sum(succeededPayments.map(p => p.amount)),
         };
     }
 

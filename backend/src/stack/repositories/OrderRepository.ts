@@ -47,6 +47,24 @@ export class OrderRepository extends BaseRepository<"order"> {
     }
 
     /**
+     * Gli ordini **saldati** di un evento: la sorgente del venduto e
+     * dell'incassato nel cruscotto (`RB21`).
+     *
+     * Solo `PAID`, e la ragione è la distinzione che l'intero cruscotto tiene in
+     * piedi: un ordine `PENDING_PAYMENT` ha già **impegnato** capienza — i posti
+     * sono sottratti a tutti gli altri — ma non ha venduto nulla, e alla scadenza
+     * dei quindici minuti torna indietro. Contarlo fra i ricavi significherebbe
+     * annunciare un incasso che il tempo può cancellare.
+     */
+    async findPaidByEvent(eventId: number, tx?: Prisma.TransactionClient): Promise<Order[]> {
+        return this.findMany(
+            { eventId, deleted: false, status: OrderStatus.PAID },
+            { orderBy: { id: "asc" } },
+            tx,
+        );
+    }
+
+    /**
      * §1.5 su un'entità a due proprietari (come `Purchase`): l'ordine è **al
      * tempo stesso** una riga del compratore e una riga dell'organizzazione che
      * incassa. Il `DANCER` vede i propri ordini, lo staff quelli della propria

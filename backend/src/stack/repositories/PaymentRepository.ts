@@ -1,5 +1,5 @@
 import { Service } from "fastify-decorators";
-import { Payment, Prisma } from "@prisma/client";
+import { Payment, PaymentStatus, Prisma } from "@prisma/client";
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
@@ -22,6 +22,27 @@ export class PaymentRepository extends BaseRepository<"payment"> {
 
     async findByOrder(orderId: number, tx?: Prisma.TransactionClient): Promise<Payment[]> {
         return this.findMany({ orderId, deleted: false }, { orderBy: { id: "asc" } }, tx);
+    }
+
+    /**
+     * Gli incassi **riusciti** su un insieme di ordini.
+     *
+     * Solo `SUCCEEDED`: un `PENDING` è un tentativo in volo e un `FAILED` è un
+     * incasso che non c'è stato — sommarli darebbe un totale che nessun conto
+     * corrente rispecchia. `REFUNDED` e `PARTIALLY_REFUNDED` restano fuori
+     * finché `Refund` non esiste: senza gli importi rimborsati non si sa quanto
+     * di quel pagamento sia ancora in casa, e un numero a metà è peggio di un
+     * numero assente.
+     */
+    async findSucceededByOrders(orderIds: number[], tx?: Prisma.TransactionClient): Promise<Payment[]> {
+        if (!orderIds.length) {
+            return [];
+        }
+        return this.findMany(
+            { orderId: { in: orderIds }, deleted: false, status: PaymentStatus.SUCCEEDED },
+            { orderBy: { id: "asc" } },
+            tx,
+        );
     }
 
     async findByIdempotencyKey(idempotencyKey: string, tx?: Prisma.TransactionClient): Promise<Payment | null> {
