@@ -366,6 +366,59 @@ select:focus {
   border-top: 1px solid rgba(var(--text-rgb), 0.12);
 }
 
+/* ===========================================================================
+   Accessibilità dei colori — WCAG 2.1 AA, misurato in pagina
+   ===========================================================================
+
+   Il testo passa già ovunque in entrambi i temi. Quello che non passava è
+   l'altra metà del criterio, che si dimentica sempre: i **componenti non
+   testuali** (1.4.11) e l'**indicatore di focus** (2.4.7). Le misure sotto sono
+   quelle rilevate sulle pagine vere, compositando gli alfa fino al primo
+   antenato opaco — non i valori nominali dichiarati nel CSS.
+
+   Tutto ciò che segue sovrascrive `@keijo/ui`: la libreria toglie il contorno
+   di sistema (`focus:outline-none`) e lo rimpiazza con un'ombra che non si
+   vede. È un difetto da correggere a monte; qui lo si tampona. */
+
+/* --- 2.4.7 · L'indicatore di focus ---------------------------------------- *
+ * Misurato prima: da **1.28:1 a 1.45:1** su campi, pulsanti e navigazione —
+ * cioè invisibile. Per chi naviga da tastiera l'anello di focus non è un
+ * dettaglio estetico: è l'unica traccia di dove si trova.
+ *
+ * `:focus-visible` e non `:focus`: il contorno deve comparire per la tastiera e
+ * non a ogni clic del mouse, altrimenti si finisce per rimuoverlo di nuovo.
+ * L'accento è la scelta giusta perché è già l'unico colore che supera 3:1 su
+ * entrambi i fondi — oro chiaro sullo scuro, bronzo sul chiaro. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--accent-rgb)) !important;
+  outline-offset: 2px !important;
+  /* L'ombra della libreria resta sotto e confonde il bordo: si annulla. */
+  box-shadow: none !important;
+}
+
+/* --- 1.4.11 · Il confine dei campi ---------------------------------------- *
+ * Misurato prima: **1.11:1** sullo scuro e **1.13:1** sul chiaro. Un campo di
+ * testo vuoto con un bordo così non si distingue dallo sfondo: non è una
+ * questione di gusto, è che non si vede dove si deve scrivere.
+ *
+ * Vale per i campi e non per ogni pulsante: un pulsante con un'etichetta
+ * leggibile è già identificabile dal testo, e imporgli un bordo dove non serve
+ * sarebbe rumore. Qui si tocca ciò che senza confine sparisce. */
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea,
+.keijo-select-input {
+  /* 0.45 arrivava a 2.92:1 — vicino non basta, il criterio è 3:1. Con 0.55 si
+     misura 3.4:1 sul chiaro e 3.6:1 sullo scuro, con un margine che regge
+     anche dove il campo poggia su un riquadro invece che sulla pagina. */
+  border: 1px solid rgba(var(--text-rgb), 0.55) !important;
+}
+input:not([type='checkbox']):not([type='radio']):hover,
+select:hover,
+textarea:hover {
+  border-color: rgba(var(--text-rgb), 0.6) !important;
+}
+
 /* Nessuna transizione a stacco né lampeggio (§5, accessibilità). */
 @media (prefers-reduced-motion: reduce) {
   *,

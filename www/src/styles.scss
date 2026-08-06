@@ -157,6 +157,20 @@ html {
   background: rgb(var(--accent-rgb));
   color: rgb(var(--mirada-black));
 }
+
+/* Il testo del pulsante principale cambia con il tema, e non per gusto.
+ *
+ * L'accento non è lo stesso colore nei due temi: sullo scuro è oro chiaro e il
+ * testo nero ci si legge bene; sul chiaro è **bronzo** (#8A600C), e il nero
+ * sopra misurava **3.52:1** — sotto il 4.5 richiesto, proprio sul pulsante che
+ * porta all'iscrizione. Il bianco sullo stesso bronzo misura **5.59:1**.
+ *
+ * L'alternativa sarebbe stata schiarire il bronzo, ma allora sarebbe stato lui
+ * a non staccare più dal fondo chiaro della pagina: il colore va lasciato dov'è
+ * e cambiato ciò che ci sta sopra. */
+:root[data-theme='light'] .www-btn {
+  color: rgb(var(--mirada-ivory));
+}
 .www-btn:hover:not(:disabled) {
   filter: brightness(1.08);
 }
@@ -168,7 +182,11 @@ html {
 .www-btn-secondary {
   background: transparent;
   color: rgb(var(--text-rgb));
-  border-color: rgba(var(--text-rgb), 0.28);
+  /* Un pulsante **senza riempimento** ha nel bordo la sola cosa che dice
+     «questo è un pulsante»: 0.28 misurava 2.21:1 sullo scuro e 1.85:1 sul
+     chiaro. Serve 0.47 perché anche il caso peggiore — chiaro su fondo pagina —
+     superi il 3:1; con 0.55 il margine c'è in tutti e quattro i casi. */
+  border-color: rgba(var(--text-rgb), 0.55);
 }
 .www-btn-secondary:hover:not(:disabled) {
   border-color: rgb(var(--accent-rgb));
@@ -178,7 +196,8 @@ html {
 .ghost-btn {
   background: transparent;
   color: rgba(var(--text-rgb), 0.86);
-  border-color: rgba(var(--text-rgb), 0.22);
+  /* Stessa ragione del secondario: senza riempimento il bordo è l'affordance. */
+  border-color: rgba(var(--text-rgb), 0.55);
   padding: 0.35rem 0.8rem;
   font-size: 0.9rem;
 }
@@ -209,7 +228,10 @@ html {
   width: 100%;
   background: rgba(var(--background-color), 0.6);
   color: rgb(var(--text-rgb));
-  border: 1px solid rgba(var(--text-rgb), 0.22);
+  /* 0.22 misurava 1.63:1 sullo scuro e 1.46:1 sul chiaro: un campo vuoto non
+     si distingueva dal fondo, e 1.4.11 chiede 3:1 proprio perché il confine di
+     un campo è l'informazione che dice dove si scrive. */
+  border: 1px solid rgba(var(--text-rgb), 0.55);
   border-radius: var(--www-radius-sm);
   padding: 0.55rem 0.7rem;
   font: inherit;

@@ -83,7 +83,11 @@ interface CastGroup {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(var(--accent-rgb), 0.16);
+        /* Le iniziali misuravano 4.48:1 sul chiaro — mancava un centesimo al
+           4.5 richiesto, ed è comunque un fallimento. Alleggerire la velatura
+           schiarisce il fondo e allontana i due colori invece di avvicinarli:
+           il colore delle iniziali resta l'accento, che è l'informazione. */
+        background: rgba(var(--accent-rgb), 0.1);
         color: rgb(var(--accent-rgb));
         font-size: 0.8rem;
       }
