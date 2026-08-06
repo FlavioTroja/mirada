@@ -164,6 +164,91 @@ describe("Apertura di un'organizzazione (§4.2)", () => {
         expect(beta?.website).not.toBe("https://dirottata.test");
     });
 
+    it("aggiungere un membro gli concede il ruolo corrispondente", async () => {
+        const ownerId = await createCandidate("titolare.cinque");
+        const collaboratorId = await createCandidate("collaboratore.uno");
+
+        const org = await app.inject({
+            method: "POST", url: "/api/organizations/create", headers: { authorization: god },
+            payload: { name: "Club con staff", ...BASE, ownerUserId: ownerId },
+        });
+        const organizationId = org.json().id as number;
+
+        const added = await app.inject({
+            method: "POST", url: "/api/organization-members/create", headers: { authorization: god },
+            payload: { organizationId, userId: collaboratorId, role: OrgMemberRole.EVENT_MANAGER },
+        });
+        expect(added.statusCode).toBe(200);
+
+        // Senza il ruolo sarebbe responsabile eventi di un'organizzazione su cui
+        // non può fare nulla: la membership da sola non concede permessi.
+        const role = await getPrismaClient().roleToUser.findFirst({
+            where: { userId: collaboratorId, roleName: RoleName.EVENT_MANAGER },
+        });
+        expect(role).not.toBeNull();
+    });
+
+    it("rimuovere un membro gli REVOCA il ruolo che nessun'altra membership giustifica", async () => {
+        const ownerId = await createCandidate("titolare.sei");
+        const collaboratorId = await createCandidate("collaboratore.due");
+
+        const org = await app.inject({
+            method: "POST", url: "/api/organizations/create", headers: { authorization: god },
+            payload: { name: "Club che licenzia", ...BASE, ownerUserId: ownerId },
+        });
+        const organizationId = org.json().id as number;
+
+        const added = await app.inject({
+            method: "POST", url: "/api/organization-members/create", headers: { authorization: god },
+            payload: { organizationId, userId: collaboratorId, role: OrgMemberRole.CHECKIN_OPERATOR },
+        });
+        const memberId = added.json().id as number;
+
+        const removed = await app.inject({
+            method: "DELETE", url: `/api/organization-members/${memberId}`, headers: { authorization: god },
+        });
+        expect(removed.statusCode).toBe(200);
+
+        // Il ruolo residuo non è un dettaglio contabile: sarebbe tornato utile
+        // alla prima organizzazione ricapitata sotto lo scope.
+        const role = await getPrismaClient().roleToUser.findFirst({
+            where: { userId: collaboratorId, roleName: RoleName.CHECKIN_OPERATOR },
+        });
+        expect(role).toBeNull();
+    });
+
+    it("uscire da UNA sola organizzazione non fa perdere il ruolo tenuto altrove", async () => {
+        const ownerId = await createCandidate("titolare.sette");
+
+        const ids: number[] = [];
+        for (const name of ["Casa nord", "Casa sud"]) {
+            const res = await app.inject({
+                method: "POST", url: "/api/organizations/create", headers: { authorization: god },
+                payload: { name, ...BASE, ownerUserId: ownerId },
+            });
+            ids.push(res.json().id as number);
+        }
+
+        const memberships = await getPrismaClient().organizationMember.findMany({
+            where: { userId: ownerId, deleted: false },
+        });
+        expect(memberships).toHaveLength(2);
+        const [first] = memberships;
+
+        const removed = await app.inject({
+            method: "DELETE", url: `/api/organization-members/${first!.id}`, headers: { authorization: god },
+        });
+        expect(removed.statusCode).toBe(200);
+
+        // Una riconciliazione ingenua «tolgo il ruolo quando esce» qui gli
+        // toglierebbe l'accesso all'organizzazione che possiede ancora.
+        const role = await getPrismaClient().roleToUser.findFirst({
+            where: { userId: ownerId, roleName: RoleName.OWNER },
+        });
+        expect(role).not.toBeNull();
+        expect(ids).toHaveLength(2);
+    });
+
     it("un secondo cliente dello stesso titolare non fallisce sul ruolo già concesso", async () => {
         const ownerId = await createCandidate("titolare.quattro");
 

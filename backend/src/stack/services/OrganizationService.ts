@@ -1,5 +1,5 @@
 import { Service } from "fastify-decorators";
-import { OrgMemberRole, Organization, Prisma, RoleName, User } from "@prisma/client";
+import { OrgMemberRole, Organization, Prisma, User } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
@@ -9,9 +9,9 @@ import { getPrismaClient } from "@utils/adapters/prisma";
 import { isGod } from "@utils/adapters/permission";
 import { OrganizationRepository } from "@repositories/OrganizationRepository";
 import { OrganizationMemberRepository } from "@repositories/OrganizationMemberRepository";
-import { RoleToUserRepository } from "@repositories/RoleToUserRepository";
 import { UserRepository } from "@repositories/UserRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
+import { OrganizationMemberService } from "@services/OrganizationMemberService";
 import { OrganizationCreateDTO } from "@DTOs/organization/OrganizationCreateDTO";
 import { OrganizationUpdateDTO } from "@DTOs/organization/OrganizationUpdateDTO";
 import { OrganizationQueryDTO } from "@DTOs/organization/OrganizationQueryDTO";
@@ -21,8 +21,8 @@ export class OrganizationService {
     constructor(
         private readonly organizationRepository: OrganizationRepository,
         private readonly organizationMemberRepository: OrganizationMemberRepository,
-        private readonly roleToUserRepository: RoleToUserRepository,
         private readonly userRepository: UserRepository,
+        private readonly organizationMemberService: OrganizationMemberService,
         private readonly organizationScopeService: OrganizationScopeService,
     ) {}
 
@@ -78,22 +78,13 @@ export class OrganizationService {
                 prisma,
             );
 
-            // Il ruolo è **idempotente**: chi possiede già un'altra
-            // organizzazione è `OWNER` da prima, e `RoleToUser` ha un vincolo di
-            // unicità su (roleName, userId) che farebbe fallire l'inserimento —
-            // portandosi dietro l'intera transazione, cioè l'organizzazione.
-            const existing = await this.roleToUserRepository.findOne(
-                { roleName: RoleName.OWNER, userId: owner.id },
-                undefined,
-                prisma,
-            );
-            if (!existing) {
-                await this.roleToUserRepository.save(
-                    { roleName: RoleName.OWNER, userId: owner.id, isActive: true },
-                    prisma,
-                );
-                Log.info(`[Organization Service]: role OWNER granted to user (id ${owner.id})`);
-            }
+            // Il ruolo lo concede `OrganizationMemberService`, che è il solo
+            // posto che sa come membership e ruoli si legano — e che lo fa per
+            // riconciliazione, quindi è già idempotente: chi possiede un'altra
+            // organizzazione è `OWNER` da prima, e il vincolo di unicità su
+            // (roleName, userId) farebbe fallire un inserimento cieco,
+            // portandosi dietro l'intera transazione.
+            await this.organizationMemberService.syncMembershipRoles(owner.id, prisma);
 
             return created;
         });
