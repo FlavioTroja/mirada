@@ -86,7 +86,22 @@ export class EventRepository extends BaseRepository<"event"> {
                     },
                     casts: {
                         where: { deleted: false },
-                        include: { artist: true },
+                        include: {
+                            // `artist: true` porta i soli campi scalari, e fra
+                            // questi c'è `photoFileId` — un **id**, da cui
+                            // nessun client può ricavare un URL. La scheda
+                            // pubblica mostrava quindi le iniziali anche per gli
+                            // artisti a cui l'organizzatore aveva caricato la
+                            // foto: il dato c'era a database e non usciva
+                            // dall'API. Le locandine dell'evento, poco più
+                            // sopra, erano già incluse per esteso: qui mancava.
+                            //
+                            // Del file si estrae **solo `url`**: il resto
+                            // (nome originale, dimensione, mime, chi l'ha
+                            // caricato) è metadato di gestione e non ha ragione
+                            // di comparire su un endpoint senza autenticazione.
+                            artist: { include: { photoFile: { select: { url: true } } } },
+                        },
                         orderBy: { sortOrder: "asc" },
                     },
                     requirements: {
