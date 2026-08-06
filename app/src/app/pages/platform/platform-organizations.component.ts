@@ -20,6 +20,8 @@ import {
   PillComponent,
   SearchBarComponent,
   SectionActionButton,
+  SelectComponent,
+  SelectOption,
 } from '@keijo/ui';
 import {
   add,
@@ -47,6 +49,13 @@ import { OrganizationStore } from '../../stores/organization.store';
 import { ConfirmService } from '../../shared/confirm.service';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
+import { ApiClient } from '../../core/api/api.client';
+
+/** Solo ciò che serve a comporre la voce dell'elenco: nessun dato personale in più. */
+interface UserRow {
+  id: number;
+  username: string;
+}
 
 /**
  * `/platform/organizations` — l'elenco delle organizzazioni (§4.10, `GOD`).
@@ -78,6 +87,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
     FormWrapperComponent,
     FormRowComponent,
     InputComponent,
+    SelectComponent,
     StatusPillComponent,
   ],
   template: `
@@ -92,6 +102,11 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
             Nel primo taglio le organizzazioni si creano a mano: non c’è una coda di approvazione
             e non c’è onboarding self-service. L’abilitazione all’incasso resta una verifica
             separata presso il prestatore di pagamento.
+          </p>
+          <p class="mirada-hint">
+            <strong>Il titolare è obbligatorio.</strong> La stai aprendo per conto di qualcuno:
+            la persona che indichi qui diventa proprietaria dell’organizzazione e riceve il ruolo
+            che le serve per amministrarla. Senza, l’organizzazione resterebbe tua.
           </p>
           @if (formErrors().length) {
             <p class="mirada-error">{{ formErrors().join(' ') }}</p>
@@ -131,6 +146,18 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
               />
             </keijo-form-row>
             @if (err('contactEmail'); as msg) {
+              <p class="mirada-error">{{ msg }}</p>
+            }
+
+            <keijo-form-row [cols]="1">
+              <keijo-select
+                [formControl]="form.controls.ownerUserId"
+                [data]="userOptions()"
+                label="titolare"
+                placeholder="Scegli chi sarà proprietario dell’organizzazione"
+              />
+            </keijo-form-row>
+            @if (err('ownerUserId'); as msg) {
               <p class="mirada-error">{{ msg }}</p>
             }
           </keijo-form-wrapper>
@@ -238,6 +265,7 @@ export class PlatformOrganizationsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
   private readonly events = inject(EventStore);
+  private readonly api = inject(ApiClient);
 
   readonly store = inject(OrganizationStore);
 
@@ -251,6 +279,8 @@ export class PlatformOrganizationsComponent implements OnInit {
   readonly editing = signal(false);
   readonly formErrors = signal<string[]>([]);
   private readonly published = signal<Record<number, number>>({});
+  /** Gli utenti fra cui scegliere il titolare. */
+  readonly userOptions = signal<SelectOption[]>([]);
 
   readonly filterTabs: KeijoFilterTab[] = [
     {
@@ -279,6 +309,12 @@ export class PlatformOrganizationsComponent implements OnInit {
       nonNullable: true,
       validators: [Validators.required, Validators.email],
     }),
+    /**
+     * Chi la possiede, non chi la digita. Obbligatorio: il Super Admin apre le
+     * organizzazioni per conto di altri, e ometterlo lo renderebbe proprietario
+     * di ogni cliente della piattaforma — il backend infatti rifiuta.
+     */
+    ownerUserId: new FormControl<number | null>(null, { validators: [Validators.required] }),
   });
 
   constructor() {
@@ -291,7 +327,23 @@ export class PlatformOrganizationsComponent implements OnInit {
     this.headerTitle.set('Organizzazione');
     this.registerActions();
     await this.store.replaceQuery({});
-    await this.loadPublishedCounts();
+    await Promise.all([this.loadPublishedCounts(), this.loadUsers()]);
+  }
+
+  /**
+   * L'elenco da cui si designa il titolare. Stessa lettura della pagina membri
+   * (`/organization/members`), che risolve lo stesso problema per i ruoli
+   * interni all'organizzazione.
+   */
+  private async loadUsers(): Promise<void> {
+    const page = await this.api.list<UserRow>('users', {}, { page: 1, limit: 200 });
+    this.userOptions.set((page.docs ?? []).map((u) => ({ label: u.username, value: u.id })));
+  }
+
+  /** Il nome del titolare per il messaggio di conferma, non un'altra chiamata. */
+  private ownerName(userId: number | null): string {
+    const found = this.userOptions().find((o) => o.value === userId);
+    return found ? found.label : 'Il titolare indicato';
   }
 
   private registerActions(): void {
@@ -382,7 +434,7 @@ export class PlatformOrganizationsComponent implements OnInit {
     this.formErrors.set([]);
     if (this.form.invalid) {
       this.formErrors.set([
-        'Denominazione, ragione sociale, forma giuridica ed email sono obbligatorie.',
+        'Denominazione, ragione sociale, forma giuridica, email e titolare sono obbligatori.',
       ]);
       return;
     }
@@ -394,9 +446,13 @@ export class PlatformOrganizationsComponent implements OnInit {
         legalName: value.legalName.trim(),
         legalForm: value.legalForm.trim(),
         contactEmail: value.contactEmail.trim(),
+        ownerUserId: Number(value.ownerUserId),
       });
       this.editing.set(false);
-      this.toast.show('SUCCESS', 'Organizzazione creata.');
+      this.toast.show(
+        'SUCCESS',
+        `Organizzazione creata. ${this.ownerName(value.ownerUserId)} ne è titolare e può amministrarla.`,
+      );
       await this.store.load();
       await this.loadPublishedCounts();
     } catch (err) {
