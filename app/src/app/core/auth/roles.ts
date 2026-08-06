@@ -38,12 +38,20 @@ export const ORG_MEMBER_ROLE_LABEL: Record<OrgMemberRole, string> = {
  * matrice §3.8, non un modello parallelo.
  */
 export interface Capabilities {
-  /** `/dashboard` — cruscotto dell'evento. */
+  /** `/dashboard` — cruscotto **dell'evento**, per chi un evento lo organizza. */
   dashboard: boolean;
   /** `/reports` — riepilogo economico ed esportazioni. */
   reports: boolean;
   /** `/platform` — cataloghi ed elenco organizzazioni. */
   platform: boolean;
+  /**
+   * `/platform/summary` — il cruscotto **della piattaforma**, di chi possiede il
+   * prodotto e guarda i clienti invece del proprio festival.
+   *
+   * È una capacità distinta da `dashboard` e non un suo grado superiore: le due
+   * pagine rispondono a domande diverse e nessun ruolo le vuole entrambe.
+   */
+  platformDashboard: boolean;
   /** `/organization` — anagrafica, dati fiscali, membri, policy. */
   organization: boolean;
   /** `/events` — workspace di costruzione dell'evento. */
@@ -67,6 +75,7 @@ const NONE: Capabilities = {
   dashboard: false,
   reports: false,
   platform: false,
+  platformDashboard: false,
   organization: false,
   events: false,
   eventsWrite: false,
@@ -81,22 +90,16 @@ const NONE: Capabilities = {
 export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
   const has = (role: AppRole) => roles.includes(role);
 
-  // GOD: allow-all in corto circuito, come `hasPermission` lato backend (§3.10 nota 8).
+  // ── GOD gestisce la piattaforma, non gli eventi ────────────────────────────
+  // Il backend lo tratta come allow-all (§3.10 nota 8) e continua a farlo: qui
+  // si decide **cosa gli si mostra**, che è un'altra cosa dal cosa gli è
+  // permesso. Un'interfaccia che gli mette davanti «Eventi» e «Iscritti» lo
+  // invita a lavorare dentro il festival di un cliente, che non è il suo
+  // mestiere: il suo è sapere quanti clienti ci sono, chi vende, chi è fermo e
+  // chi non può ancora incassare. Le pagine di tenant restano costruite e
+  // funzionanti — semplicemente non sono le sue.
   if (has('GOD')) {
-    return {
-      dashboard: true,
-      reports: true,
-      platform: true,
-      organization: true,
-      events: true,
-      eventsWrite: true,
-      publishEvent: true,
-      directory: true,
-      directoryWrite: true,
-      registrations: true,
-      registrationsWrite: true,
-      refunds: true,
-    };
+    return { ...NONE, platform: true, platformDashboard: true };
   }
 
   if (has('OWNER')) {

@@ -13,6 +13,7 @@ import {
 import { login as loginIcon, warning } from '@keijo/ui/icons';
 import { ApiError } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
+import { landingFor } from '../../shell/sidebar-routes';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
 
 /**
@@ -176,6 +177,7 @@ export class LoginComponent implements OnInit {
 
   private redirectTarget(): string {
     const redirect = this.route.snapshot.queryParamMap.get('redirect');
-    return redirect && !redirect.startsWith('/login') ? redirect : '/events';
+    // Non `/events`: chi gestisce la piattaforma non ce l'ha e rimbalzerebbe.
+    return redirect && !redirect.startsWith('/login') ? redirect : landingFor(this.auth.can());
   }
 }

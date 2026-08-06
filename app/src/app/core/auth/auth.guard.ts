@@ -8,6 +8,7 @@ import {
 } from '@angular/router';
 import { AuthService } from './auth.service';
 import { Capabilities } from './roles';
+import { landingFor } from '../../shell/sidebar-routes';
 
 /**
  * Verifica della sessione. Le dipendenze si iniettano **prima di qualunque
@@ -51,6 +52,28 @@ export function requireCapability(capability: keyof Capabilities): CanActivateFn
     const allowed = await ensureSession(auth, router, state);
     if (allowed !== true) return allowed;
 
-    return auth.can()[capability] ? true : router.createUrlTree(['/events']);
+    // Il rimbalzo va **dove il ruolo può stare**. Un `/events` fisso mandava
+    // chi gestisce la piattaforma su una pagina che a sua volta lo rimbalza:
+    // due guardie che si rifiutano a vicenda sono un ciclo, non un errore
+    // visibile.
+    return auth.can()[capability] ? true : router.createUrlTree([landingFor(auth.can())]);
   };
 }
+
+/**
+ * La radice e le rotte inesistenti portano **dove il ruolo atterra**, che non è
+ * lo stesso posto per tutti: un organizzatore al cruscotto del suo evento, chi
+ * gestisce la piattaforma al riepilogo dei clienti.
+ */
+export const landingRedirect: CanActivateFn = async (
+  _route: ActivatedRouteSnapshot,
+  state: RouterStateSnapshot,
+): Promise<boolean | UrlTree> => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  const allowed = await ensureSession(auth, router, state);
+  if (allowed !== true) return allowed;
+
+  return router.createUrlTree([landingFor(auth.can())]);
+};

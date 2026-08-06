@@ -96,6 +96,24 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
         );
     }
 
+    /**
+     * Iscrizioni attive **per evento**, in una query sola.
+     *
+     * Serve al riepilogo di piattaforma, che tocca ogni evento di ogni
+     * organizzazione: un `countActive` per evento sarebbe una query per riga, e
+     * su un catalogo che cresce è la differenza fra una pagina e un timeout.
+     */
+    async countActiveByEvent(tx?: Prisma.TransactionClient): Promise<Map<number, number>> {
+        return this.exec(async () => {
+            const rows = await this.getDelegate(tx).groupBy({
+                by: ["eventId"],
+                where: { deleted: false, status: { in: ACTIVE_REGISTRATION_STATUSES } },
+                _count: { _all: true },
+            });
+            return new Map(rows.map(r => [r.eventId, r._count._all]));
+        });
+    }
+
     /** §1.5 — lo scope passa dall'evento. */
     async findOneInScope(
         scope: OrganizationScope,

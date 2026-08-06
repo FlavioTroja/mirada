@@ -32,6 +32,7 @@ import { ArtistController } from "@controllers/ArtistController";
 import { DancerProfileController } from "@controllers/DancerProfileController";
 import { EventTypeController } from "@controllers/EventTypeController";
 import { OrganizationController } from "@controllers/OrganizationController";
+import { PlatformController } from "@controllers/PlatformController";
 import { OrganizationMemberController } from "@controllers/OrganizationMemberController";
 import { RefundPolicyController } from "@controllers/RefundPolicyController";
 import { RequirementTypeController } from "@controllers/RequirementTypeController";
@@ -308,6 +309,7 @@ export class APIServer {
                 DancerProfileController,
                 EventTypeController,
                 OrganizationController,
+                PlatformController,
                 OrganizationMemberController,
                 RefundPolicyController,
                 RequirementTypeController,

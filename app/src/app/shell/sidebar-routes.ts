@@ -25,8 +25,42 @@ import { Capabilities } from '../core/auth/roles';
  * Le voci sono filtrate per **capacità del ruolo** (§1, §3.8): ciò che il ruolo
  * non può fare **non compare**, non compare disabilitato.
  */
+/**
+ * **Dove atterra chi entra.** `/dashboard` è il cruscotto di un evento e non
+ * esiste per chi la piattaforma la gestisce: mandarcelo lo farebbe rimbalzare.
+ */
+export function landingFor(can: Capabilities): string {
+  if (can.platformDashboard) return '/platform';
+  if (can.dashboard) return '/dashboard';
+  if (can.events) return '/events';
+  return '/registrations';
+}
+
 export function sidebarRoutesFor(can: Capabilities): KeijoSidebarRoute[] {
   const routes: KeijoSidebarRoute[] = [];
+
+  // ── La navigazione di chi gestisce la piattaforma ──────────────────────────
+  // È una navigazione **diversa**, non un sovrainsieme di quella di un
+  // organizzatore: chi possiede il prodotto guarda i clienti, non i festival.
+  // Le voci di tenant non compaiono perché non sono il suo mestiere — e una
+  // sidebar che le mostrasse lo inviterebbe a lavorare dentro l'evento di
+  // qualcun altro.
+  if (can.platformDashboard) {
+    routes.push({ icon: dashboard, label: 'Cruscotto', path: '/platform' });
+    routes.push({ icon: domain, label: 'Organizzatori', path: '/platform/organizations' });
+    routes.push({
+      icon: adminPanelSettings,
+      label: 'Cataloghi',
+      path: '/platform/event-types',
+      children: [
+        { icon: adminPanelSettings, label: 'Tipi evento', path: '/platform/event-types' },
+        { icon: adminPanelSettings, label: 'Tipi requisito', path: '/platform/requirement-types' },
+        { icon: adminPanelSettings, label: 'Tipi servizio', path: '/platform/service-types' },
+        { icon: adminPanelSettings, label: 'Preset di rimborso', path: '/platform/refund-presets' },
+      ],
+    });
+    return routes;
+  }
 
   if (can.dashboard) {
     routes.push({ icon: dashboard, label: 'Cruscotto', path: '/dashboard' });
@@ -75,21 +109,6 @@ export function sidebarRoutesFor(can: Capabilities): KeijoSidebarRoute[] {
         { icon: domain, label: 'Dichiarazioni', path: '/organization/fiscal' },
         { icon: domain, label: 'Membri', path: '/organization/members' },
         { icon: domain, label: 'Policy di rimborso', path: '/organization/refund-policies' },
-      ],
-    });
-  }
-
-  if (can.platform) {
-    routes.push({
-      icon: adminPanelSettings,
-      label: 'Piattaforma',
-      path: '/platform',
-      children: [
-        { icon: adminPanelSettings, label: 'Tipi evento', path: '/platform/event-types' },
-        { icon: adminPanelSettings, label: 'Tipi requisito', path: '/platform/requirement-types' },
-        { icon: adminPanelSettings, label: 'Tipi servizio', path: '/platform/service-types' },
-        { icon: adminPanelSettings, label: 'Preset di rimborso', path: '/platform/refund-presets' },
-        { icon: adminPanelSettings, label: 'Organizzazioni', path: '/platform/organizations' },
       ],
     });
   }

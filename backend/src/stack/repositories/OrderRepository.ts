@@ -5,6 +5,14 @@ import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { OrganizationScope } from "@utils/helpers/organizationScope";
 
+/** I tre importi del §3.1 più il conteggio, tutti in centesimi interi. */
+export interface OrderTotals {
+    paidOrders: number;
+    subtotal: number;
+    presaleRights: number;
+    total: number;
+}
+
 /** L'ordine con tutto ciò che serve a decidere, in una query sola. */
 export type OrderWithContext = Prisma.OrderGetPayload<{
     include: {
@@ -62,6 +70,38 @@ export class OrderRepository extends BaseRepository<"order"> {
             { orderBy: { id: "asc" } },
             tx,
         );
+    }
+
+    /**
+     * I totali degli ordini **saldati, per organizzazione** — in una query sola.
+     *
+     * È la stessa grandezza del cruscotto d'evento, letta però su tutta la
+     * piattaforma: solo `PAID`, perché una prenotazione in corso ha impegnato
+     * posti ma non ha venduto nulla e alla scadenza torna indietro.
+     *
+     * Non passa dallo scope di tenancy perché **non è una lettura di tenant**:
+     * la chiama il solo riepilogo di piattaforma, che è riservato a `GOD`.
+     */
+    async paidTotalsByOrganization(tx?: Prisma.TransactionClient): Promise<Map<number, OrderTotals>> {
+        return this.exec(async () => {
+            const rows = await this.getDelegate(tx).groupBy({
+                by: ["organizationId"],
+                where: { deleted: false, status: OrderStatus.PAID },
+                _count: { _all: true },
+                _sum: { subtotal: true, presaleRights: true, total: true },
+            });
+            return new Map(
+                rows.map(r => [
+                    r.organizationId,
+                    {
+                        paidOrders: r._count._all,
+                        subtotal: r._sum.subtotal ?? 0,
+                        presaleRights: r._sum.presaleRights ?? 0,
+                        total: r._sum.total ?? 0,
+                    },
+                ]),
+            );
+        });
     }
 
     /**

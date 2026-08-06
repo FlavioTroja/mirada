@@ -1,6 +1,6 @@
 // keijo-ui: scaffolded — do not remove this marker if you intend to re-run ng add
 import { Routes } from '@angular/router';
-import { authGuard, requireCapability } from './core/auth/auth.guard';
+import { authGuard, landingRedirect, requireCapability } from './core/auth/auth.guard';
 
 /**
  * Rotte dell'applicazione `app`.
@@ -15,7 +15,9 @@ import { authGuard, requireCapability } from './core/auth/auth.guard';
  * la seconda vive nel menu utente (`KEIJO-SIDEBAR-NO-SETTINGS`).
  */
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+  // La radice non può avere un `redirectTo` fisso: `/dashboard` è il cruscotto
+  // di un evento e chi gestisce la piattaforma non ce l'ha, quindi rimbalzerebbe.
+  { path: '', pathMatch: 'full', canActivate: [landingRedirect], children: [] },
 
   {
     path: 'login',
@@ -195,7 +197,15 @@ export const routes: Routes = [
   },
 
   // -------------------------------------------------------------- /platform
-  { path: 'platform', pathMatch: 'full', redirectTo: 'platform/event-types' },
+  {
+    path: 'platform',
+    pathMatch: 'full',
+    canActivate: [requireCapability('platformDashboard')],
+    loadComponent: () =>
+      import('./pages/platform/platform-dashboard.component').then(
+        (m) => m.PlatformDashboardComponent,
+      ),
+  },
   {
     path: 'platform/event-types',
     canActivate: [requireCapability('platform')],
@@ -246,5 +256,5 @@ export const routes: Routes = [
     data: { showBackButton: true },
   },
 
-  { path: '**', redirectTo: 'dashboard' },
+  { path: '**', canActivate: [landingRedirect], children: [] },
 ];

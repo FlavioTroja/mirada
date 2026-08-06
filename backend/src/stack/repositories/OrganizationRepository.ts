@@ -32,6 +32,38 @@ export class OrganizationRepository extends BaseRepository<"organization"> {
      * §1.5 — nessun finder senza contesto di tenancy: lo scope è il primo argomento
      * e non è opzionale. `null` è ammesso solo per GOD.
      */
+    /**
+     * **Tutte le organizzazioni con i loro titolari** — il registro dei clienti
+     * della piattaforma, riservato a `GOD`.
+     *
+     * I membri sono inclusi nella stessa query: un elenco di venti
+     * organizzazioni non deve diventare ventuno interrogazioni, e i titolari
+     * sono l'informazione che rende l'elenco utile invece che decorativo.
+     */
+    async findAllWithMembers(tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { deleted: false },
+                include: {
+                    members: {
+                        where: { deleted: false },
+                        include: {
+                            user: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    person: { select: { name: true, surname: true } },
+                                },
+                            },
+                        },
+                        orderBy: { id: "asc" },
+                    },
+                },
+                orderBy: { name: "asc" },
+            })
+        );
+    }
+
     async findOneInScope(
         scope: OrganizationScope,
         query: Prisma.OrganizationWhereInput,

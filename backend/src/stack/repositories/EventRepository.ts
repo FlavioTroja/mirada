@@ -226,6 +226,24 @@ export class EventRepository extends BaseRepository<"event"> {
         );
     }
 
+    /**
+     * **Tutti gli eventi della piattaforma**, con la loro organizzazione.
+     *
+     * Lettura senza scope di tenancy, e va detto chiaramente: la chiama solo il
+     * riepilogo di piattaforma, che è riservato a `GOD`. Nessun percorso di
+     * tenant deve arrivarci — per quello esistono `findByOrganization` e
+     * `paginateInScope`, che lo scope ce l'hanno per costruzione.
+     */
+    async findAllWithOrganization(tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { deleted: false },
+                include: { organization: { select: { id: true, name: true } } },
+                orderBy: [{ startAt: "asc" }, { id: "asc" }],
+            })
+        );
+    }
+
     /** §1.5 — lo scope di tenancy è obbligatorio e precede la query di dominio. */
     async findOneInScope(
         scope: OrganizationScope,
