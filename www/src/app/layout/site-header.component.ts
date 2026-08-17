@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, afterNextRender, inject } from '@an
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
 import { ThemeService } from '../core/theme/theme.service';
+import { AvatarComponent } from '../shared/avatar.component';
 
 /**
  * Testata di `www`. **Nessuna shell keijo, nessuna sidebar**: questa
@@ -9,7 +10,7 @@ import { ThemeService } from '../core/theme/theme.service';
  */
 @Component({
   selector: 'app-site-header',
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, AvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="site-header">
@@ -23,19 +24,32 @@ import { ThemeService } from '../core/theme/theme.service';
       </nav>
 
       <div class="site-actions">
-        <button
-          type="button"
-          class="ghost-btn"
-          (click)="theme.toggle()"
-          [attr.aria-label]="theme.resolved() === 'dark' ? 'Passa al tema chiaro' : 'Passa al tema scuro'"
-        >
-          {{ theme.resolved() === 'dark' ? '☾' : '☀' }}
-        </button>
-
         @if (auth.isAuthenticated()) {
-          <span class="who" title="Sei entrato">{{ auth.displayName() || 'Il mio account' }}</span>
-          <button type="button" class="ghost-btn" (click)="auth.logout()">Esci</button>
+          <!--
+            Un solo comando, e porta a sé stessi. Tema e uscita stavano qui
+            perché non c'era altro posto: ora ce l'hanno, dentro il profilo,
+            dove sono impostazioni della persona invece che tasti del sito.
+          -->
+          <a class="me" routerLink="/profilo" routerLinkActive="active">
+            <app-avatar [src]="auth.avatarUrl()" [initials]="auth.initials() || '?'" />
+            <span class="who">{{ auth.displayName() || 'Il mio profilo' }}</span>
+          </a>
         } @else {
+          <!--
+            Per chi non è entrato il tema resta qui: è la sola impostazione che
+            un visitatore anonimo può cambiare, e non ha un profilo in cui
+            andarla a cercare.
+          -->
+          <button
+            type="button"
+            class="ghost-btn"
+            (click)="theme.toggle()"
+            [attr.aria-label]="
+              theme.resolved() === 'dark' ? 'Passa al tema chiaro' : 'Passa al tema scuro'
+            "
+          >
+            {{ theme.resolved() === 'dark' ? '☾' : '☀' }}
+          </button>
           <a class="ghost-btn" routerLink="/accedi">Accedi</a>
         }
       </div>
@@ -98,8 +112,23 @@ import { ThemeService } from '../core/theme/theme.service';
         align-items: center;
         gap: 0.5rem;
       }
+      .me {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-decoration: none;
+        color: rgba(var(--text-rgb), 0.86);
+        border: 1px solid transparent;
+        border-radius: 999px;
+        padding: 0.2rem 0.6rem 0.2rem 0.2rem;
+      }
+      .me:hover,
+      .me.active {
+        border-color: rgba(var(--accent-rgb), 0.7);
+        color: rgb(var(--text-rgb));
+      }
       .who {
-        color: rgba(var(--text-rgb), 0.72);
+        color: inherit;
         font-size: 0.9rem;
         max-width: 12rem;
         overflow: hidden;

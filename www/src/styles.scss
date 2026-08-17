@@ -188,6 +188,17 @@ html {
      superi il 3:1; con 0.55 il margine c'è in tutti e quattro i casi. */
   border-color: rgba(var(--text-rgb), 0.55);
 }
+/* Il testo del secondario va **ripreso** sul tema chiaro.
+ *
+ * La regola qui sopra che schiarisce il testo del pulsante principale è scritta
+ * come `:root[data-theme='light'] .www-btn`, e un secondario porta entrambe le
+ * classi: quella regola vince per specificità (0,2,1 contro 0,1,0) e imponeva
+ * l'avorio anche a un pulsante **senza riempimento**. Risultato: avorio su
+ * bianco, 1,06:1 — un pulsante di cui si vedeva solo il contorno, sul chiaro,
+ * ovunque comparisse: «Vedi il programma», «Azzera», «Esci dall'account». */
+:root[data-theme='light'] .www-btn-secondary {
+  color: rgb(var(--text-rgb));
+}
 .www-btn-secondary:hover:not(:disabled) {
   border-color: rgb(var(--accent-rgb));
   color: rgb(var(--accent-rgb));

@@ -4,6 +4,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, parseApiError } from './api-error';
 import { PaginateDatasource, PaginateOptions } from './paginate';
+import { PublicFile } from '../domain/models';
 
 /** Prefisso globale del §3.1. Nessun versionamento in URL. */
 export const API_PREFIX = '/api';
@@ -72,6 +73,25 @@ export class ApiClient {
   /** Endpoint non-CRUD del §3.7 in scrittura — elenco chiuso, mai inferito. */
   post<T>(path: string, body: unknown = {}): Promise<T> {
     return this.run(firstValueFrom(this.http.post<T>(this.url(path), body)));
+  }
+
+  /** `PATCH /{plural}/:id` — aggiornamento parziale della propria riga. */
+  patch<T>(base: string, id: number, body: unknown): Promise<T> {
+    return this.run(firstValueFrom(this.http.patch<T>(this.url(`/${base}/${id}`), body)));
+  }
+
+  /**
+   * `POST /files/upload-image` — carica un'immagine e restituisce la riga `File`.
+   *
+   * Il corpo è un `FormData` e **l'intestazione `Content-Type` non si imposta a
+   * mano**: il browser la scrive da sé aggiungendo il `boundary` che separa le
+   * parti. Scriverla noi produrrebbe un multipart senza confine, che il server
+   * rifiuta con un errore che non parla di questo.
+   */
+  uploadImage(file: File): Promise<PublicFile> {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    return this.run(firstValueFrom(this.http.post<PublicFile>(this.url('/files/upload-image'), body)));
   }
 }
 

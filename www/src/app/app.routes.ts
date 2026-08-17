@@ -26,6 +26,13 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/checkout/login.page').then((m) => m.LoginPage),
   },
   {
+    // Il proprio account. Il rinvio di chi non è entrato lo fa la pagina, non un
+    // guard: la sessione vive in `localStorage` e sul server non esiste, quindi
+    // un guard eseguito in prima resa caccerebbe fuori anche chi è entrato.
+    path: 'profilo',
+    loadComponent: () => import('./pages/account/profile.page').then((m) => m.ProfilePage),
+  },
+  {
     // Dove atterra il tasto dell'email di conferma. Il gettone arriva in query
     // string perché un link in un'email non può fare altro; la pagina lo toglie
     // subito dalla barra e lo rispedisce nel corpo di una POST.

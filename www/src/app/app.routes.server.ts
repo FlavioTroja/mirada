@@ -16,5 +16,9 @@ import { RenderMode, ServerRoute } from '@angular/ssr';
 export const serverRoutes: ServerRoute[] = [
   { path: 'eventi/:slug/iscrizione', renderMode: RenderMode.Client },
   { path: 'accedi', renderMode: RenderMode.Client },
+  // Il profilo è la più privata di tutte: senza token il server non sa nemmeno
+  // di chi sia, e ne renderebbe una versione «non sei entrato» da smentire
+  // subito dopo. La `conferma-email` è già `Client` per la stessa ragione.
+  { path: 'profilo', renderMode: RenderMode.Client },
   { path: '**', renderMode: RenderMode.Server },
 ];

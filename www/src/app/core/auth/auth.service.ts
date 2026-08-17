@@ -18,6 +18,11 @@ import { AuthenticatedUser, RegisterPayload } from '../domain/models';
  */
 const TOKEN_KEY = 'Authorization';
 
+/** La prima lettera utile di una parola, maiuscola. */
+function first(word: string | null | undefined): string {
+  return (word ?? '').trim().charAt(0).toUpperCase();
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly api = inject(ApiClient);
@@ -34,6 +39,31 @@ export class AuthService {
     const u = this._user();
     if (!u) return '';
     return u.person?.name ? `${u.person.name} ${u.person.surname ?? ''}`.trim() : u.username;
+  });
+
+  /**
+   * Il ritratto del profilo da ballerino, quando c'è.
+   *
+   * Arriva già dentro `GET /auth/profile`: la testata lo mostra su ogni pagina,
+   * e una seconda richiesta per un dato che la prima ha sottomano sarebbe
+   * traffico a ogni navigazione.
+   */
+  readonly avatarUrl = computed(() => this._user()?.dancerProfile?.avatarFile?.url ?? null);
+
+  /**
+   * Le iniziali, per quando il ritratto non c'è — che è il caso di chiunque non
+   * l'abbia ancora caricato, cioè quasi tutti. Nome e cognome danno due lettere
+   * esatte; senza anagrafica si ripiega sullo username.
+   */
+  readonly initials = computed(() => {
+    const u = this._user();
+    if (!u) return '';
+    const name = u.person?.name?.trim();
+    const surname = u.person?.surname?.trim();
+    if (name || surname) {
+      return `${first(name)}${first(surname)}` || first(u.username);
+    }
+    return first(u.username) || '?';
   });
 
   private readToken(): string | null {

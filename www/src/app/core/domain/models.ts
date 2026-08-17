@@ -347,4 +347,36 @@ export interface AuthenticatedUser {
     surname: string;
     contact?: { email?: string | null } | null;
   } | null;
+  /** Popolato da `GET /auth/profile`: serve il ritratto già in testata. */
+  dancerProfile?: DancerProfile | null;
+}
+
+/** Ruolo che la persona preferisce ballare. `BOTH` non è un'incertezza: è una scelta. */
+export type PreferredDanceRole = 'LEADER' | 'FOLLOWER' | 'BOTH';
+
+/**
+ * **Il profilo da ballerino** — `GET/POST/PATCH /api/dancer-profiles` (§4.3).
+ *
+ * È una riga distinta da `User` e da `Person`, e la distinzione conta: `Person`
+ * è l'anagrafica che serve a emettere un biglietto — nome, cognome, codice
+ * fiscale — mentre questo è ciò che la persona sceglie di mostrare di sé come
+ * ballerina. Il primo si corregge, il secondo si cambia quando si vuole.
+ *
+ * Il `nickname` è unico su tutta la piattaforma e il server conta quante volte
+ * viene cambiato: in fase 1b finirà proiettato su un maxischermo in milonga.
+ */
+export interface DancerProfile {
+  id: number;
+  userId: number;
+  nickname: string;
+  preferredRole: PreferredDanceRole;
+  city?: string | null;
+  languages: string[];
+  birthDate?: string | null;
+  declaredLevel?: string | null;
+  avatarFileId?: number | null;
+  /** Popolabile con `populate=avatarFile`. */
+  avatarFile?: PublicFile | null;
+  nicknameChangedAt?: string | null;
+  nicknameChangeCount?: number;
 }

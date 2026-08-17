@@ -133,7 +133,14 @@ export class AuthService {
                 ]
             }
         });
-        const populatedUser = await this.userService.findById(user.id, { populate: "person.contact roles" })
+        // `dancerProfile.avatarFile` serve alla testata del sito pubblico: il
+        // ritratto della persona è il modo in cui riconosce di essere entrata
+        // con il proprio account. Senza, ogni pagina dovrebbe chiedere il
+        // profilo da ballerino con una seconda richiesta, per un dato che
+        // questa risposta ha già sottomano.
+        const populatedUser = await this.userService.findById(user.id, {
+            populate: "person.contact roles dancerProfile.avatarFile",
+        })
 
         // `password` non arriva più fin qui: il client Prisma la omette a livello
         // globale (§3.1, `initializePrismaClient`). La riga resta come difesa in
