@@ -330,6 +330,12 @@ export interface RegisterPayload {
   lastName: string;
   email: string;
   phoneNumber?: string;
+  /**
+   * L'evento da cui parte l'iscrizione. Il server lo usa per nominarlo
+   * nell'email di conferma e per riportare qui la persona dopo il clic, invece
+   * di lasciarla su una pagina di benvenuto generica a ricominciare da capo.
+   */
+  eventSlug?: string | null;
 }
 
 export interface AuthenticatedUser {

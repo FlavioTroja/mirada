@@ -151,7 +151,11 @@ import { I18nTextComponent } from '../../shared/i18n-text.component';
 
           @default {
             @if (!auth.isAuthenticated()) {
-              <app-account-step />
+              <!-- Lo slug scende fin qui perché deve arrivare all'email di
+                   conferma: serve a nominare l'evento nel messaggio e a
+                   riportare la persona **su questa pagina** dopo il clic,
+                   invece che su un benvenuto generico da cui ricominciare. -->
+              <app-account-step [eventSlug]="e.slug" />
             } @else {
               <form class="www-panel" (ngSubmit)="reserve()">
                 <h2 class="www-h2">Scegli il titolo d’ingresso</h2>

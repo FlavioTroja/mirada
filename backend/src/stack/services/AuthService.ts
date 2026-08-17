@@ -7,6 +7,8 @@ import { LoginRequestDTO } from "@DTOs/login/LoginRequestDTO";
 import { AuthTokenPayloadDTO } from "@DTOs/login/AuthTokenPayloadDTO";
 import { LogService } from "@services/LogService";
 import { Log } from "@utils/adapters/log";
+import { domainError } from "@utils/helpers/domainError";
+import { DomainErrorCode } from "@enums/DomainErrorCode";
 
 /** Riga utente arricchita dei soli ruoli, come la restituisce `findOneForAuthentication`. */
 type AuthenticatedUser = User & { roles?: { roleName: string; isActive: boolean }[] };
@@ -71,6 +73,19 @@ export class AuthService {
         };
     }
 
+    /**
+     * I cancelli d'accesso, **in quest'ordine di proposito**.
+     *
+     * Prima le decisioni prese da un amministratore — cancellato, disabilitato,
+     * fuori dalla finestra di validità — e solo **per ultima** la conferma
+     * dell'indirizzo. Il criterio è: si dice alla persona la cosa su cui può
+     * agire soltanto se non c'è nulla su cui non può agire.
+     *
+     * All'inverso, un account sospeso e mai confermato leggerebbe «conferma il
+     * tuo indirizzo», andrebbe a cercare l'email, premerebbe il tasto e si
+     * ritroverebbe davanti «Account disabilitato»: due passaggi per arrivare
+     * all'informazione che contava fin dall'inizio.
+     */
     private assertAccountCanLogin(user: User): void {
         if (user.deleted) {
             Log.warn(`[${AuthService.name}][login][${user.id}] login negato: account eliminato`);
@@ -89,6 +104,20 @@ export class AuthService {
         if (user.expiresAt && user.expiresAt.getTime() < now.getTime()) {
             Log.warn(`[${AuthService.name}][login][${user.id}] login negato: account scaduto (expiresAt=${user.expiresAt.toISOString()})`);
             throw new httpErrors.Unauthorized("Account scaduto.");
+        }
+
+        // L'ultimo cancello, e l'unico che la persona può aprire da sola. Ha un
+        // codice suo perché le credenziali sono **giuste**: «username o password
+        // non validi» sarebbe una bugia, e «account disabilitato» manderebbe a
+        // cercare un amministratore che non c'entra nulla. La cosa da fare è
+        // premere il tasto nell'email — o farsene rimandare una.
+        if (!user.emailVerifiedAt) {
+            Log.warn(`[${AuthService.name}][login][${user.id}] login negato: indirizzo mai confermato`);
+            throw domainError(
+                DomainErrorCode.EMAIL_NOT_CONFIRMED,
+                "Devi prima confermare il tuo indirizzo email: trovi il link nel messaggio che ti abbiamo mandato.",
+                403,
+            );
         }
 
         Log.info(`[${AuthService.name}][login][${user.id}] login consentito`);

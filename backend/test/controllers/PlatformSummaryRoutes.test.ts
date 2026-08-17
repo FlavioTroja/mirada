@@ -1,5 +1,5 @@
 import { getPrismaClient } from "@utils/adapters/prisma";
-import { login } from "../helpers";
+import { login, markEmailConfirmed } from "../helpers";
 
 const app = (globalThis as any).__TEST_APP__;
 
@@ -31,7 +31,11 @@ describe("Riepilogo di piattaforma (§4.10)", () => {
             },
         });
         expect(res.statusCode).toBe(201);
-        return res.json().id as number;
+        // `{ user, confirmationSent }`: l'account nasce da confermare, e il
+        // titolare qui sotto deve poter accedere.
+        const id = res.json().user.id as number;
+        await markEmailConfirmed(id);
+        return id;
     }
 
     beforeAll(async () => {

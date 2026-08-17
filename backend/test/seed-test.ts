@@ -95,6 +95,11 @@ export async function seed(prisma: PrismaClient) {
                     password: user.dto.password,
                     avatarUrl: user.dto.avatarUrl,
                     note: user.dto.note,
+                    // Come nel seed di sviluppo: questi account non nascono dal
+                    // percorso d'iscrizione, quindi nessuno confermerà mai il
+                    // loro indirizzo. Senza, ogni test che fa un accesso
+                    // fallirebbe con `EMAIL_NOT_CONFIRMED`.
+                    emailVerifiedAt: new Date(),
                     ...(user.dto.roles?.length ? {
                         roles: {
                             createMany: {

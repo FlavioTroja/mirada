@@ -134,6 +134,43 @@ export function describePublicDomainError(err: ApiError): PublicDomainError | nu
         tone: 'info',
         temporary: true,
       };
+
+    // ── Identità ─────────────────────────────────────────────────────────────
+    // Questi tre hanno un'interfaccia dedicata nel passo dell'account, con il
+    // tasto che porta all'azione giusta. I testi qui sotto sono la rete di
+    // sicurezza per quando affiorano altrove: nessuno è un guasto, tutti e tre
+    // hanno una via d'uscita, e per questo il tono non è mai `error`.
+
+    case 'EMAIL_ALREADY_REGISTERED':
+      return {
+        code: err.code,
+        title: 'Questo indirizzo ha già un account',
+        detail:
+          'Non serve registrarsi di nuovo: accedi con le tue credenziali e prosegui con ' +
+          'l’iscrizione all’evento.',
+        tone: 'info',
+        temporary: false,
+      };
+
+    case 'USERNAME_TAKEN':
+      return {
+        code: err.code,
+        title: 'Nome utente già occupato',
+        detail: 'Qualcun altro lo sta usando. Scegline un altro: il resto dei dati resta com’è.',
+        tone: 'warning',
+        temporary: false,
+      };
+
+    case 'EMAIL_NOT_CONFIRMED':
+      return {
+        code: err.code,
+        title: 'Devi ancora confermare il tuo indirizzo',
+        detail:
+          'Ti abbiamo mandato un’email con un tasto di conferma: finché non lo premi l’account ' +
+          'non può prenotare un posto. Se non l’hai ricevuta puoi fartela rimandare.',
+        tone: 'warning',
+        temporary: true,
+      };
   }
 }
 

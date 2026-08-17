@@ -21,6 +21,14 @@ export const DOMAIN_ERROR_CODES = [
   'RESERVATION_ALREADY_ACTIVE',
   'SALES_CLOSED',
   'PAYOUT_NOT_ENABLED',
+  // Identità: i tre esiti del modulo d'iscrizione. Servono distinti perché
+  // portano ad azioni **opposte** — `EMAIL_ALREADY_REGISTERED` va risolto
+  // accedendo, `USERNAME_TAKEN` cambiando il nome. Mostrarli entrambi come un
+  // riquadro rosso dentro «Crea un account» lasciava fermo chi un account ce
+  // l'aveva già.
+  'EMAIL_ALREADY_REGISTERED',
+  'USERNAME_TAKEN',
+  'EMAIL_NOT_CONFIRMED',
 ] as const;
 
 export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number];

@@ -24,6 +24,14 @@ export interface SeoTags {
   type?: 'website' | 'article' | 'event';
   /** Lingua del contenuto, se diversa dall'italiano. */
   locale?: string;
+  /**
+   * Tiene la pagina fuori dai motori di ricerca.
+   *
+   * Serve alle pagine che esistono solo per un gettone monouso — la conferma
+   * dell'indirizzo — dove l'indicizzazione significherebbe pubblicare l'URL
+   * **gettone compreso**.
+   */
+  noIndex?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -80,6 +88,13 @@ export class SeoService {
     }
     this.setName('twitter:title', tags.title);
     this.setName('twitter:description', tags.description);
+
+    // Si **rimuove** quando non serve, non solo si aggiunge quando serve: le
+    // rotte cambiano senza ricaricare il documento, e un `robots: noindex`
+    // lasciato dalla pagina precedente toglierebbe dai motori di ricerca la
+    // scheda dell'evento su cui l'utente è appena arrivato.
+    if (tags.noIndex) this.setName('robots', 'noindex, nofollow');
+    else this.meta.removeTag("name='robots'");
 
     this.setCanonical(url);
   }

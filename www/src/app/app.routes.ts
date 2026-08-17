@@ -25,5 +25,13 @@ export const routes: Routes = [
     path: 'accedi',
     loadComponent: () => import('./pages/checkout/login.page').then((m) => m.LoginPage),
   },
+  {
+    // Dove atterra il tasto dell'email di conferma. Il gettone arriva in query
+    // string perché un link in un'email non può fare altro; la pagina lo toglie
+    // subito dalla barra e lo rispedisce nel corpo di una POST.
+    path: 'conferma-email',
+    loadComponent: () =>
+      import('./pages/checkout/confirm-email.page').then((m) => m.ConfirmEmailPage),
+  },
   { path: '**', redirectTo: 'eventi' },
 ];

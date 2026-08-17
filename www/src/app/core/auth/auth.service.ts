@@ -66,10 +66,45 @@ export class AuthService {
     await this.loadProfile();
   }
 
-  /** `POST /api/users/register` — auto-registrazione, poi login immediato. */
-  async register(payload: RegisterPayload): Promise<void> {
-    await this.api.post<AuthenticatedUser>('/users/register', payload);
-    await this.login(payload.username, payload.password);
+  /**
+   * `POST /api/users/register` — auto-registrazione.
+   *
+   * **Non accede più subito dopo.** L'account nasce con l'indirizzo non
+   * confermato e il backend rifiuterebbe l'accesso con `EMAIL_NOT_CONFIRMED`:
+   * la sessione arriva dal clic sul tasto nell'email, non da qui.
+   *
+   * Restituisce se l'email è **partita davvero**, perché «controlla la posta»
+   * si può dire soltanto quando è vero. Con `false` l'account esiste comunque:
+   * la via d'uscita è il rinvio, non una seconda registrazione — quella
+   * fallirebbe con `EMAIL_ALREADY_REGISTERED` sull'indirizzo appena scritto.
+   */
+  async register(payload: RegisterPayload): Promise<{ confirmationSent: boolean }> {
+    const res = await this.api.post<{ user: AuthenticatedUser; confirmationSent: boolean }>(
+      '/users/register',
+      payload,
+    );
+    return { confirmationSent: res?.confirmationSent !== false };
+  }
+
+  /** `POST /api/auth/resend-confirmation` — risponde uguale che l'indirizzo esista o no. */
+  async resendConfirmation(email: string, eventSlug?: string | null): Promise<void> {
+    await this.api.post<{ ok: true }>('/auth/resend-confirmation', { email, eventSlug: eventSlug ?? null });
+  }
+
+  /**
+   * `POST /api/auth/confirm-email` — il tasto dell'email.
+   *
+   * Conferma **e** accede: chi ha appena dimostrato di possedere l'indirizzo non
+   * deve compilare un modulo d'accesso per la stessa cosa.
+   */
+  async confirmEmail(token: string): Promise<{ justConfirmed: boolean; next: string | null }> {
+    const res = await this.api.post<{ token: string; justConfirmed: boolean; next: string | null }>(
+      '/auth/confirm-email',
+      { token },
+    );
+    this.writeToken(res.token);
+    await this.loadProfile();
+    return { justConfirmed: res.justConfirmed, next: res.next ?? null };
   }
 
   /** `GET /api/auth/profile` — utente popolato, comprensivo di `wsCode`. */

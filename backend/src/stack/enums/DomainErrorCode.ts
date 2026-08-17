@@ -15,4 +15,19 @@ export enum DomainErrorCode {
     RESERVATION_ALREADY_ACTIVE = "RESERVATION_ALREADY_ACTIVE",
     SALES_CLOSED = "SALES_CLOSED",
     PAYOUT_NOT_ENABLED = "PAYOUT_NOT_ENABLED",
+
+    // ── Identità: i tre esiti che il form d'iscrizione deve saper distinguere ──
+    // Prima erano tutti e tre un `400 BadRequest` con una frase italiana diversa,
+    // e il sito li mostrava allo stesso modo: un riquadro rosso dentro la scheda
+    // «Crea un account». Chi aveva già un account leggeva «Email già in uso» e
+    // restava fermo lì, perché nulla gli diceva che la cosa da fare era
+    // **accedere**. Un codice stabile è ciò che permette all'interfaccia di
+    // proporre l'azione giusta invece del testo dell'errore.
+
+    /** L'email appartiene già a un account: la via d'uscita è l'accesso, non un altro indirizzo. */
+    EMAIL_ALREADY_REGISTERED = "EMAIL_ALREADY_REGISTERED",
+    /** Il nome utente è occupato: qui invece la via d'uscita è davvero cambiarlo. */
+    USERNAME_TAKEN = "USERNAME_TAKEN",
+    /** Credenziali giuste, ma l'indirizzo non è mai stato confermato: si offre di rimandare l'email. */
+    EMAIL_NOT_CONFIRMED = "EMAIL_NOT_CONFIRMED",
 }

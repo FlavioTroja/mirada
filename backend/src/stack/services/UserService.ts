@@ -27,7 +27,9 @@ import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { generateRandomString } from "@utils/helpers/crypto";
 import { regionForProvince } from "@utils/helpers/italianProvinces";
 import { FileService } from "@services/FileService";
-import { MailService } from "@mail/MailService";
+import { EmailConfirmationService } from "@services/EmailConfirmationService";
+import { domainError } from "@utils/helpers/domainError";
+import { DomainErrorCode } from "@enums/DomainErrorCode";
 import { MultipartFile } from "@fastify/multipart";
 import { AuditLog } from "@utils/adapters/decorators/AuditLog";
 import { LogOp } from "@utils/adapters/decorators/LogOp";
@@ -40,7 +42,7 @@ export class UserService {
                 private readonly addressRepository: AddressRepository,
                 private readonly contactRepository: ContactRepository,
                 private readonly fileService: FileService,
-                private readonly mailService: MailService) {}
+                private readonly emailConfirmationService: EmailConfirmationService) {}
 
     @AuditLog({ op: LogOp.CREATE, entity: Prisma.ModelName.User })
     public async save(principalId: number, dto: UserCreateDTO) {
@@ -76,6 +78,19 @@ export class UserService {
             const user = await this.userRepository.save({
                 ...userDTO,
                 wsCode: generateRandomString(6),
+                // **Nasce già confermato**, al contrario di `register`.
+                //
+                // Questa è la strada amministrativa: un operatore del
+                // back-office che iscrive una persona che ha davanti o di cui
+                // conosce l'indirizzo. Nessuna email di conferma parte da qui —
+                // e quindi lasciare il campo nullo non produrrebbe un account
+                // «da verificare», ma un account che **nessuno potrà mai
+                // usare**, in attesa di un link che non esisterà mai.
+                //
+                // La conferma via email ha senso dove serve davvero: sul
+                // percorso pubblico d'iscrizione, dove l'indirizzo lo digita
+                // uno sconosciuto e nessuno lo ha verificato.
+                emailVerifiedAt: new Date(),
             });
 
             const rolesDTO = userCreationDTOSplit.roles(user.id) ?? [];
@@ -87,15 +102,42 @@ export class UserService {
         }) as Promise<UserWithRelations | null>;
     }
 
-    public async register(dto: UserRegisterDTO): Promise<UserWithRelations | null> {
+    /**
+     * Auto-registrazione dal percorso d'iscrizione (`AS2`, §3.7).
+     *
+     * ── L'account nasce **non confermato** ────────────────────────────────────
+     * `emailVerifiedAt` resta nullo e l'accesso è rifiutato finché non arriva il
+     * clic sul tasto nell'email. Il posto si prenota dopo: su questa piattaforma
+     * il biglietto **è** l'email, e un indirizzo digitato male non è un campo
+     * sbagliato ma un QR d'ingresso che non raggiungerà mai nessuno.
+     *
+     * ── I due rifiuti non sono lo stesso rifiuto ─────────────────────────────
+     * Prima erano due `BadRequest` con frasi diverse, e il sito li mostrava
+     * identici: un riquadro rosso dentro «Crea un account». Chi aveva già un
+     * account leggeva «Email già in uso» e restava fermo lì, perché nulla gli
+     * diceva che la cosa da fare era **accedere**. Ora portano un codice stabile
+     * e l'interfaccia può proporre l'azione giusta invece del testo dell'errore.
+     */
+    public async register(
+        dto: UserRegisterDTO,
+    ): Promise<{ user: UserWithRelations | null; confirmationSent: boolean }> {
         const existingUser = await this.userRepository.findOne({ username: dto.username });
         if (existingUser) {
-            throw new BadRequest("Attenzione! Username già in uso");
+            Log.warn(`[User Service]: registration refused — username '${dto.username}' is taken`);
+            throw domainError(
+                DomainErrorCode.USERNAME_TAKEN,
+                "Questo nome utente è già occupato. Scegline un altro.",
+            );
         }
 
-        const existingContact = await this.contactRepository.findOne({ email: dto.email });
+        const email = dto.email.trim().toLowerCase();
+        const existingContact = await this.contactRepository.findOne({ email });
         if (existingContact) {
-            throw new BadRequest("Attenzione! Email già in uso");
+            Log.warn(`[User Service]: registration refused — '${email}' already belongs to an account`);
+            throw domainError(
+                DomainErrorCode.EMAIL_ALREADY_REGISTERED,
+                "Questo indirizzo ha già un account su Mirada. Accedi per iscriverti all'evento.",
+            );
         }
 
         const transformer = new UserRegistrationDTOTransformer();
@@ -116,15 +158,25 @@ export class UserService {
             return this.userRepository.findById(savedUser.id!, {populate: "person person.contact"}, prisma);
         }) as UserWithRelations;
 
-        // Il benvenuto parte **dopo il commit** (`RF-COM-1`): dentro la
-        // transazione, un rollback lascerebbe in mano al ballerino la conferma
-        // di un account che non esiste — e un'email non si richiama indietro.
-        await this.mailService.sendWelcome(dto.email, {
-            firstName: dto.firstName,
-            username: dto.username,
-        });
+        // L'email parte **dopo il commit** (`RF-COM-1`): dentro la transazione,
+        // un rollback lascerebbe in mano al ballerino il link di conferma di un
+        // account che non esiste — e un'email non si richiama indietro.
+        //
+        // Parte la **conferma**, non il benvenuto: il benvenuto è spostato a
+        // dopo il clic, perché prima di allora l'account non serve a nulla e due
+        // email nello stesso minuto si annullano a vicenda nella casella.
+        const confirmationSent = await this.emailConfirmationService.sendConfirmation(
+            created,
+            email,
+            dto.firstName,
+            { eventSlug: dto.eventSlug ?? null },
+        );
 
-        return created;
+        // L'esito risale al chiamante invece di essere ingoiato: «controlla la
+        // posta» va detto solo quando l'email è partita davvero. Non si lancia —
+        // l'account è creato e un errore HTTP lo renderebbe irraggiungibile
+        // anche al rinvio.
+        return { user: created, confirmationSent };
     }
 
     public async findByIdWithPermission(principalId: number, wantedUserId: number, options?: FindOptions): Promise<User | null> {

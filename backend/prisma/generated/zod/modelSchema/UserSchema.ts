@@ -42,6 +42,21 @@ export const UserSchema = z.object({
   enabled: z.boolean(),
   activatedAt: z.coerce.date().nullish(),
   expiresAt: z.coerce.date().nullish(),
+  /**
+   * Quando il proprietario dell'indirizzo ha premuto il tasto nell'email di
+   * conferma. **Nullo = mai confermato**, e l'accesso è rifiutato con
+   * `EMAIL_NOT_CONFIRMED`.
+   * 
+   * Serve un campo suo e non `enabled`: `enabled` è la sospensione decisa da
+   * un amministratore, questo è «l'indirizzo non è ancora stato dimostrato».
+   * Confonderli darebbe a chi si è appena iscritto il messaggio «account
+   * disabilitato» — che è falso e non dice cosa fare.
+   * 
+   * È anche ciò che rende il link di conferma **usabile una volta sola in
+   * modo utile**: al secondo clic il campo è già valorizzato e la risposta
+   * diventa «già confermato, entra pure» invece di un errore.
+   */
+  emailVerifiedAt: z.coerce.date().nullish(),
   logoFileId: z.number().int().nullish(),
   personId: z.number().int(),
   deleted: z.boolean(),

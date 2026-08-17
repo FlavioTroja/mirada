@@ -171,6 +171,7 @@ export async function createDancer(input: {
         data: {
             username: tag,
             password: encryptPasswordSync("secret"),
+            emailVerifiedAt: new Date(),
             person: {
                 create: {
                     name: "Nuovo",

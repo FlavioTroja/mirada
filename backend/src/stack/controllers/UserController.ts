@@ -52,7 +52,13 @@ export class UserController {
         schema: {
             operationId: "registerUser",
             summary: "Register User",
-            description: "Public self-registration endpoint. Creates Contact, Person and User in a single transaction and assigns the USER role.",
+            description:
+                "Public self-registration endpoint. Creates Contact, Person and User in a single transaction and "
+                + "assigns the DANCER role. The account is created UNCONFIRMED: it cannot log in or reserve a seat "
+                + "until the dancer clicks the button in the confirmation mail. Answers 201 with "
+                + "{ user, confirmationSent }; confirmationSent=false means the account exists but the mail did not "
+                + "leave, so the caller must offer a resend instead of saying 'check your inbox'. Fails with "
+                + "EMAIL_ALREADY_REGISTERED (the way out is logging in) or USERNAME_TAKEN (the way out is another name).",
             body: UserRegisterSchema,
         },
     })
@@ -60,6 +66,9 @@ export class UserController {
         req: FastifyRequest<{ Body: UserRegisterDTO }>,
         reply: FastifyReply
     ) {
+        // **Non risponde più con un token di sessione**, e non è una dimenticanza:
+        // l'account nasce non confermato, quindi non esiste ancora una sessione
+        // da consegnare. Chi si è appena iscritto va nella casella di posta.
         reply
             .status(201)
             .send(await this.userService.register(req.body));

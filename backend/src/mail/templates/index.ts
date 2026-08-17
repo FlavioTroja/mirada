@@ -61,6 +61,66 @@ export function welcomeMail(input: WelcomeInput): Rendered {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// 1-bis. Conferma dell'indirizzo — il tasto che sblocca l'iscrizione
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ConfirmEmailInput {
+    locale: MailLocale;
+    firstName: string;
+    /** Il link completo, gettone compreso: la composizione non è cosa del modello. */
+    confirmUrl: string;
+    /** Il titolo dell'evento da cui è partita l'iscrizione, quando c'è. */
+    eventTitle?: string | null;
+    /** Ore di validità del link — scritte nel testo perché il lettore possa regolarsi. */
+    validForHours: number;
+}
+
+/**
+ * **L'unica email che il destinatario deve agire per forza**, e per questo è
+ * costruita al contrario delle altre: prima il tasto, poi le spiegazioni.
+ *
+ * Non porta il QR e non porta un codice d'ingresso, perché a questo punto non
+ * esiste ancora nessun biglietto: il posto si prenota **dopo** il clic. Dirlo in
+ * modo esplicito evita l'equivoco peggiore, cioè che qualcuno la archivi
+ * credendo di essere già iscritto.
+ */
+export function confirmEmailMail(input: ConfirmEmailInput): Rendered {
+    const { locale, firstName, confirmUrl, eventTitle, validForHours } = input;
+
+    if (locale === "en") {
+        return build("Confirm your email address", {
+            locale,
+            heading: "One tap and you are in.",
+            paragraphs: [
+                `${firstName}, tap the button below to confirm this address is yours.`,
+                eventTitle
+                    ? `Until you do, your place at ${eventTitle} is not booked: seats are held from the moment you confirm, not from now.`
+                    : "Until you do, the account cannot be used to book a place.",
+                `The link works for ${validForHours} hours. If it expires, ask for a new one from the registration page — nothing is lost.`,
+            ],
+            action: { label: "Confirm my address", url: confirmUrl },
+            footnote:
+                "If you did not sign up on Mirada, ignore this message: without this confirmation the account stays inactive and no one can use it.",
+        });
+    }
+
+    return build("Conferma il tuo indirizzo email", {
+        locale,
+        heading: "Manca un tocco.",
+        paragraphs: [
+            `${firstName}, premi il tasto qui sotto per confermare che questo indirizzo è tuo.`,
+            eventTitle
+                ? `Finché non lo fai, il tuo posto a ${eventTitle} non è prenotato: i posti si fermano dal momento della conferma, non da adesso.`
+                : "Finché non lo fai, l'account non può prenotare un posto.",
+            `Il link vale ${validForHours} ore. Se scade non hai perso nulla: puoi chiederne un altro dalla pagina d'iscrizione.`,
+        ],
+        action: { label: "Conferma il mio indirizzo", url: confirmUrl },
+        footnote:
+            "Se non ti sei iscritto tu su Mirada, ignora questo messaggio: senza questa conferma l'account resta inattivo e nessuno può usarlo.",
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // 2. Iscrizione confermata, con i biglietti
 // ═══════════════════════════════════════════════════════════════════════════
 

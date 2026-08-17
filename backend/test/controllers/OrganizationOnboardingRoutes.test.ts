@@ -1,6 +1,6 @@
 import { OrgMemberRole, RoleName } from "@prisma/client";
 import { getPrismaClient } from "@utils/adapters/prisma";
-import { login } from "../helpers";
+import { login, markEmailConfirmed } from "../helpers";
 
 const app = (globalThis as any).__TEST_APP__;
 
@@ -42,9 +42,17 @@ describe("Apertura di un'organizzazione (§4.2)", () => {
             },
         });
         // L'auto-registrazione risponde `201`, a differenza del resto del
-        // dialetto che risponde `200` (§3.3).
+        // dialetto che risponde `200` (§3.3), e il corpo è
+        // `{ user, confirmationSent }`: l'account nasce da confermare, e chi
+        // chiama deve sapere se l'email di conferma è partita davvero.
         expect(res.statusCode).toBe(201);
-        return res.json().id as number;
+        const id = res.json().user.id as number;
+        // Il candidato deve poter **accedere**, e da quando la conferma è
+        // obbligatoria un account appena registrato non può. Qui si simula il
+        // clic sul tasto dell'email; il percorso vero è provato in
+        // `EmailConfirmation.test.ts`.
+        await markEmailConfirmed(id);
+        return id;
     }
 
     beforeAll(async () => {

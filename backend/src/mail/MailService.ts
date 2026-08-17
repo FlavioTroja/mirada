@@ -3,10 +3,12 @@ import { Log } from "@utils/adapters/log";
 import { InlineImage, MailLocale } from "@mail/ports/Mailer";
 import { SmtpMailer } from "@mail/adapters/SmtpMailer";
 import {
+    ConfirmEmailInput,
     RegistrationConfirmedInput,
     ReservationExpiredInput,
     TicketTransferredInput,
     WelcomeInput,
+    confirmEmailMail,
     registrationConfirmedMail,
     reservationExpiredMail,
     ticketTransferredMail,
@@ -58,10 +60,35 @@ export class MailService {
         return "it";
     }
 
-    /** Benvenuto alla registrazione autonoma (`RF-COM-1`). */
+    /** Benvenuto — spedito **dopo** la conferma dell'indirizzo, non prima (`RF-COM-1`). */
     public async sendWelcome(to: string, input: Omit<WelcomeInput, "locale">): Promise<void> {
         await this.dispatch("welcome", to, input.firstName, () =>
             welcomeMail({ ...input, locale: this.localeFor(to) }),
+        );
+    }
+
+    /**
+     * Conferma dell'indirizzo — **l'unico invio il cui esito il chiamante deve
+     * conoscere**, ed è per questo che restituisce un booleano invece di nulla.
+     *
+     * La regola 1 di questa classe — «nessun metodo lancia, il fatto è già
+     * scritto e resta vero» — vale perché le altre email *raccontano* qualcosa
+     * che è successo: se non arriva la conferma d'ordine, il biglietto esiste
+     * comunque e si recupera dall'area personale.
+     *
+     * Questa no. Questa **è** il meccanismo: senza, l'account resta inattivo per
+     * sempre e la persona non ha nessun'altra strada. Ingoiare il fallimento in
+     * silenzio mostrerebbe «controlla la posta» a chi non riceverà mai niente.
+     * Continua a non lanciare — un'eccezione lascerebbe l'account creato e la
+     * risposta HTTP in errore, che è lo stato peggiore — ma **dice come è andata**,
+     * così il sito può proporre subito il rinvio invece di una bugia.
+     */
+    public async sendEmailConfirmation(
+        to: string,
+        input: Omit<ConfirmEmailInput, "locale">,
+    ): Promise<boolean> {
+        return this.dispatch("email-confirmation", to, input.firstName, () =>
+            confirmEmailMail({ ...input, locale: this.localeFor(to) }),
         );
     }
 
@@ -115,10 +142,10 @@ export class MailService {
         toName: string,
         compose: () => { subject: string; html: string; text: string },
         inlineImages?: InlineImage[],
-    ): Promise<void> {
+    ): Promise<boolean> {
         if (!to) {
             Log.warn(`[Mail Service]: '${kind}' not sent — no recipient address`);
-            return;
+            return false;
         }
         try {
             const mail = compose();
@@ -126,8 +153,10 @@ export class MailService {
             if (!outcome.sent) {
                 Log.warn(`[Mail Service]: '${kind}' to '${to}' was NOT delivered — ${outcome.error}`);
             }
+            return outcome.sent;
         } catch (err) {
             Log.error(`[Mail Service]: '${kind}' to '${to}' failed to compose or send: ${(err as Error).message}`);
+            return false;
         }
     }
 }

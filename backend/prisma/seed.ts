@@ -50,6 +50,13 @@ export async function seed(prisma: PrismaClient) {
                             avatarUrl: user.dto.avatarUrl,
                             note: user.dto.note,
                             wsCode: generateRandomString(6),
+                            // Gli account del seed nascono **già confermati**:
+                            // non passano dal percorso d'iscrizione e nessuno
+                            // riceverà mai un'email per loro. Senza questa
+                            // riga, `god` e gli utenti di prova non potrebbero
+                            // accedere — la stessa ragione per cui la
+                            // migrazione popola le righe preesistenti.
+                            emailVerifiedAt: new Date(),
                             ...(user.dto.roles?.length ? {
                                 roles: {
                                     createMany: {
