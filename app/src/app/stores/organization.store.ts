@@ -19,7 +19,8 @@ export interface OrganizationQuery extends BaseQuery {
 @Injectable({ providedIn: 'root' })
 export class OrganizationStore extends EntityStore<Organization, OrganizationQuery> {
   protected override readonly base = 'organizations';
-  protected override readonly listPopulate = 'address';
+  /** Il logo serve anche in elenco: è ciò che fa riconoscere il cliente. */
+  protected override readonly listPopulate = 'address logoFile';
   /** Sede e logo sono riferimenti ad altre entità: si popolano per mostrarli. */
   protected override readonly detailPopulate = 'address logoFile';
   protected override readonly defaultSort = { name: 'asc' as const };

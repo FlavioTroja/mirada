@@ -45,6 +45,7 @@ function firstLetter(word: string): string {
       <img
         class="avatar"
         [class.avatar--portrait]="shape() === 'portrait'"
+        [class.avatar--square]="shape() === 'square'"
         [src]="url"
         alt=""
         loading="lazy"
@@ -54,6 +55,7 @@ function firstLetter(word: string): string {
       <span
         class="avatar avatar--initials"
         [class.avatar--portrait]="shape() === 'portrait'"
+        [class.avatar--square]="shape() === 'square'"
         aria-hidden="true"
         >{{ initials() }}</span
       >
@@ -79,6 +81,12 @@ function firstLetter(word: string): string {
       .avatar--portrait {
         width: 2rem;
         height: 3rem;
+        border-radius: 0.3rem;
+      }
+      /* Un logo è quadrato e ha spesso il nome scritto dentro: nel cerchio ne
+         perderebbe gli angoli, cioè le lettere ai bordi. Qui resta intero, e la
+         forma diversa distingue a colpo d'occhio una cosa da una persona. */
+      .avatar--square {
         border-radius: 0.3rem;
       }
       .avatar--initials {
@@ -110,12 +118,15 @@ export class AvatarComponent {
   readonly surname = input<string | null>(null);
 
   /**
-   * `circle` per le persone, `portrait` per la locandina di un evento.
+   * `circle` per le persone, `portrait` per la locandina di un evento,
+   * `square` per il logo di un'organizzazione e per i luoghi.
    *
    * Non è una preferenza estetica: il ritaglio verticale è 2:3 e nel cerchio
-   * perderebbe i lati, cioè quasi sempre il titolo stampato sopra.
+   * perderebbe i lati — quasi sempre il titolo stampato sopra —; un logo
+   * quadrato perderebbe gli angoli, dove di solito sta il nome. La forma dice
+   * anche di che cosa si parla: tondo una persona, squadrato una cosa.
    */
-  readonly shape = input<'circle' | 'portrait'>('circle');
+  readonly shape = input<'circle' | 'portrait' | 'square'>('circle');
 
   /** L'ultimo URL che il browser non è riuscito a caricare. */
   private readonly brokenSrc = signal<string | null>(null);

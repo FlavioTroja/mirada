@@ -47,6 +47,7 @@ import { Organization } from '../../core/domain/models';
 import { EventStore } from '../../stores/event.store';
 import { OrganizationStore } from '../../stores/organization.store';
 import { ConfirmService } from '../../shared/confirm.service';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
 import { ApiClient } from '../../core/api/api.client';
@@ -88,6 +89,7 @@ interface UserRow {
     FormRowComponent,
     InputComponent,
     SelectComponent,
+    AvatarComponent,
     StatusPillComponent,
   ],
   template: `
@@ -179,9 +181,16 @@ interface UserRow {
             @for (org of store.items(); track org.id) {
               <keijo-entity-list-item [expandable]="true">
                 <ng-template #primary>
-                  <div class="primary">
-                    <span class="title">{{ org.name }}</span>
-                    <span class="mirada-muted">{{ org.legalName }} · {{ org.contactEmail }}</span>
+                  <div class="headline">
+                    <app-avatar
+                      shape="square"
+                      [src]="org.logoFile?.url ?? null"
+                      [name]="org.name"
+                    />
+                    <div class="primary">
+                      <span class="title">{{ org.name }}</span>
+                      <span class="mirada-muted">{{ org.legalName }} · {{ org.contactEmail }}</span>
+                    </div>
                   </div>
                 </ng-template>
                 <ng-template #secondary>
@@ -241,6 +250,12 @@ interface UserRow {
   `,
   styles: [
     `
+      .headline {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-width: 0;
+      }
       .primary {
         display: flex;
         flex-direction: column;

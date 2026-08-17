@@ -44,6 +44,7 @@ import { Address, Venue } from '../../core/domain/models';
 import { AddressStore, formatAddress } from '../../stores/address.store';
 import { VenueStore } from '../../stores/venue.store';
 import { ConfirmService } from '../../shared/confirm.service';
+import { AvatarComponent } from '../../shared/avatar.component';
 import {
   AddressFieldsComponent,
   addressPayload,
@@ -88,6 +89,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
     TextareaComponent,
     CheckboxComponent,
     SelectComponent,
+    AvatarComponent,
     AddressFieldsComponent,
   ],
   template: `
@@ -228,9 +230,18 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
             @for (venue of store.items(); track venue.id) {
               <keijo-entity-list-item [expandable]="true">
                 <ng-template #primary>
-                  <div class="primary">
-                    <span class="title">{{ venue.name }}</span>
-                    <span class="mirada-muted">{{ addressLine(venue) }}</span>
+                  <div class="headline">
+                    <!--
+                      Nessuna immagine da passare: la location non ne ha una.
+                      L'entità Venue non ha un campo fotografia in banca dati,
+                      quindi restano le iniziali del nome — che è tutto ciò che
+                      esiste finché quel campo non viene aggiunto.
+                    -->
+                    <app-avatar shape="square" [name]="venue.name" />
+                    <div class="primary">
+                      <span class="title">{{ venue.name }}</span>
+                      <span class="mirada-muted">{{ addressLine(venue) }}</span>
+                    </div>
                   </div>
                 </ng-template>
                 <ng-template #secondary>
@@ -300,6 +311,12 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
   `,
   styles: [
     `
+      .headline {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-width: 0;
+      }
       .primary {
         display: flex;
         flex-direction: column;
