@@ -60,11 +60,20 @@ export class SmtpMailer extends Mailer {
         this.transporter = nodemailer.createTransport({
             host,
             port,
-            // `secure` vale per la porta 465 (TLS implicito). Sulla 587 la
-            // connessione parte in chiaro e sale con STARTTLS: metterlo a `true`
-            // lì fa fallire l'apertura, ed è l'errore di configurazione più
-            // comune che si vede su questo trasporto.
-            secure: port === 465,
+            // TLS implicito o STARTTLS, e la differenza non è un dettaglio:
+            // sulla **465** la connessione è cifrata dal primo byte, sulla
+            // **587** parte in chiaro e sale con STARTTLS. Invertire i due
+            // valori fa fallire l'apertura, ed è l'errore di configurazione più
+            // comune su questo trasporto.
+            //
+            // La regola di serie — «465 significa implicito» — copre OVH,
+            // Gmail, SendGrid e la quasi totalità dei fornitori. `SMTP_SECURE`
+            // esiste per il caso in cui non basti: un fornitore che offra il TLS
+            // implicito su una porta diversa manderebbe altrimenti in errore una
+            // configurazione per il resto corretta, senza dire perché.
+            secure: process.env.SMTP_SECURE
+                ? process.env.SMTP_SECURE === "true"
+                : port === 465,
             auth: user && pass ? { user, pass } : undefined,
             pool: true,
             maxConnections: 3,
