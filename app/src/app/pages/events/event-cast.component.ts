@@ -28,6 +28,7 @@ import { ArtistStore } from '../../stores/artist.store';
 import { EventCastStore } from '../../stores/event-cast.store';
 import { EventStore } from '../../stores/event.store';
 import { ConfirmService } from '../../shared/confirm.service';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
 import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
@@ -58,6 +59,7 @@ import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
     FormRowComponent,
     InputComponent,
     SelectComponent,
+    AvatarComponent,
     StatusPillComponent,
     EventWorkspaceNavComponent,
   ],
@@ -112,7 +114,13 @@ import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
             @for (row of store.items(); track row.id) {
               <keijo-entity-list-item [expandable]="true">
                 <ng-template #primary>
-                  <span class="title">{{ row.artist?.name ?? 'Artista #' + row.artistId }}</span>
+                  <div class="primary">
+                    <app-avatar
+                      [src]="row.artist?.photoFile?.url ?? null"
+                      [name]="row.artist?.name ?? ''"
+                    />
+                    <span class="title">{{ row.artist?.name ?? 'Artista #' + row.artistId }}</span>
+                  </div>
                 </ng-template>
                 <ng-template #secondary>
                   <div class="secondary">
@@ -154,6 +162,12 @@ import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
   `,
   styles: [
     `
+      .primary {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+      }
       .title {
         font-weight: 600;
       }

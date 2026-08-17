@@ -355,10 +355,29 @@ export interface CapacityQuota extends Entity {
   publiclyVisible: boolean;
 }
 
+/**
+ * L'account di chi si è iscritto, per quel poco che serve a una lista.
+ *
+ * Non è l'utente intero di proposito: qui basta il ritratto. Un'iscrizione può
+ * benissimo non averne uno — si compra un biglietto anche per un'altra persona,
+ * e chi arriva dalla biglietteria fisica un account non ce l'ha proprio.
+ */
+export interface RegistrationAccount extends Entity {
+  username: string;
+  /** La fotografia caricata nel profilo personale. */
+  logoFileId?: number | null;
+  /** Popolabile con `populate=personUser.logoFile`. */
+  logoFile?: StoredFile | null;
+  /** Ritratto indicato come indirizzo, invece che caricato come file. */
+  avatarUrl?: string | null;
+}
+
 export interface Registration extends Entity {
   eventId: number;
   event?: MiradaEvent | null;
   personUserId?: number | null;
+  /** Popolabile con `populate=personUser`. Nullo per chi si iscrive senza account. */
+  personUser?: RegistrationAccount | null;
   holderName: string;
   holderSurname: string;
   holderEmail: string;

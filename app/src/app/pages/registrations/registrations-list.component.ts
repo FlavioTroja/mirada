@@ -59,6 +59,7 @@ import { CoupleStore } from '../../stores/couple.store';
 import { EventStore } from '../../stores/event.store';
 import { RegistrationStore } from '../../stores/registration.store';
 import { ConfirmService } from '../../shared/confirm.service';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { DomainErrorComponent } from '../../shared/domain-error.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
@@ -97,6 +98,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
     InputComponent,
     SelectComponent,
     CheckboxComponent,
+    AvatarComponent,
     StatusPillComponent,
     DomainErrorComponent,
   ],
@@ -221,9 +223,16 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
             @for (reg of store.items(); track reg.id) {
               <keijo-entity-list-item [expandable]="true">
                 <ng-template #primary>
-                  <div class="primary">
-                    <span class="title">{{ reg.holderName }} {{ reg.holderSurname }}</span>
-                    <span class="mirada-muted">{{ reg.holderEmail }}</span>
+                  <div class="holder">
+                    <app-avatar
+                      [src]="avatar(reg)"
+                      [name]="reg.holderName"
+                      [surname]="reg.holderSurname"
+                    />
+                    <div class="primary">
+                      <span class="title">{{ reg.holderName }} {{ reg.holderSurname }}</span>
+                      <span class="mirada-muted">{{ reg.holderEmail }}</span>
+                    </div>
                   </div>
                 </ng-template>
 
@@ -311,6 +320,12 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
   `,
   styles: [
     `
+      .holder {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-width: 0;
+      }
       .primary {
         display: flex;
         flex-direction: column;
@@ -515,6 +530,18 @@ export class RegistrationsListComponent implements OnInit {
 
   err(control: keyof typeof this.form.controls): string | null {
     return controlError(this.form.controls[control]);
+  }
+
+  /**
+   * Il ritratto dell'iscritto, se ne ha uno **nel proprio profilo**.
+   *
+   * Non è il dato dell'iscrizione: quello lo digita chi compra, e può comprare
+   * per qualcun altro. La fotografia è la persona che la mette nel suo account,
+   * quindi si legge di lì e da nessun'altra parte. Chi arriva dalla biglietteria
+   * fisica un account non ce l'ha affatto: resta senza, ed è normale.
+   */
+  avatar(reg: Registration): string | null {
+    return reg.personUser?.logoFile?.url ?? reg.personUser?.avatarUrl ?? null;
   }
 
   statusUi(status: RegistrationStatus) {

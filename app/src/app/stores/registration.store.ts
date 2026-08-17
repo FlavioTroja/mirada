@@ -23,7 +23,13 @@ export interface RegistrationQuery extends BaseQuery {
 @Injectable({ providedIn: 'root' })
 export class RegistrationStore extends EntityStore<Registration, RegistrationQuery> {
   protected override readonly base = 'registrations';
-  protected override readonly listPopulate = 'couple';
+  /**
+   * `personUser` serve al ritratto accanto al nome, e si ferma al file del
+   * profilo: la scheda anagrafica completa — codice fiscale, data di nascita,
+   * indirizzi — non ha ragione di viaggiare dentro un elenco, e ciò che non si
+   * carica non si può nemmeno lasciare in giro per sbaglio.
+   */
+  protected override readonly listPopulate = 'couple personUser personUser.logoFile';
   protected override readonly detailPopulate = 'couple event quotaConsumptions';
   protected override readonly defaultSort = { id: 'desc' as const };
 
