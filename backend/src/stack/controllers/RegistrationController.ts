@@ -54,6 +54,28 @@ export class RegistrationController {
         reply.status(200).send(await this.registrationService.save(+req.user.id, req.body));
     }
 
+    /**
+     * Sta **prima** di `GET /:id` di proposito: Fastify sceglie la rotta più
+     * specifica, ma tenere l'ordine anche nel file evita che una lettura veloce
+     * faccia credere che «mine» finisca nel parametro `:id`.
+     */
+    @GET("/mine", {
+        schema: {
+            operationId: "findMyRegistrations",
+            summary: "My own registrations",
+            description:
+                "Returns the caller's own registrations — the ones where they are the registered person — split into `upcoming` and `past` on the event END date, each with a compact event card and its tickets. Deliberately outside the organization scope of §1.5: a dancer is not a tenant but the person named in the row, and their scope is empty, so the paginated list would hide their own registrations from them. The ticket `code` (the signed QR payload) is NOT returned here: it is served as an image by `GET /tickets/:id/qr`.",
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.READ, PermissionResource.REGISTRATION, PermissionScope.OWN),
+        ],
+    })
+    async mine(req: FastifyRequest, reply: FastifyReply) {
+        reply.status(200).send(await this.registrationService.findMine(+req.user.id));
+    }
+
     @GET("/:id", {
         schema: {
             operationId: "findRegistration",

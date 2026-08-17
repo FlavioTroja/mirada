@@ -8,6 +8,8 @@ import { SeoService } from '../../core/seo/seo.service';
 import { ApiError } from '../../core/api/api-error';
 import { PreferredDanceRole } from '../../core/domain/models';
 import { AvatarComponent } from '../../shared/avatar.component';
+import { MyRegistrationsService } from '../../core/auth/my-registrations.service';
+import { MyEventsComponent } from './my-events.component';
 
 /** Le lingue che si dichiarano in milonga. L'elenco è corto di proposito. */
 const LANGUAGES: { code: string; label: string }[] = [
@@ -53,7 +55,7 @@ const ROLES: { value: PreferredDanceRole; label: string; hint: string }[] = [
  */
 @Component({
   selector: 'app-profile-page',
-  imports: [FormsModule, AvatarComponent],
+  imports: [FormsModule, AvatarComponent, MyEventsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="www-narrow">
@@ -74,6 +76,30 @@ const ROLES: { value: PreferredDanceRole; label: string; hint: string }[] = [
             }
           </div>
         </header>
+
+        <!-- ── I tuoi eventi ───────────────────────────────────────────── -->
+        @if (mine.failed()) {
+          <div class="www-notice www-notice-warn">
+            <strong>Le tue iscrizioni non sono arrivate</strong>
+            Ricarica la pagina fra poco: il resto del profilo funziona lo stesso.
+          </div>
+        } @else if (mine.loading() && !mine.loaded()) {
+          <p class="www-muted">Cerco le tue iscrizioni…</p>
+        } @else if (mine.loaded()) {
+          <app-my-events
+            title="I tuoi prossimi eventi"
+            emptyLabel="Non sei iscritto a nessun evento in programma. Quando ti iscrivi, il biglietto compare qui."
+            [rows]="mine.upcoming()"
+          />
+          @if (mine.past().length) {
+            <app-my-events
+              title="Ci sei stato"
+              emptyLabel=""
+              [rows]="mine.past()"
+              [past]="true"
+            />
+          }
+        }
 
         <!-- ── Ritratto ────────────────────────────────────────────────── -->
         <section class="www-panel">
@@ -451,6 +477,7 @@ export class ProfilePage {
   private readonly seo = inject(SeoService);
   protected readonly auth = inject(AuthService);
   protected readonly profiles = inject(DancerProfileService);
+  protected readonly mine = inject(MyRegistrationsService);
   protected readonly theme = inject(ThemeService);
 
   protected readonly roles = ROLES;
@@ -517,6 +544,9 @@ export class ProfilePage {
     effect(() => {
       if (!this.auth.isAuthenticated()) return;
       if (!this.auth.user()) void this.auth.loadProfile();
+      // Le iscrizioni si leggono una volta sola per visita: `loaded` resta vero
+      // fino all'uscita, che è ciò che svuota il servizio.
+      if (!this.mine.loaded() && !this.mine.loading() && !this.mine.failed()) void this.mine.load();
       if (!this.profiles.profile() && !this.profiles.loading() && !this.profiles.missing()) {
         void this.profiles.load();
       }

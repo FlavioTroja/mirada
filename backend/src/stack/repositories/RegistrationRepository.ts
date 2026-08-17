@@ -21,6 +21,28 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
         return this.findMany({ eventId, deleted: false }, { ...options, orderBy: { id: "asc" } }, tx);
     }
 
+    /**
+     * **Le iscrizioni di una persona**, per il sito pubblico.
+     *
+     * Deliberatamente **fuori dallo scope di organizzazione**: lo scope serve a
+     * isolare un tenant dall'altro, e un ballerino non è un tenant — è la
+     * persona che compare nella riga. Filtrare qui per organizzazione darebbe a
+     * chi balla un elenco vuoto (uno scope vuoto non vede nulla) e a un
+     * titolare, che pure è una persona, solo le iscrizioni fatte a casa propria.
+     *
+     * Il filtro è `personUserId`, che è il legame reale fra l'account e
+     * l'iscrizione: l'indirizzo scritto in fase d'acquisto no, perché si compra
+     * anche per altri e un omonimo di casella condivisa vedrebbe i biglietti di
+     * qualcun altro.
+     */
+    async findByPersonUser(
+        personUserId: number,
+        options?: FindOptions,
+        tx?: Prisma.TransactionClient,
+    ): Promise<Registration[]> {
+        return this.findMany({ personUserId, deleted: false }, options, tx);
+    }
+
     async findByIds(ids: number[], tx?: Prisma.TransactionClient): Promise<Registration[]> {
         if (!ids.length) {
             return [];

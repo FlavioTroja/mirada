@@ -30,6 +30,7 @@ import { CapacityQuotaRepository } from "@repositories/CapacityQuotaRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { CapacityEngineService } from "@services/CapacityEngineService";
 import { RequirementOutcomeService } from "@services/RequirementOutcomeService";
+import { QrImageService } from "@mail/QrImageService";
 import { TicketQrService } from "@services/TicketQrService";
 import { TicketDocumentService } from "@services/TicketDocumentService";
 import { OrganizationAudienceService } from "@services/OrganizationAudienceService";
@@ -96,6 +97,7 @@ export class TicketService {
         private readonly requirementOutcomeService: RequirementOutcomeService,
         private readonly ticketQrService: TicketQrService,
         private readonly ticketDocumentService: TicketDocumentService,
+        private readonly qrImageService: QrImageService,
         private readonly organizationAudienceService: OrganizationAudienceService,
         private readonly wsPublisher: WsPublisherService,
     ) {}
@@ -210,6 +212,39 @@ export class TicketService {
     /** Il contenuto del QR: JWS compatto firmato Ed25519 (assunzione `AS-7`). */
     public qrToken(ticket: Ticket): string {
         return this.ticketQrService.issueToken(ticket);
+    }
+
+    /**
+     * `GET /tickets/:id/qr` → il PNG del QR, pronto da mostrare a schermo.
+     *
+     * ── Perché un'immagine e non il contenuto ────────────────────────────────
+     * Il contenuto del QR è un JWS firmato: è **la chiave d'ingresso**. Servirlo
+     * come testo significherebbe farlo passare per la memoria del browser, per
+     * la cronologia delle richieste e per qualunque registro intermedio, per poi
+     * disegnarlo comunque come immagine. L'immagine si guarda alla porta e
+     * finisce lì.
+     *
+     * ── Perché può non esserci ───────────────────────────────────────────────
+     * Un QR revocato — rimborso, annullamento — non viene ridisegnato: mostrarne
+     * uno che il lettore rifiuta manderebbe qualcuno alla porta convinto di
+     * avere un biglietto valido. Meglio dirlo prima.
+     */
+    public async qrImage(principalId: number, id: number): Promise<{ png: Buffer; filename: string } | null> {
+        const ticket = await this.findByIdOrThrow(principalId, id);
+
+        if (ticket.qrRevokedAt) {
+            Log.warn(`[Ticket Service]: QR requested for ticket (id ${id}) but it was revoked on ${ticket.qrRevokedAt.toISOString()}`);
+            return null;
+        }
+
+        const image = await this.qrImageService.ticketQr(ticket.id, this.qrToken(ticket));
+        if (!image) {
+            Log.error(`[Ticket Service]: QR rendering failed for ticket (id ${id})`);
+            return null;
+        }
+
+        Log.info(`[Ticket Service]: QR served for ticket (id ${id}, code ${ticket.code})`);
+        return { png: image.content, filename: image.filename };
     }
 
     /**

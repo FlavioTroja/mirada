@@ -175,6 +175,38 @@ export class TicketController {
         reply.status(200).send(await this.ticketService.pdf(+req.user.id, +req.params.id));
     }
 
+    @GET("/:id/qr", {
+        schema: {
+            operationId: "getTicketQr",
+            summary: "QR image of a Ticket",
+            description: "Returns the ticket QR as a PNG, ready to be shown on screen at the door. The signed JWS itself is never returned as text: it is the entry key, and serving it as a string would spread it through browser memory, request logs and history for no gain — the image is what gets scanned. Visible to the organization staff of the event OR to the ticket holder. Answers 404 when the QR has been revoked (refund, cancellation): showing a QR that the scanner refuses would send someone to the door believing they hold a valid ticket.",
+            params: exz.pathId,
+            produces: ["image/png"],
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.READ, PermissionResource.TICKET, PermissionScope.SINGLE),
+        ],
+    })
+    async qr(
+        req: FastifyRequest<{ Params: { id: string } }>,
+        reply: FastifyReply,
+    ) {
+        const image = await this.ticketService.qrImage(+req.user.id, +req.params.id);
+        if (!image) {
+            throw new httpErrors.NotFound("Questo biglietto non ha un QR valido.");
+        }
+        reply
+            .status(200)
+            .header("Content-Type", "image/png")
+            // Privato: è la chiave d'ingresso di una persona, non deve restare
+            // in nessuna cache condivisa fra chi passa dalla stessa rete.
+            .header("Cache-Control", "private, no-store")
+            .header("Content-Disposition", `inline; filename="${image.filename}"`)
+            .send(image.png);
+    }
+
     @POST("/:id/transfer", {
         schema: {
             operationId: "transferTicket",

@@ -351,6 +351,55 @@ export interface AuthenticatedUser {
   dancerProfile?: DancerProfile | null;
 }
 
+/**
+ * `GET /api/registrations/mine` — **le proprie iscrizioni**, divise dal server
+ * fra prossime e passate sulla data di **fine** dell'evento: un festival
+ * cominciato ieri e che finisce domani è ancora un evento a cui stai andando.
+ */
+export interface MyTicket {
+  id: number;
+  status: string;
+  ticketTypeName?: I18nText | null;
+  holderName: string;
+  holderSurname: string;
+  /** Pass al portatore: nessun nome sopra, non trasferibile. */
+  bearer: boolean;
+  /**
+   * Falso quando il QR è stato revocato — rimborso, annullamento. Il biglietto
+   * resta in elenco: sapere che non vale più è un'informazione, farlo sparire
+   * è una sorpresa alla porta.
+   */
+  qrAvailable: boolean;
+}
+
+export interface MyRegistrationEvent {
+  id: number;
+  slug: string;
+  title: I18nText;
+  startAt: string;
+  endAt: string;
+  status: string;
+  venueName?: string | null;
+  city?: string | null;
+  posterUrl?: string | null;
+}
+
+export interface MyRegistration {
+  id: number;
+  status: string;
+  declaredRole: string;
+  assignedRole?: string | null;
+  confirmedAt?: string | null;
+  isMinor: boolean;
+  event: MyRegistrationEvent;
+  tickets: MyTicket[];
+}
+
+export interface MyRegistrations {
+  upcoming: MyRegistration[];
+  past: MyRegistration[];
+}
+
 /** Ruolo che la persona preferisce ballare. `BOTH` non è un'incertezza: è una scelta. */
 export type PreferredDanceRole = 'LEADER' | 'FOLLOWER' | 'BOTH';
 

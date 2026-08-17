@@ -172,6 +172,14 @@ export async function createDancer(input: {
             username: tag,
             password: encryptPasswordSync("secret"),
             emailVerifiedAt: new Date(),
+            // **Il ruolo, non solo il profilo.** Un ballerino vero nasce da
+            // `POST /users/register`, che gli concede `DANCER` nella stessa
+            // transazione: senza, questo fixture produce una persona che ha un
+            // profilo da ballerino e **nessun permesso**, e ogni rotta che il
+            // ballerino usa davvero risponde 403 in prova pur funzionando in
+            // esercizio. La differenza si è vista alla prima rotta pubblica
+            // provata da qui.
+            roles: { create: { roleName: "DANCER", isActive: true } },
             person: {
                 create: {
                     name: "Nuovo",

@@ -15,6 +15,34 @@ import { RegistrationCreateDTO } from "@DTOs/registration/RegistrationCreateDTO"
 import { RegistrationUpdateDTO } from "@DTOs/registration/RegistrationUpdateDTO";
 import { RegistrationQueryDTO } from "@DTOs/registration/RegistrationQueryDTO";
 import { RegistrationRoleReassignDTO } from "@DTOs/registration/RegistrationRoleDTO";
+import { MyRegistrationDTO, MyRegistrationsDTO } from "@DTOs/registration/MyRegistrationsDTO";
+
+/**
+ * La riga come torna dal repository con le relazioni popolate. È un tipo locale
+ * perché Prisma non ne genera uno per una `populate` composta a runtime.
+ */
+type MyRegistrationRow = Registration & {
+    event?: {
+        id: number;
+        slug: string;
+        title: unknown;
+        startAt: Date;
+        endAt: Date;
+        status: string;
+        venue?: { name: string; address?: { city?: string | null } | null } | null;
+        posterVerticalFile?: { url: string } | null;
+    } | null;
+    tickets?: {
+        id: number;
+        status: string;
+        holderName: string;
+        holderSurname: string;
+        bearer: boolean;
+        qrRevokedAt?: Date | null;
+        deleted: boolean;
+        ticketType?: { name: unknown } | null;
+    }[];
+};
 
 /**
  * `Registration` — backend-brief §4.10.
@@ -80,6 +108,94 @@ export class RegistrationService {
     ): Promise<PaginateDatasourceDTO<Registration>> {
         const scope = await this.organizationScopeService.resolve(principalId);
         return this.registrationRepository.paginateInScope(scope, this.createQueryFromPayload(query), options);
+    }
+
+    /**
+     * **Le iscrizioni di chi chiede** — `GET /registrations/mine`, §3.7.
+     *
+     * ── Perché non passa dallo scope di organizzazione ───────────────────────
+     * Lo scope del §1.5 isola un tenant dall'altro, e chi balla non è un tenant:
+     * è la persona scritta nella riga. Un ballerino ha scope vuoto e con
+     * `paginate` otterrebbe zero risultati — cioè la piattaforma gli nasconde le
+     * sue stesse iscrizioni. Qui il filtro è la persona, e solo quella.
+     *
+     * ── Perché non tocca `paginate` ──────────────────────────────────────────
+     * Sarebbe bastato aggiungere «oppure le mie» al filtro dell'elenco, come già
+     * fanno `Order` e `Ticket`. Non qui: l'elenco iscritti è la schermata di
+     * lavoro dell'organizzatore, e mescolarci le sue iscrizioni personali a
+     * eventi altrui la sporcherebbe di righe che con il suo evento non c'entrano
+     * nulla. Due letture diverse meritano due rotte diverse.
+     *
+     * ── Il taglio prossimi / passati ─────────────────────────────────────────
+     * Sulla **fine** dell'evento, non sull'inizio: un festival cominciato ieri e
+     * che finisce domani è ancora un evento a cui stai andando.
+     */
+    public async findMine(principalId: number): Promise<MyRegistrationsDTO> {
+        // L'ordine non si chiede qui: i due elenchi vengono riordinati sotto
+        // per data d'evento, che è l'unico ordine che significhi qualcosa a chi
+        // guarda le proprie iscrizioni.
+        const rows = await this.registrationRepository.findByPersonUser(principalId, {
+            populate: "event event.venue event.venue.address event.posterVerticalFile tickets tickets.ticketType",
+        });
+
+        Log.info(`[Registration Service]: user (id ${principalId}) is reading their own ${rows.length} registration(s)`);
+
+        const now = new Date();
+        const upcoming: MyRegistrationDTO[] = [];
+        const past: MyRegistrationDTO[] = [];
+
+        for (const row of rows as MyRegistrationRow[]) {
+            // Un'iscrizione senza evento non è mostrabile e non è un errore da
+            // far vedere: l'evento è `Restrict`, quindi può succedere solo se
+            // qualcuno ha smontato dati a mano.
+            if (!row.event) {
+                Log.warn(`[Registration Service]: registration (id ${row.id}) has no event — skipped`);
+                continue;
+            }
+            const view = this.toMyRegistration(row);
+            (new Date(row.event.endAt) < now ? past : upcoming).push(view);
+        }
+
+        // I prossimi dal più vicino, i passati dal più recente: in entrambi i
+        // casi per primo ciò che sta più vicino a oggi.
+        upcoming.sort((a, b) => +new Date(a.event.startAt) - +new Date(b.event.startAt));
+        past.sort((a, b) => +new Date(b.event.endAt) - +new Date(a.event.endAt));
+
+        return { upcoming, past };
+    }
+
+    private toMyRegistration(row: MyRegistrationRow): MyRegistrationDTO {
+        const event = row.event!;
+        return {
+            id: row.id,
+            status: row.status,
+            declaredRole: row.declaredRole,
+            assignedRole: row.assignedRole ?? null,
+            confirmedAt: row.confirmedAt ?? null,
+            isMinor: row.isMinor,
+            event: {
+                id: event.id,
+                slug: event.slug,
+                title: event.title,
+                startAt: event.startAt,
+                endAt: event.endAt,
+                status: event.status,
+                venueName: event.venue?.name ?? null,
+                city: event.venue?.address?.city ?? null,
+                posterUrl: event.posterVerticalFile?.url ?? null,
+            },
+            tickets: (row.tickets ?? [])
+                .filter(ticket => !ticket.deleted)
+                .map(ticket => ({
+                    id: ticket.id,
+                    status: ticket.status,
+                    ticketTypeName: ticket.ticketType?.name ?? null,
+                    holderName: ticket.holderName,
+                    holderSurname: ticket.holderSurname,
+                    bearer: ticket.bearer,
+                    qrAvailable: !ticket.qrRevokedAt,
+                })),
+        };
     }
 
     public async updateById(principalId: number, id: number, dto: RegistrationUpdateDTO): Promise<Registration> {

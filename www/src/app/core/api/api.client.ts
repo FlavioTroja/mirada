@@ -75,6 +75,19 @@ export class ApiClient {
     return this.run(firstValueFrom(this.http.post<T>(this.url(path), body)));
   }
 
+  /**
+   * Un endpoint che risponde con un **file**, non con JSON.
+   *
+   * Serve al QR del biglietto: l'immagine è protetta dal token, e un `<img src>`
+   * non può portare l'intestazione `Authorization`. Si scarica quindi qui, dove
+   * l'interceptor la aggiunge, e si mostra da un URL di oggetto.
+   */
+  fetchBlob(path: string): Promise<Blob> {
+    return this.run(
+      firstValueFrom(this.http.get(this.url(path), { responseType: 'blob' })),
+    );
+  }
+
   /** `PATCH /{plural}/:id` — aggiornamento parziale della propria riga. */
   patch<T>(base: string, id: number, body: unknown): Promise<T> {
     return this.run(firstValueFrom(this.http.patch<T>(this.url(`/${base}/${id}`), body)));
