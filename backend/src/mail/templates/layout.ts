@@ -103,8 +103,8 @@ export function renderHtml(input: LayoutInput): string {
         <table role="presentation" cellpadding="0" cellspacing="0"
                style="background-color:#FFFFFF;border-radius:10px;padding:16px;">
           <tr><td align="center">
-            <img src="cid:${escapeHtml(q.cid)}" width="180" height="180" alt="${escapeHtml(q.code)}"
-                 style="display:block;width:180px;height:180px;" />
+            <img src="cid:${escapeHtml(q.cid)}" width="200" height="200" alt="${escapeHtml(q.code)}"
+                 style="display:block;width:200px;height:200px;" />
           </td></tr>
           <tr><td align="center" style="padding-top:10px;color:#0F0A0C;font-size:13px;
                                         font-family:monospace;letter-spacing:0.05em;">${escapeHtml(q.code)}</td></tr>
