@@ -42,9 +42,21 @@ function firstLetter(word: string): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (photo(); as url) {
-      <img class="avatar" [src]="url" alt="" loading="lazy" (error)="onBrokenImage(url)" />
+      <img
+        class="avatar"
+        [class.avatar--portrait]="shape() === 'portrait'"
+        [src]="url"
+        alt=""
+        loading="lazy"
+        (error)="onBrokenImage(url)"
+      />
     } @else {
-      <span class="avatar avatar--initials" aria-hidden="true">{{ initials() }}</span>
+      <span
+        class="avatar avatar--initials"
+        [class.avatar--portrait]="shape() === 'portrait'"
+        aria-hidden="true"
+        >{{ initials() }}</span
+      >
     }
   `,
   styles: [
@@ -60,6 +72,14 @@ function firstLetter(word: string): string {
         flex: none;
         object-fit: cover;
         border: 1px solid rgba(var(--text-rgb), 0.14);
+      }
+      /* Il ritaglio verticale della locandina è 2:3: mostrarlo dentro un
+         cerchio significherebbe buttare via i lati e metà del titolo. Qui
+         conserva le sue proporzioni, in piccolo. */
+      .avatar--portrait {
+        width: 2rem;
+        height: 3rem;
+        border-radius: 0.3rem;
       }
       .avatar--initials {
         display: inline-flex;
@@ -89,6 +109,14 @@ export class AvatarComponent {
    */
   readonly surname = input<string | null>(null);
 
+  /**
+   * `circle` per le persone, `portrait` per la locandina di un evento.
+   *
+   * Non è una preferenza estetica: il ritaglio verticale è 2:3 e nel cerchio
+   * perderebbe i lati, cioè quasi sempre il titolo stampato sopra.
+   */
+  readonly shape = input<'circle' | 'portrait'>('circle');
+
   /** L'ultimo URL che il browser non è riuscito a caricare. */
   private readonly brokenSrc = signal<string | null>(null);
 
@@ -104,7 +132,13 @@ export class AvatarComponent {
 
     if (surname) return `${firstLetter(name)}${firstLetter(surname)}` || '?';
 
-    const words = name.split(/\s+/).filter((w) => w && !CONNECTORS.has(w.toLowerCase()));
+    const words = name
+      .split(/\s+/)
+      // I titoli degli eventi sono pieni di trattini lunghi e virgolette
+      // — «International Trani Tango — XIV edizione» — e un `—` non è
+      // l'iniziale di niente.
+      .map((w) => w.replace(/^[^\p{L}\p{N}]+/u, ''))
+      .filter((w) => w && !CONNECTORS.has(w.toLowerCase()));
     return words.slice(0, 2).map(firstLetter).join('') || '?';
   });
 

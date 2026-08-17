@@ -48,6 +48,7 @@ import { EventStore } from '../../stores/event.store';
 import { EventTypeStore } from '../../stores/event-type.store';
 import { VenueStore } from '../../stores/venue.store';
 import { ConfirmService } from '../../shared/confirm.service';
+import { AvatarComponent } from '../../shared/avatar.component';
 import { DomainErrorComponent } from '../../shared/domain-error.component';
 import { I18nTextComponent } from '../../shared/i18n-text.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
@@ -95,6 +96,7 @@ interface LifecycleAction {
     PillComponent,
     InfoBoxComponent,
     I18nTextComponent,
+    AvatarComponent,
     StatusPillComponent,
     DomainErrorComponent,
   ],
@@ -118,9 +120,16 @@ interface LifecycleAction {
             @for (ev of store.items(); track ev.id) {
               <keijo-entity-list-item [expandable]="true">
                 <ng-template #primary>
-                  <div class="primary">
-                    <span class="title"><app-i18n-text [value]="ev.title" /></span>
-                    <span class="mirada-muted">{{ range(ev) }}</span>
+                  <div class="headline">
+                    <app-avatar
+                      shape="portrait"
+                      [src]="ev.posterVerticalFile?.url ?? null"
+                      [name]="plainTitle(ev)"
+                    />
+                    <div class="primary">
+                      <span class="title"><app-i18n-text [value]="ev.title" /></span>
+                      <span class="mirada-muted">{{ range(ev) }}</span>
+                    </div>
                   </div>
                 </ng-template>
 
@@ -238,6 +247,12 @@ interface LifecycleAction {
   `,
   styles: [
     `
+      .headline {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-width: 0;
+      }
       .primary {
         display: flex;
         flex-direction: column;
@@ -452,6 +467,15 @@ export class EventsListComponent implements OnInit {
 
   range(ev: MiradaEvent): string {
     return formatRange(ev.startAt, ev.endAt);
+  }
+
+  /**
+   * Il titolo in testo semplice, per ricavarne le iniziali quando la locandina
+   * manca. Il titolo è multilingua: si prende quello della lingua in uso, così
+   * l'evento inglese non dà le iniziali del titolo italiano.
+   */
+  plainTitle(ev: MiradaEvent): string {
+    return i18nPlain(ev.title, this.locale.lang(), '');
   }
 
   statusUi(ev: MiradaEvent): StatusUi {

@@ -21,7 +21,14 @@ export interface EventQuery extends BaseQuery {
 @Injectable({ providedIn: 'root' })
 export class EventStore extends EntityStore<MiradaEvent, EventQuery> {
   protected override readonly base = 'events';
-  protected override readonly listPopulate = 'eventType venue organization';
+  /**
+   * `posterVerticalFile` serve alla locandina in miniatura dell'elenco: è il
+   * ritaglio che il pubblico vede aprendo l'evento, quindi è anche quello che
+   * fa riconoscere la riga giusta a colpo d'occhio. Gli altri due ritagli
+   * restano fuori: nell'elenco non si vedono, e caricarli sarebbe traffico
+   * speso per niente.
+   */
+  protected override readonly listPopulate = 'eventType venue organization posterVerticalFile';
   /** I tre ritagli della locandina sono riferimenti a `File`: si popolano per mostrarli. */
   protected override readonly detailPopulate =
     'eventType venue organization posterVerticalFile posterHorizontalFile posterSquareFile';
