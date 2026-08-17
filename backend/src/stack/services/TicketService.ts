@@ -42,6 +42,8 @@ import { TicketQueryDTO } from "@DTOs/ticket/TicketQueryDTO";
 import { TicketPdfResponseDTO } from "@DTOs/ticket/TicketResponseDTO";
 import { TicketTransferRequestDTO } from "@DTOs/ticket/TicketTransferDTO";
 import { TicketTransferOutcomeDTO } from "@DTOs/ticket_transfer/TicketTransferResponseDTO";
+import { MailService } from "@mail/MailService";
+import { readI18nText } from "@utils/helpers/i18nText";
 
 /** Ciò che serve a emettere un biglietto: la forma la impone il servizio, non il client. */
 export type TicketIssueInput = {
@@ -87,6 +89,7 @@ export class TicketService {
         private readonly contactRepository: ContactRepository,
         private readonly fileRepository: FileRepository,
         private readonly quotaConsumptionRepository: QuotaConsumptionRepository,
+        private readonly mailService: MailService,
         private readonly capacityQuotaRepository: CapacityQuotaRepository,
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly capacityEngineService: CapacityEngineService,
@@ -153,9 +156,15 @@ export class TicketService {
         return ticket;
     }
 
+    /**
+     * Il biglietto visto da chi chiama: lo staff dell'organizzazione **oppure**
+     * il titolare. Erano due proprietari e se ne considerava uno solo, e il
+     * trasferimento del nominativo ne pagava il prezzo (vedi
+     * `TicketRepository.visibilityWhere`).
+     */
     public async findById(principalId: number, id: number, options?: FindOptions): Promise<Ticket | null> {
         const scope = await this.organizationScopeService.resolve(principalId);
-        return this.ticketRepository.findOneInScope(scope, { id, deleted: false }, options);
+        return this.ticketRepository.findOneVisible(scope, principalId, { id, deleted: false }, options);
     }
 
     public async paginate(
@@ -410,7 +419,63 @@ export class TicketService {
             recipient.user.id,
         ]);
 
+        await this.mailTransfer(ticket, outcome.ticket.code, recipient);
+
         return outcome;
+    }
+
+    /**
+     * **L'esito del trasferimento** (`RF-COM-1`), a entrambe le parti e con due
+     * testi diversi.
+     *
+     * Chi riceve deve sapere qual è il codice con cui entra; chi cede deve
+     * sapere che il suo **non fa più entrare nessuno**. Mandare a tutti e due lo
+     * stesso messaggio lascerebbe uno dei due a presentarsi all'ingresso con un
+     * codice morto — e succederebbe la sera dell'evento, davanti alla porta.
+     *
+     * Dopo il commit e senza lanciare: il trasferimento è già scritto.
+     */
+    private async mailTransfer(
+        previous: Ticket,
+        newCode: string,
+        recipient: { name: string; surname: string; email?: string | null },
+    ): Promise<void> {
+        try {
+            const event = await this.eventRepository.findOne({ id: previous.eventId, deleted: false });
+            if (!event) return;
+
+            const eventTitle = readI18nText(event.title) ?? event.slug;
+            const newHolder = `${recipient.name} ${recipient.surname}`.trim();
+            const oldHolder = `${previous.holderName ?? ""} ${previous.holderSurname ?? ""}`.trim();
+
+            if (recipient.email) {
+                await this.mailService.sendTicketTransferred(recipient.email, {
+                    recipient: "new",
+                    firstName: recipient.name,
+                    eventTitle,
+                    eventSlug: event.slug,
+                    ticketCode: newCode,
+                    otherPartyName: oldHolder || "Un altro ballerino",
+                });
+            }
+
+            if (previous.holderEmail) {
+                await this.mailService.sendTicketTransferred(previous.holderEmail, {
+                    recipient: "previous",
+                    firstName: previous.holderName ?? "",
+                    eventTitle,
+                    eventSlug: event.slug,
+                    // Chi cede non deve ricevere il codice nuovo: non è più suo.
+                    ticketCode: "",
+                    otherPartyName: newHolder,
+                });
+            }
+        } catch (err) {
+            Log.error(
+                `[Ticket Service]: failed to mail transfer outcome for ticket (id ${previous.id}): `
+                + `${(err as Error).message}`,
+            );
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -86,6 +86,27 @@ services:
       # Senza questo volume locandine e PDF sparirebbero a ogni redeploy.
       - backend_public:/app/public
 
+  # ── Il raccoglitore di posta per lo sviluppo ─────────────────────────────
+  # Mailpit finge di essere un server SMTP: accetta tutto, non recapita nulla e
+  # mostra i messaggi in un'interfaccia web. Serve a *vedere* le email come le
+  # riceverà un ballerino — con l'HTML vero, il testo alternativo e il mittente
+  # — invece di fidarsi di un log che dice «inviata».
+  #
+  # Non spedisce all'esterno **per costruzione**: è la sola configurazione in
+  # cui provare la conferma d'iscrizione non rischia di scrivere davvero a
+  # qualcuno.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mirada-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"   # SMTP, dove punta il backend
+      - "${MAILPIT_UI_PORT:-8025}:8025"     # interfaccia web, dove guardi
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
 volumes:
   postgres_data:
   backend_public:

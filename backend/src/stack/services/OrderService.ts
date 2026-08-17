@@ -12,6 +12,7 @@ import {
     Registration,
     RegistrationChannel,
     RegistrationStatus,
+    User,
 } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
@@ -53,6 +54,11 @@ type PlannedAttendee = {
     /** Quante volte la persona compare sulle righe di titolo — normalmente 1. */
     quantity: number;
     registrationId?: number;
+    /**
+     * L'account del partecipante, se ne ha uno. Risolto dall'email in una
+     * lettura sola per l'intero carrello — non una per persona.
+     */
+    personUserId?: number | null;
 };
 
 /** Una riga del carrello dopo la risoluzione, prima della scrittura. */
@@ -156,6 +162,23 @@ export class OrderService {
                         holderName: participant.attendee.name,
                         holderSurname: participant.attendee.surname,
                         holderEmail: participant.attendee.email,
+                        // **Il legame con l'account, quando esiste.**
+                        //
+                        // Restava nullo su ogni iscrizione nata da un acquisto, e
+                        // solo il trasferimento lo valorizzava. Le conseguenze
+                        // erano tre, tutte silenziose: il ballerino non poteva
+                        // trasferire il **proprio** biglietto (lo scope non lo
+                        // riconosceva titolare e rispondeva «non trovato»); l'area
+                        // personale non avrebbe trovato nulla da mostrargli; e la
+                        // regola «una iscrizione per persona per evento» non
+                        // poteva scattare, perché non c'era una persona da
+                        // confrontare.
+                        //
+                        // Resta `null` quando il partecipante non ha un account —
+                        // si compra legittimamente per un amico che non è
+                        // registrato — e in quel caso l'iscrizione vive sui soli
+                        // dati anagrafici, come prima.
+                        personUserId: participant.personUserId ?? null,
                         declaredRole: participant.attendee.declaredRole,
                         channel: RegistrationChannel.ONLINE_SALE,
                         // Stato coerente: l'iscrizione esiste ed è impegnata, ma
@@ -646,6 +669,25 @@ export class OrderService {
         const all = [...participants.values()];
         for (const participant of all) {
             participant.quantity = Math.max(1, participant.quantity);
+        }
+
+        // Chi fra i partecipanti ha già un account: **una** query per l'intero
+        // carrello, non una per persona. Le email sono già normalizzate in
+        // `key`, che è l'identità della persona dentro l'ordine.
+        const emails = all.map(p => p.key).filter(Boolean);
+        if (emails.length) {
+            const known = await this.userRepository.findMany(
+                { deleted: false, person: { contact: { email: { in: emails } } } },
+                { populate: "person person.contact" },
+            ) as (User & { person?: { contact?: { email?: string } } })[];
+            const byEmail = new Map(
+                known
+                    .map(u => [u.person?.contact?.email?.toLowerCase(), u.id] as const)
+                    .filter((e): e is readonly [string, number] => !!e[0]),
+            );
+            for (const participant of all) {
+                participant.personUserId = byEmail.get(participant.key) ?? null;
+            }
         }
 
         Log.debug(

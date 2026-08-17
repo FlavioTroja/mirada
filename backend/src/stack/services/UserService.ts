@@ -27,6 +27,7 @@ import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { generateRandomString } from "@utils/helpers/crypto";
 import { regionForProvince } from "@utils/helpers/italianProvinces";
 import { FileService } from "@services/FileService";
+import { MailService } from "@mail/MailService";
 import { MultipartFile } from "@fastify/multipart";
 import { AuditLog } from "@utils/adapters/decorators/AuditLog";
 import { LogOp } from "@utils/adapters/decorators/LogOp";
@@ -38,7 +39,8 @@ export class UserService {
                 private readonly roleToUserRepository: RoleToUserRepository,
                 private readonly addressRepository: AddressRepository,
                 private readonly contactRepository: ContactRepository,
-                private readonly fileService: FileService) {}
+                private readonly fileService: FileService,
+                private readonly mailService: MailService) {}
 
     @AuditLog({ op: LogOp.CREATE, entity: Prisma.ModelName.User })
     public async save(principalId: number, dto: UserCreateDTO) {
@@ -99,7 +101,7 @@ export class UserService {
         const transformer = new UserRegistrationDTOTransformer();
         const split = transformer.transform(dto);
 
-        return await getPrismaClient().$transaction(async prisma => {
+        const created = await getPrismaClient().$transaction(async prisma => {
             const savedContact = await this.contactRepository.save(split.contact(), prisma);
             const savedPerson = await this.personRepository.save(split.person(savedContact.id!), prisma);
             const savedUser = await this.userRepository.save({
@@ -113,6 +115,16 @@ export class UserService {
 
             return this.userRepository.findById(savedUser.id!, {populate: "person person.contact"}, prisma);
         }) as UserWithRelations;
+
+        // Il benvenuto parte **dopo il commit** (`RF-COM-1`): dentro la
+        // transazione, un rollback lascerebbe in mano al ballerino la conferma
+        // di un account che non esiste — e un'email non si richiama indietro.
+        await this.mailService.sendWelcome(dto.email, {
+            firstName: dto.firstName,
+            username: dto.username,
+        });
+
+        return created;
     }
 
     public async findByIdWithPermission(principalId: number, wantedUserId: number, options?: FindOptions): Promise<User | null> {

@@ -26,6 +26,7 @@ const config: Config = {
         "^@transformers/(.*)$": "<rootDir>/src/stack/transformers/$1",
         "^@enums/(.*)$": "<rootDir>/src/stack/enums/$1",
         "^@websocket/(.*)$": "<rootDir>/src/websocket/$1",
+        "^@mail/(.*)$": "<rootDir>/src/mail/$1",
         "^@prisma-gen/(.*)$": "<rootDir>/prisma/generated/$1",
     },
     collectCoverage: true,

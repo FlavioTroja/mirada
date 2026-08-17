@@ -106,6 +106,32 @@ export class TicketRepository extends BaseRepository<"ticket"> {
     }
 
     /** §1.5 — lo scope passa dall'evento: `Ticket` non porta `organizationId`. */
+    /**
+     * §1.5 su un'entità a **due proprietari**, esattamente come `Order`: il
+     * biglietto è al tempo stesso una riga dell'organizzazione che lo ha emesso
+     * e **il biglietto di una persona**.
+     *
+     * Prima la visibilità passava solo per l'organizzazione, e la conseguenza
+     * era che un ballerino non vedeva il **proprio** biglietto: lo scope di un
+     * `DANCER` è vuoto, quindi `POST /tickets/:id/transfer` rispondeva «non
+     * trovato» proprio a chi la rotta esiste per servire. Il trasferimento del
+     * nominativo (`RF-TCK`) era di fatto riservato al Super Admin.
+     *
+     * La forma è quella già collaudata su `OrderRepository.visibilityWhere`, e
+     * non è un caso: il problema è lo stesso e merita la stessa soluzione.
+     */
+    static visibilityWhere(scope: OrganizationScope, userId: number): Prisma.TicketWhereInput {
+        const own: Prisma.TicketWhereInput = { registration: { personUserId: userId } };
+        if (scope === null) {
+            return {};
+        }
+        if (!scope.length) {
+            return own;
+        }
+        return { OR: [own, { event: { organizationId: { in: scope } } }] };
+    }
+
+    /** Visibilità **di sola organizzazione** — per i percorsi di back-office. */
     async findOneInScope(
         scope: OrganizationScope,
         query: Prisma.TicketWhereInput,
@@ -113,6 +139,17 @@ export class TicketRepository extends BaseRepository<"ticket"> {
         tx?: Prisma.TransactionClient,
     ): Promise<Ticket | null> {
         return this.findOne({ AND: [query, relationOrganizationScopeWhere(scope, "event")] }, options, tx);
+    }
+
+    /** Visibilità completa: l'organizzazione **oppure** il proprio biglietto. */
+    async findOneVisible(
+        scope: OrganizationScope,
+        userId: number,
+        query: Prisma.TicketWhereInput,
+        options?: FindOptions,
+        tx?: Prisma.TransactionClient,
+    ): Promise<Ticket | null> {
+        return this.findOne({ AND: [query, TicketRepository.visibilityWhere(scope, userId)] }, options, tx);
     }
 
     async paginateInScope(

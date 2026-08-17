@@ -8,6 +8,7 @@ import {
     Prisma,
     RegistrationStatus,
     Ticket,
+    User,
 } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
@@ -33,6 +34,9 @@ import { OrderReservationService } from "@services/OrderReservationService";
 import { CapacityEngineService } from "@services/CapacityEngineService";
 import { TicketService } from "@services/TicketService";
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
+import { MailService } from "@mail/MailService";
+import { formatEventDates } from "@mail/templates/format";
+import { readI18nText } from "@utils/helpers/i18nText";
 import { Events } from "@websocket/events/Events";
 import { PaymentSucceededPayloadDTO } from "@websocket/dtos/PaymentSucceededPayloadDTO";
 
@@ -107,6 +111,7 @@ export class OrderFulfilmentService {
         private readonly capacityEngineService: CapacityEngineService,
         private readonly ticketService: TicketService,
         private readonly wsPublisher: WsPublisherService,
+        private readonly mailService: MailService,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -283,7 +288,78 @@ export class OrderFulfilmentService {
         );
 
         await this.publishPaymentSucceeded(order);
+        await this.sendConfirmationMail(order, outcome);
         return outcome;
+    }
+
+    /**
+     * **La conferma d'iscrizione con i biglietti** (`RF-COM-1`) — l'email che
+     * conta più di tutte le altre messe insieme: senza, il ballerino ha un
+     * codice d'ingresso che vive solo finché tiene aperta quella pagina.
+     *
+     * Parte **dopo il commit**, come il segnale WebSocket e per la ragione
+     * rovesciata: una transazione che rotolasse indietro dopo l'invio lascerebbe
+     * in mano a qualcuno la conferma di un'iscrizione che non esiste, e
+     * un'email non si richiama indietro.
+     *
+     * Va al **compratore**, non ai singoli partecipanti: è lui che ha concluso
+     * l'ordine e che si aspetta la ricevuta, ed è la forma che il §RF-COM-1
+     * chiede («conferma d'ordine con biglietti»). Quando esisterà l'area
+     * personale, ogni partecipante troverà lì il proprio.
+     *
+     * **Non lancia.** L'ordine è pagato e i biglietti sono emessi: nessun
+     * problema di posta può rendere falso quel fatto.
+     */
+    private async sendConfirmationMail(
+        order: OrderWithContext,
+        outcome: FulfilmentOutcome,
+    ): Promise<void> {
+        try {
+            const buyer = await this.userRepository.findById(order.purchase.buyerUserId, {
+                populate: "person person.contact",
+            }) as (User & { person?: { name?: string; contact?: { email?: string } } }) | null;
+
+            const email = buyer?.person?.contact?.email;
+            if (!email) {
+                Log.warn(
+                    `[OrderFulfilment Service]: no email for buyer (id ${order.purchase.buyerUserId}) — `
+                    + `confirmation for order (id ${order.id}) not sent`,
+                );
+                return;
+            }
+
+            // I nomi degli intestatari, per distinguere i codici quando l'ordine
+            // porta più persone. Una lettura sola, non una per biglietto.
+            const registrationIds = outcome.tickets
+                .map(t => t.registrationId)
+                .filter((id): id is number => id !== null);
+            const registrations = registrationIds.length
+                ? await this.registrationRepository.findByIds(registrationIds)
+                : [];
+            const holderById = new Map(
+                registrations.map(r => [r.id, `${r.holderName} ${r.holderSurname}`.trim()]),
+            );
+
+            await this.mailService.sendRegistrationConfirmed(email, {
+                firstName: buyer?.person?.name ?? "",
+                eventTitle: readI18nText(order.event.title) ?? order.event.slug,
+                eventSlug: order.event.slug,
+                eventDates: formatEventDates(order.event.startAt, order.event.endAt),
+                // La location richiederebbe una lettura in più su un percorso
+                // caldo: la scheda dell'evento, linkata nell'email, la porta.
+                venue: null,
+                tickets: outcome.tickets.map(t => ({
+                    code: t.code,
+                    holder: (t.registrationId !== null ? holderById.get(t.registrationId) : "") ?? "",
+                })),
+                total: order.total,
+            });
+        } catch (err) {
+            Log.error(
+                `[OrderFulfilment Service]: failed to send confirmation for order (id ${order.id}): `
+                + `${(err as Error).message}`,
+            );
+        }
     }
 
     // ═════════════════════════════════════════════════════════════════════════

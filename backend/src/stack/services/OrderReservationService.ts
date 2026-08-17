@@ -1,5 +1,5 @@
 import { Service } from "fastify-decorators";
-import { OrderStatus, Prisma, ReleaseReason, Reservation } from "@prisma/client";
+import { OrderStatus, Prisma, ReleaseReason, Reservation, User } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { getPrismaClient } from "@utils/adapters/prisma";
@@ -19,6 +19,8 @@ import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { CheckoutPolicyService } from "@services/CheckoutPolicyService";
 import { CapacityEngineService } from "@services/CapacityEngineService";
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
+import { MailService } from "@mail/MailService";
+import { readI18nText } from "@utils/helpers/i18nText";
 import { Events } from "@websocket/events/Events";
 import { OrderReservationExpiredPayloadDTO } from "@websocket/dtos/OrderReservationExpiredPayloadDTO";
 
@@ -80,6 +82,7 @@ export class OrderReservationService {
         private readonly checkoutPolicyService: CheckoutPolicyService,
         private readonly capacityEngineService: CapacityEngineService,
         private readonly wsPublisher: WsPublisherService,
+        private readonly mailService: MailService,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -355,7 +358,13 @@ export class OrderReservationService {
 
         Log.info(`[OrderReservation Service]: expiry sweep started — ${expired.length} expired reservation(s) to release`);
 
-        const notify: { buyerUserId: number; orderId: number; eventId: number }[] = [];
+        const notify: {
+            buyerUserId: number;
+            orderId: number;
+            eventId: number;
+            eventTitle: string;
+            eventSlug: string;
+        }[] = [];
         let released = 0;
         let releasedRegistrations = 0;
 
@@ -397,6 +406,8 @@ export class OrderReservationService {
                     buyerUserId: reservation.order.purchase.buyerUserId,
                     orderId: reservation.orderId,
                     eventId: reservation.eventId,
+                    eventTitle: readI18nText(reservation.order.event.title) ?? reservation.order.event.slug,
+                    eventSlug: reservation.order.event.slug,
                 });
 
                 Log.info(
@@ -411,9 +422,10 @@ export class OrderReservationService {
             }
         }
 
-        // Dopo il commit, mai dentro (§3.9).
+        // Dopo il commit, mai dentro (§3.9) — e vale identico per l'email.
         for (const target of notify) {
             await this.publishReservationExpired(target);
+            await this.mailExpired(target);
         }
 
         Log.info(
@@ -500,6 +512,41 @@ export class OrderReservationService {
         }
         if (registrationIds.length) {
             Log.debug(`[OrderReservation Service]: registration(s) [${registrationIds.join(", ")}] marked deleted after release`);
+        }
+    }
+
+    /**
+     * **«I quindici minuti sono trascorsi»** (`RF-COM-1`).
+     *
+     * Il segnale WebSocket arriva solo a chi ha la pagina aperta; questa email
+     * arriva a chi l'ha chiusa ed è andato a cena — cioè quasi sempre. E dice
+     * soprattutto una cosa: **non è stato addebitato nulla**. È la prima
+     * domanda che si fa chi riceve un messaggio con scritto «scaduta», e
+     * lasciarla senza risposta genera un ticket di assistenza per ogni invio.
+     */
+    private async mailExpired(target: {
+        buyerUserId: number;
+        eventTitle: string;
+        eventSlug: string;
+    }): Promise<void> {
+        try {
+            const buyer = await this.userRepository.findById(target.buyerUserId, {
+                populate: "person person.contact",
+            }) as (User & { person?: { name?: string; contact?: { email?: string } } }) | null;
+
+            const email = buyer?.person?.contact?.email;
+            if (!email) return;
+
+            await this.mailService.sendReservationExpired(email, {
+                firstName: buyer?.person?.name ?? "",
+                eventTitle: target.eventTitle,
+                eventSlug: target.eventSlug,
+            });
+        } catch (err) {
+            Log.error(
+                `[OrderReservation Service]: failed to mail expiry to buyer (id ${target.buyerUserId}): `
+                + `${(err as Error).message}`,
+            );
         }
     }
 

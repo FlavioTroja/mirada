@@ -5,9 +5,17 @@ import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { OrganizationScope } from "@utils/helpers/organizationScope";
 
-/** La prenotazione con l'ordine e le sue righe: quanto basta per rilasciarla. */
+/**
+ * La prenotazione con l'ordine, le sue righe e l'evento: quanto basta per
+ * rilasciarla **e per dirlo a chi aspettava**.
+ *
+ * L'evento è incluso perché l'email di scadenza (`RF-COM-1`) deve nominarlo —
+ * «la tua prenotazione per International Trani Tango è scaduta» dice qualcosa,
+ * «la prenotazione 47 è scaduta» no. È un join su una passata già limitata a
+ * lotti, non una lettura per riga.
+ */
 export type ReservationWithOrder = Prisma.ReservationGetPayload<{
-    include: { order: { include: { lines: true; purchase: true } } };
+    include: { order: { include: { lines: true; purchase: true; event: true } } };
 }>;
 
 /**
@@ -61,7 +69,7 @@ export class ReservationRepository extends BaseRepository<"reservation"> {
         return this.exec(() =>
             this.getDelegate(tx).findMany({
                 where: { releasedAt: null, expiresAt: { lt: at } },
-                include: { order: { include: { lines: true, purchase: true } } },
+                include: { order: { include: { lines: true, purchase: true, event: true } } },
                 orderBy: { expiresAt: "asc" },
                 take,
             }),
