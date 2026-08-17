@@ -27,6 +27,8 @@ export interface AddressQuery extends BaseQuery {
 export class AddressStore extends EntityStore<Address, AddressQuery> {
   protected override readonly base = 'addresses';
   protected override readonly defaultSort = { id: 'desc' as const };
+  /** Si legge intero — gli indirizzi accompagnano le sedi e si leggono insieme a loro. */
+  protected override readonly readsWhole = true;
 
   private readonly _cities = signal<string[]>([]);
   readonly cities = this._cities.asReadonly();

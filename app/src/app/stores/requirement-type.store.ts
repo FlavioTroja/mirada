@@ -13,6 +13,8 @@ export interface RequirementTypeQuery {
 export class RequirementTypeStore extends EntityStore<RequirementType, RequirementTypeQuery> {
   protected override readonly base = 'requirement-types';
   protected override readonly defaultSort = { id: 'asc' as const };
+  /** Si legge intero — il catalogo dei requisiti è la tendina che tutti gli organizzatori vedranno. */
+  protected override readonly readsWhole = true;
 
   readonly active = computed(() => this.items().filter((t) => t.active));
 }

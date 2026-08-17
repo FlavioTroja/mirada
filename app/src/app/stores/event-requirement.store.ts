@@ -18,4 +18,6 @@ export class EventRequirementStore extends EntityStore<EventRequirement, EventRe
   protected override readonly listPopulate = 'requirementType';
   protected override readonly detailPopulate = 'requirementType';
   protected override readonly defaultSort = { sortOrder: 'asc' as const };
+  /** Si legge intero — i requisiti di un evento si leggono tutti: quello nascosto è quello che nessuno soddisfa. */
+  protected override readonly readsWhole = true;
 }

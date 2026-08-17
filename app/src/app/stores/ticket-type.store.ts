@@ -22,6 +22,8 @@ export class TicketTypeStore extends EntityStore<TicketType, TicketTypeQuery> {
   protected override readonly base = 'ticket-types';
   protected override readonly defaultSort = { sortOrder: 'asc' as const };
   protected override readonly detailPopulate = 'sessions priceTiers';
+  /** Si legge intero — i titoli di un evento sono pochi e vanno visti insieme: è fra loro che si decide il prezzo. */
+  protected override readonly readsWhole = true;
 
   /**
    * Un titolo `PER_COUPLE` **non è acquistabile da solo**: senza un titolo per

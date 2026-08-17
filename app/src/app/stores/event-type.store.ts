@@ -20,6 +20,8 @@ export interface EventTypeQuery extends BaseQuery {
 export class EventTypeStore extends EntityStore<EventType, EventTypeQuery> {
   protected override readonly base = 'event-types';
   protected override readonly defaultSort = { sortOrder: 'asc' as const };
+  /** Si legge intero — il catalogo dei tipi di evento è la tendina che tutti gli organizzatori vedranno. */
+  protected override readonly readsWhole = true;
 
   readonly active = computed(() => this.items().filter((t) => t.active));
 

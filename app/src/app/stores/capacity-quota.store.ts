@@ -25,6 +25,8 @@ export interface CapacityQuotaQuery extends BaseQuery {
 export class CapacityQuotaStore extends EntityStore<CapacityQuota, CapacityQuotaQuery> {
   protected override readonly base = 'capacity-quotas';
   protected override readonly defaultSort = { id: 'asc' as const };
+  /** Si legge intero — le quote si leggono tutte: una quota fuori pagina è un limite che nessuno sa di avere. */
+  protected override readonly readsWhole = true;
 
   /** La capienza della sala: ambito evento, nessun ruolo, nessuna riserva. */
   readonly venueQuota = computed(

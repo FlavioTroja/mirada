@@ -13,6 +13,8 @@ export interface SessionQuery extends BaseQuery {
 export class SessionStore extends EntityStore<Session, SessionQuery> {
   protected override readonly base = 'sessions';
   protected override readonly defaultSort = { startAt: 'asc' as const };
+  /** Si legge intero — il programma di un evento si legge tutto: una giornata nascosta è una giornata che nessuno pubblica. */
+  protected override readonly readsWhole = true;
 
   readonly active = computed(() => this.items().filter((s) => !s.cancelledAt));
   readonly cancelled = computed(() => this.items().filter((s) => !!s.cancelledAt));

@@ -23,4 +23,6 @@ export class FiscalDeclarationStore extends EntityStore<FiscalDeclaration, Fisca
   protected override readonly listPopulate = 'declaredBy event';
   protected override readonly detailPopulate = 'declaredBy event organization';
   protected override readonly defaultSort = { id: 'desc' as const };
+  /** Si legge intero — le dichiarazioni si leggono per intero: una mancante è un adempimento che sembra fatto. */
+  protected override readonly readsWhole = true;
 }

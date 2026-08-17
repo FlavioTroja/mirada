@@ -23,6 +23,8 @@ export class RefundPolicyStore extends EntityStore<RefundPolicy, RefundPolicyQue
   protected override readonly listPopulate = 'derivedFromPolicy';
   protected override readonly detailPopulate = 'derivedFromPolicy';
   protected override readonly defaultSort = { id: 'asc' as const };
+  /** Si legge intero — le politiche di rimborso si confrontano fra loro, quindi si guardano insieme. */
+  protected override readonly readsWhole = true;
 
   readonly presets = computed(() => this.items().filter((p) => p.isPlatformPreset));
 

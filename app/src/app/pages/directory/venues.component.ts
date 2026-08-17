@@ -14,6 +14,7 @@ import {
   ListItemsWrapperComponent,
   PageSectionWrapperComponent,
   PageWrapperComponent,
+  PaginationComponent,
   PillComponent,
   SearchBarComponent,
   SectionActionButton,
@@ -78,6 +79,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
     ListItemsSkeletonComponent,
     EntityListItemComponent,
     ButtonComponent,
+    PaginationComponent,
     PillComponent,
     InfoBoxComponent,
     FormWrapperComponent,
@@ -286,6 +288,13 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
             }
           </keijo-list-items-wrapper>
         }
+
+        <keijo-pagination
+          [paginator]="store.paginator()"
+          [paginateResults]="store.paginateResults()"
+          (pageChange)="onPage($event)"
+          (pageSizeChange)="onPageSize($event)"
+        />
       </keijo-page-section-wrapper>
     </keijo-page-wrapper>
   `,
@@ -381,6 +390,18 @@ export class VenuesComponent implements OnInit {
     this.headerTitle.set('Location');
     this.registerActions();
     await Promise.all([this.store.replaceQuery({}), this.loadAddresses()]);
+  }
+
+  /**
+   * L'archivio delle sedi cresce con la piattaforma: qui la paginazione è
+   * quella vera, non un insieme da leggere intero.
+   */
+  onPage(page: number): void {
+    void this.store.setPage(page);
+  }
+
+  onPageSize(size: number): void {
+    void this.store.setPageSize(size);
   }
 
   /** `POST /addresses/` — l'archivio degli indirizzi riusabili (§3.4). */

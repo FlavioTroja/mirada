@@ -15,6 +15,7 @@ import {
   ListItemsWrapperComponent,
   PageSectionWrapperComponent,
   PageWrapperComponent,
+  PaginationComponent,
   PillComponent,
   SearchBarComponent,
   SectionActionButton,
@@ -56,6 +57,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
     ListItemsSkeletonComponent,
     EntityListItemComponent,
     ButtonComponent,
+    PaginationComponent,
     PillComponent,
     InfoBoxComponent,
     FormWrapperComponent,
@@ -201,6 +203,13 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
             }
           </keijo-list-items-wrapper>
         }
+
+        <keijo-pagination
+          [paginator]="store.paginator()"
+          [paginateResults]="store.paginateResults()"
+          (pageChange)="onPage($event)"
+          (pageSizeChange)="onPageSize($event)"
+        />
       </keijo-page-section-wrapper>
     </keijo-page-wrapper>
   `,
@@ -313,6 +322,19 @@ export class ArtistsComponent implements OnInit {
       });
     }
     this.pageActions.set(actions);
+  }
+
+  /**
+   * L'anagrafica è l'unico elenco della directory che cresce a ogni edizione:
+   * dieci righe per pagina restavano il limite anche senza un modo per chiedere
+   * la seconda, e con venti artisti in archivio la metà non esisteva.
+   */
+  onPage(page: number): void {
+    void this.store.setPage(page);
+  }
+
+  onPageSize(size: number): void {
+    void this.store.setPageSize(size);
   }
 
   onFilterChanged(change: KeijoFilterChange): void {

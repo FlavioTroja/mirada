@@ -26,4 +26,6 @@ export class OrganizationMemberStore extends EntityStore<
   protected override readonly base = 'organization-members';
   protected override readonly listPopulate = 'user';
   protected override readonly detailPopulate = 'user organization';
+  /** Si legge intero — chi ha accesso all'organizzazione va visto tutto: un membro fuori pagina è un permesso di cui nessuno risponde. */
+  protected override readonly readsWhole = true;
 }

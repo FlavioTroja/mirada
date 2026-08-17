@@ -4,6 +4,12 @@ import { ApiClient } from '../core/api/api.client';
 import { PaginateOptions } from '../core/api/paginate';
 import { Entity } from '../core/domain/models';
 
+/** Quante righe per richiesta quando si legge un insieme intero. */
+const WHOLE_LIST_PAGE_SIZE = 200;
+
+/** Tetto di sicurezza: 20 richieste, cioè 4000 righe, e poi ci si ferma. */
+const WHOLE_LIST_MAX_PAGES = 20;
+
 /**
  * Base degli **store per entità** (§5, `AGENTS.md`).
  *
@@ -29,6 +35,28 @@ export abstract class EntityStore<T extends Entity, Q extends object = Record<st
   /** Ordinamento di default dell'elenco. */
   protected readonly defaultSort: Record<string, 'asc' | 'desc'> = { id: 'desc' };
 
+  /**
+   * **Elenchi che si leggono interi** — niente pagine, mai.
+   *
+   * Alcune collezioni non sono elenchi da sfogliare ma *composizioni*: il cast
+   * di un evento, il suo programma, i suoi titoli, le sue quote. Chi le guarda
+   * sta componendo un insieme e ha bisogno di vederlo tutto — l'ordine di una
+   * voce ha senso solo rispetto alle altre.
+   *
+   * Su queste pagine la paginazione non era nascosta per scelta: era assente, e
+   * il limite di dieci restava attivo lo stesso. Il risultato è la peggior
+   * forma di errore possibile in un pannello di gestione — **una lista che
+   * sembra completa e non lo è**: il cast di Trani mostrava i nove DJ e
+   * l'orchestra, e gli undici maestri semplicemente non esistevano, senza
+   * un «pagina 2» da premere per accorgersene.
+   *
+   * Con questo flag lo store non chiede una pagina: chiede **tutto**, seguendo
+   * le pagine successive finché il server dice che sono finite. Costa qualche
+   * richiesta in più su insiemi che ne hanno una sola, e in cambio nessuna
+   * pagina può più mentire per omissione.
+   */
+  protected readonly readsWhole: boolean = false;
+
   private readonly _items = signal<T[]>([]);
   private readonly _current = signal<T | null>(null);
   private readonly _loading = signal(false);
@@ -39,6 +67,8 @@ export abstract class EntityStore<T extends Entity, Q extends object = Record<st
   private readonly _totalPages = signal(0);
   private readonly _hasNextPage = signal(false);
   private readonly _hasPrevPage = signal(false);
+  private readonly _nextPage = signal<number | null>(null);
+  private readonly _prevPage = signal<number | null>(null);
   private readonly _query = signal<Q>({} as Q);
   private readonly _sort = signal<Record<string, 'asc' | 'desc'> | null>(null);
 
@@ -60,18 +90,35 @@ export abstract class EntityStore<T extends Entity, Q extends object = Record<st
     pageSize: this._limit(),
   }));
 
+  /**
+   * Il riepilogo che legge `<keijo-pagination>`.
+   *
+   * **`nextPage` non è ridondante**, per quanto lo sembri accanto a `page`: il
+   * tasto «pagina successiva» del componente emette letteralmente
+   * `paginateResults.nextPage || 1`. Ometterlo non toglieva un dettaglio
+   * informativo — faceva emettere `1` a ogni clic, cioè riportava alla prima
+   * pagina fingendo di andare avanti, su tutte le pagine impaginate del
+   * pannello. Il numero arriva dal server, che è l'unico a sapere se una
+   * pagina successiva esiste davvero.
+   */
   readonly paginateResults = computed<KeijoPaginateResults>(() => ({
     totalDocs: this._totalDocs(),
     page: this._page(),
     totalPages: this._totalPages(),
     hasNextPage: this._hasNextPage(),
     hasPrevPage: this._hasPrevPage(),
+    nextPage: this._nextPage(),
+    prevPage: this._prevPage(),
   }));
 
   /** `POST /{plural}/` — elenco paginato e filtrato. */
   async load(options: PaginateOptions = {}): Promise<void> {
     this._loading.set(true);
     try {
+      if (this.readsWhole) {
+        await this.loadWhole(options);
+        return;
+      }
       const page = await this.api.list<T, Q>(this.base, this._query(), {
         page: options.page ?? this._page(),
         limit: options.limit ?? this._limit(),
@@ -85,9 +132,54 @@ export abstract class EntityStore<T extends Entity, Q extends object = Record<st
       this._limit.set(page.limit ?? this._limit());
       this._hasNextPage.set(page.hasNextPage ?? false);
       this._hasPrevPage.set(page.hasPrevPage ?? false);
+      // Se il server non li dichiara si ricavano dalla pagina corrente: il
+      // tasto «avanti» deve avere un numero da emettere, altrimenti torna a 1.
+      this._nextPage.set(page.nextPage ?? (page.hasNextPage ? (page.page ?? 1) + 1 : null));
+      this._prevPage.set(page.prevPage ?? (page.hasPrevPage ? (page.page ?? 1) - 1 : null));
     } finally {
       this._loading.set(false);
     }
+  }
+
+  /**
+   * Legge l'insieme **intero**, seguendo le pagine finché il server ne dichiara
+   * altre. Vale solo per gli store con `readsWhole` (vedi lì il perché).
+   *
+   * Il tetto di `WHOLE_LIST_MAX_PAGES` non è una scelta di prodotto ma una
+   * cintura di sicurezza: se un giorno una di queste collezioni diventasse
+   * davvero grande, il pannello si fermerebbe invece di girare all'infinito su
+   * un server che risponde male. A quel punto quella collezione avrà smesso di
+   * essere una composizione e vorrà la sua paginazione vera.
+   */
+  private async loadWhole(options: PaginateOptions): Promise<void> {
+    const limit = options.limit ?? WHOLE_LIST_PAGE_SIZE;
+    const sort = options.sort ?? this._sort() ?? this.defaultSort;
+    const populate = options.populate ?? this.listPopulate;
+
+    const docs: T[] = [];
+    let page = 1;
+    let totalDocs = 0;
+
+    for (;;) {
+      const result = await this.api.list<T, Q>(this.base, this._query(), { page, limit, sort, populate });
+      docs.push(...(result.docs ?? []));
+      totalDocs = result.totalDocs ?? docs.length;
+      if (!result.hasNextPage || page >= WHOLE_LIST_MAX_PAGES) break;
+      page += 1;
+    }
+
+    this._items.set(docs);
+    this._totalDocs.set(totalDocs);
+    // Una pagina sola, perché una sola ce n'è: le viste che leggono
+    // `paginateResults()` devono raccontare l'insieme che è stato caricato,
+    // non quello che il server avrebbe impaginato.
+    this._totalPages.set(1);
+    this._page.set(1);
+    this._limit.set(Math.max(docs.length, limit));
+    this._hasNextPage.set(false);
+    this._hasPrevPage.set(false);
+    this._nextPage.set(null);
+    this._prevPage.set(null);
   }
 
   /** Carica l'elenco completo (fino a `limit`) senza toccare la paginazione della vista. */

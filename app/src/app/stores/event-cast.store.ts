@@ -17,4 +17,6 @@ export class EventCastStore extends EntityStore<EventCast, EventCastQuery> {
   protected override readonly listPopulate = 'artist';
   protected override readonly detailPopulate = 'artist';
   protected override readonly defaultSort = { sortOrder: 'asc' as const };
+  /** Si legge intero — l'ordine di una voce di cast ha senso solo rispetto a tutte le altre. */
+  protected override readonly readsWhole = true;
 }
