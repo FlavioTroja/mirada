@@ -21,10 +21,16 @@ import { MailLocale } from "@mail/ports/Mailer";
  * Word, la ignora e lascia il fondo bianco — con sopra il testo avorio del tema.
  * È lo stesso difetto dei chip dei filtri, in un altro contesto.
  *
- * ── Perché nessuna immagine remota ───────────────────────────────────────────
- * Quasi tutti i client bloccano le immagini finché l'utente non le sblocca. Un
- * biglietto la cui informazione vive dentro un'immagine è un biglietto che non
- * si legge. Qui il contenuto è testo; il QR sta nell'area personale e nel PDF.
+ * ── Perché nessuna immagine REMOTA, e il QR invece sì ────────────────────────
+ * Quasi tutti i client bloccano le immagini **scaricate da un server** finché
+ * l'utente non le sblocca: un biglietto che dipendesse da una `<img src="http…">`
+ * sarebbe un biglietto che alla porta non si vede.
+ *
+ * Il QR fa eccezione perché non è remoto: viaggia **dentro** il messaggio come
+ * allegato incorporato (`cid:`), e gli allegati incorporati la gran parte dei
+ * client li mostra. Non tutti, però — ed è per questo che sotto ogni QR il
+ * codice resta scritto in chiaro: se l'immagine non compare, l'operatore lo
+ * digita e la persona entra lo stesso.
  */
 
 const BRAND = {
@@ -43,6 +49,14 @@ export interface LayoutInput {
     paragraphs: string[];
     /** Righe di dettaglio in evidenza — «Evento», «Data», «Codice». */
     facts?: { label: string; value: string }[];
+    /**
+     * I QR dei biglietti, uno per persona, incorporati come `cid:`.
+     *
+     * Ciascuno porta **anche il codice in chiaro**, e non per ridondanza: se il
+     * client blocca l'immagine — succede — il ballerino ha comunque qualcosa da
+     * mostrare, e l'operatore lo cerca a mano invece di rimandarlo indietro.
+     */
+    qrCodes?: { cid: string; code: string; caption?: string }[];
     /** Invito all'azione, quando c'è qualcosa da fare. */
     action?: { label: string; url: string };
     /** Chiusa aggiuntiva, sotto la firma. */
@@ -77,6 +91,33 @@ export function renderHtml(input: LayoutInput): string {
         )
         .join("");
 
+    // ── I QR ────────────────────────────────────────────────────────────────
+    // Fondo BIANCO e non la superficie del tema: un lettore ottico legge il
+    // contrasto fra i moduli scuri e lo sfondo, e un QR chiaro su prugna è un QR
+    // che lo scanner alla porta fatica a prendere. È l'unico riquadro
+    // dell'email che non segue la palette, e la ragione è funzionale.
+    const qrBlocks = (input.qrCodes ?? [])
+        .map(
+            q => `
+      <tr><td style="padding:20px 0 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0"
+               style="background-color:#FFFFFF;border-radius:10px;padding:16px;">
+          <tr><td align="center">
+            <img src="cid:${escapeHtml(q.cid)}" width="180" height="180" alt="${escapeHtml(q.code)}"
+                 style="display:block;width:180px;height:180px;" />
+          </td></tr>
+          <tr><td align="center" style="padding-top:10px;color:#0F0A0C;font-size:13px;
+                                        font-family:monospace;letter-spacing:0.05em;">${escapeHtml(q.code)}</td></tr>
+          ${
+              q.caption
+                  ? `<tr><td align="center" style="padding-top:4px;color:#5A4048;font-size:12px;">${escapeHtml(q.caption)}</td></tr>`
+                  : ""
+          }
+        </table>
+      </td></tr>`,
+        )
+        .join("");
+
     const action = input.action
         ? `
       <tr><td style="padding:24px 0 0;">
@@ -106,6 +147,7 @@ export function renderHtml(input: LayoutInput): string {
             )
             .join("")}
         ${facts ? `<tr><td style="padding:12px 0;"><table role="presentation" cellpadding="0" cellspacing="0">${facts}</table></td></tr>` : ""}
+        ${qrBlocks}
         ${action}
         ${
             input.footnote
@@ -135,6 +177,12 @@ export function renderText(input: LayoutInput): string {
     if (input.facts?.length) {
         parts.push("");
         for (const f of input.facts) parts.push(`${f.label}: ${f.value}`);
+    }
+    if (input.qrCodes?.length) {
+        parts.push("");
+        for (const q of input.qrCodes) {
+            parts.push(q.caption ? `${q.caption} — codice: ${q.code}` : `Codice d'ingresso: ${q.code}`);
+        }
     }
     if (input.action) {
         parts.push("", `${input.action.label}: ${input.action.url}`);

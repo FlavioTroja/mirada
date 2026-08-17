@@ -1,6 +1,6 @@
 import { Service } from "fastify-decorators";
 import { Log } from "@utils/adapters/log";
-import { MailLocale } from "@mail/ports/Mailer";
+import { InlineImage, MailLocale } from "@mail/ports/Mailer";
 import { SmtpMailer } from "@mail/adapters/SmtpMailer";
 import {
     RegistrationConfirmedInput,
@@ -69,9 +69,15 @@ export class MailService {
     public async sendRegistrationConfirmed(
         to: string,
         input: Omit<RegistrationConfirmedInput, "locale">,
+        /** I QR dei biglietti, già disegnati. Il corpo li richiama per `cid`. */
+        inlineImages?: InlineImage[],
     ): Promise<void> {
-        await this.dispatch("registration-confirmed", to, input.firstName, () =>
-            registrationConfirmedMail({ ...input, locale: this.localeFor(to) }),
+        await this.dispatch(
+            "registration-confirmed",
+            to,
+            input.firstName,
+            () => registrationConfirmedMail({ ...input, locale: this.localeFor(to) }),
+            inlineImages,
         );
     }
 
@@ -108,6 +114,7 @@ export class MailService {
         to: string,
         toName: string,
         compose: () => { subject: string; html: string; text: string },
+        inlineImages?: InlineImage[],
     ): Promise<void> {
         if (!to) {
             Log.warn(`[Mail Service]: '${kind}' not sent — no recipient address`);
@@ -115,7 +122,7 @@ export class MailService {
         }
         try {
             const mail = compose();
-            const outcome = await this.mailer.send({ ...mail, to, toName });
+            const outcome = await this.mailer.send({ ...mail, to, toName, inlineImages });
             if (!outcome.sent) {
                 Log.warn(`[Mail Service]: '${kind}' to '${to}' was NOT delivered — ${outcome.error}`);
             }

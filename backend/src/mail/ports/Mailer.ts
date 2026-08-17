@@ -22,6 +22,31 @@ export type MailLocale = "it" | "en";
  * arriva intatta a chi usa un lettore di schermo o un client che blocca l'HTML.
  * Un'email transazionale senza corpo testuale parte già svantaggiata.
  */
+/**
+ * Un'immagine **incorporata** nel messaggio e richiamata dall'HTML con
+ * `src="cid:<cid>"`.
+ *
+ * È l'unico modo perché un QR si veda. Le tre alternative non funzionano:
+ *  · `<img src="https://…">` — quasi tutti i client bloccano le immagini remote
+ *    finché l'utente non le sblocca, e un biglietto va mostrato alla porta, non
+ *    sbloccato;
+ *  · `data:` URI — Gmail li rimuove del tutto;
+ *  · un allegato normale — si scarica, non si mostra nel corpo.
+ *
+ * L'allegato incorporato non è però una garanzia: qualche client lo blocca lo
+ * stesso. Per questo il **codice resta scritto in chiaro** accanto al QR, e
+ * l'operatore può digitarlo — è la ragione per cui `RF-CHK` prevede la ricerca
+ * manuale accanto alla scansione.
+ */
+export interface InlineImage {
+    /** Identificativo richiamato nell'HTML come `cid:<cid>`. */
+    cid: string;
+    /** Nome del file, quello che l'utente vede se apre l'allegato. */
+    filename: string;
+    content: Buffer;
+    contentType: string;
+}
+
 export interface OutgoingMail {
     to: string;
     subject: string;
@@ -29,6 +54,8 @@ export interface OutgoingMail {
     text: string;
     /** Nome leggibile del destinatario, quando lo si conosce. */
     toName?: string;
+    /** Immagini incorporate — oggi solo i QR dei biglietti. */
+    inlineImages?: InlineImage[];
 }
 
 /** Esito della spedizione. **Non si lancia mai**: si riferisce. */

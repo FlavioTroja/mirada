@@ -72,7 +72,12 @@ export interface RegistrationConfirmedInput {
     /** Periodo dell'evento già formattato: la formattazione è presentazione. */
     eventDates: string;
     venue: string | null;
-    tickets: { code: string; holder: string }[];
+    /**
+     * I biglietti. `qrCid` è l'identificativo dell'immagine incorporata: quando
+     * c'è, il QR compare nel corpo; quando manca — per esempio se la
+     * generazione è fallita — resta il solo codice, e l'email vale comunque.
+     */
+    tickets: { code: string; holder: string; qrCid?: string }[];
     /** Centesimi interi. Zero è un caso normale, non un errore. */
     total: number;
 }
@@ -89,11 +94,23 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
     const { locale, firstName, eventTitle, eventSlug, eventDates, venue, tickets, total } = input;
     const url = `${publicUrl()}/eventi/${eventSlug}`;
 
-    const ticketFacts = tickets.map((t, i) => ({
-        label: tickets.length > 1
-            ? (locale === "en" ? `Ticket ${i + 1} · ${t.holder}` : `Biglietto ${i + 1} · ${t.holder}`)
-            : (locale === "en" ? "Ticket code" : "Codice biglietto"),
-        value: t.code,
+    // Il QR ha già il codice scritto sotto: ripeterlo anche nell'elenco dei
+    // dettagli sarebbe la stessa stringa due volte a mezzo centimetro di
+    // distanza. I dettagli portano il codice **solo** quando il QR non c'è.
+    const withQr = tickets.filter(t => t.qrCid);
+    const ticketFacts = withQr.length
+        ? []
+        : tickets.map((t, i) => ({
+            label: tickets.length > 1
+                ? (locale === "en" ? `Ticket ${i + 1} · ${t.holder}` : `Biglietto ${i + 1} · ${t.holder}`)
+                : (locale === "en" ? "Ticket code" : "Codice biglietto"),
+            value: t.code,
+        }));
+
+    const qrCodes = withQr.map(t => ({
+        cid: t.qrCid!,
+        code: t.code,
+        caption: tickets.length > 1 ? t.holder : undefined,
     }));
 
     if (locale === "en") {
@@ -105,9 +122,13 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
                 total === 0
                     ? "Nothing was charged: this ticket type is free."
                     : `You paid ${euro(total, locale)}.`,
-                tickets.length > 1
-                    ? "Show the codes below at the entrance. Each one admits one person."
-                    : "Show the code below at the entrance.",
+                withQr.length
+                    ? (tickets.length > 1
+                        ? "Show these QR codes at the entrance — one per person. If your mail app hides the images, the code written underneath works just as well."
+                        : "Show this QR code at the entrance. If your mail app hides images, the code written underneath works just as well.")
+                    : (tickets.length > 1
+                        ? "Show the codes below at the entrance. Each one admits one person."
+                        : "Show the code below at the entrance."),
             ],
             facts: [
                 { label: "Event", value: eventTitle },
@@ -115,6 +136,7 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
                 ...(venue ? [{ label: "Where", value: venue }] : []),
                 ...ticketFacts,
             ],
+            qrCodes,
             action: { label: "Open the event page", url },
             footnote:
                 "This is an order confirmation with an entry code, not a fiscal document.",
@@ -129,9 +151,13 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
             total === 0
                 ? "Non è stato addebitato nulla: questo titolo d'ingresso è gratuito."
                 : `Hai pagato ${euro(total, locale)}.`,
-            tickets.length > 1
-                ? "Presenta i codici qui sotto all'ingresso. Ognuno vale per una persona."
-                : "Presenta il codice qui sotto all'ingresso.",
+            withQr.length
+                ? (tickets.length > 1
+                    ? "Mostra questi QR all'ingresso — uno per persona. Se il tuo programma di posta nasconde le immagini, il codice scritto sotto vale allo stesso modo."
+                    : "Mostra questo QR all'ingresso. Se il tuo programma di posta nasconde le immagini, il codice scritto sotto vale allo stesso modo.")
+                : (tickets.length > 1
+                    ? "Presenta i codici qui sotto all'ingresso. Ognuno vale per una persona."
+                    : "Presenta il codice qui sotto all'ingresso."),
         ],
         facts: [
             { label: "Evento", value: eventTitle },
@@ -139,6 +165,7 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
             ...(venue ? [{ label: "Dove", value: venue }] : []),
             ...ticketFacts,
         ],
+        qrCodes,
         action: { label: "Apri la scheda dell'evento", url },
         footnote:
             "È una conferma d'ordine con codice d'accesso, non un titolo fiscale.",

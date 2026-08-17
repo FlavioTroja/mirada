@@ -33,8 +33,10 @@ import { OrderService } from "@services/OrderService";
 import { OrderReservationService } from "@services/OrderReservationService";
 import { CapacityEngineService } from "@services/CapacityEngineService";
 import { TicketService } from "@services/TicketService";
+import { TicketQrService } from "@services/TicketQrService";
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
 import { MailService } from "@mail/MailService";
+import { QrImageService } from "@mail/QrImageService";
 import { formatEventDates } from "@mail/templates/format";
 import { readI18nText } from "@utils/helpers/i18nText";
 import { Events } from "@websocket/events/Events";
@@ -112,6 +114,8 @@ export class OrderFulfilmentService {
         private readonly ticketService: TicketService,
         private readonly wsPublisher: WsPublisherService,
         private readonly mailService: MailService,
+        private readonly qrImageService: QrImageService,
+        private readonly ticketQrService: TicketQrService,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -340,20 +344,44 @@ export class OrderFulfilmentService {
                 registrations.map(r => [r.id, `${r.holderName} ${r.holderSurname}`.trim()]),
             );
 
-            await this.mailService.sendRegistrationConfirmed(email, {
-                firstName: buyer?.person?.name ?? "",
-                eventTitle: readI18nText(order.event.title) ?? order.event.slug,
-                eventSlug: order.event.slug,
-                eventDates: formatEventDates(order.event.startAt, order.event.endAt),
-                // La location richiederebbe una lettura in più su un percorso
-                // caldo: la scheda dell'evento, linkata nell'email, la porta.
-                venue: null,
-                tickets: outcome.tickets.map(t => ({
-                    code: t.code,
-                    holder: (t.registrationId !== null ? holderById.get(t.registrationId) : "") ?? "",
-                })),
-                total: order.total,
-            });
+            // ── I QR, uno per biglietto ──────────────────────────────────────
+            // Il contenuto è il **token firmato**, non il codice: l'app di
+            // check-in lo verifica offline con la sola chiave pubblica, e
+            // l'operatore alla porta non deve interrogare il server per ogni
+            // persona in fila. Se il disegno fallisce si va avanti senza — il
+            // codice in chiaro resta, e l'email parte comunque.
+            const qrByTicket = new Map<number, string>();
+            const inlineImages = [];
+            for (const ticket of outcome.tickets) {
+                const image = await this.qrImageService.ticketQr(
+                    ticket.id,
+                    this.ticketQrService.issueToken(ticket),
+                );
+                if (image) {
+                    inlineImages.push(image);
+                    qrByTicket.set(ticket.id, image.cid);
+                }
+            }
+
+            await this.mailService.sendRegistrationConfirmed(
+                email,
+                {
+                    firstName: buyer?.person?.name ?? "",
+                    eventTitle: readI18nText(order.event.title) ?? order.event.slug,
+                    eventSlug: order.event.slug,
+                    eventDates: formatEventDates(order.event.startAt, order.event.endAt),
+                    // La location richiederebbe una lettura in più su un percorso
+                    // caldo: la scheda dell'evento, linkata nell'email, la porta.
+                    venue: null,
+                    tickets: outcome.tickets.map(t => ({
+                        code: t.code,
+                        holder: (t.registrationId !== null ? holderById.get(t.registrationId) : "") ?? "",
+                        qrCid: qrByTicket.get(t.id),
+                    })),
+                    total: order.total,
+                },
+                inlineImages,
+            );
         } catch (err) {
             Log.error(
                 `[OrderFulfilment Service]: failed to send confirmation for order (id ${order.id}): `

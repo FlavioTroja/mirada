@@ -106,6 +106,15 @@ export class SmtpMailer extends Mailer {
                 subject: mail.subject,
                 text: mail.text,
                 html: mail.html,
+                // `cid` collega l'allegato all'`<img src="cid:…">` del corpo:
+                // è così che un QR arriva **dentro** il messaggio invece di
+                // essere scaricato da un server e quindi bloccato.
+                attachments: mail.inlineImages?.map(image => ({
+                    cid: image.cid,
+                    filename: image.filename,
+                    content: image.content,
+                    contentType: image.contentType,
+                })),
             });
             Log.info(`[Smtp Mailer]: sent to '${mail.to}' — subject '${mail.subject}' (id ${info.messageId})`);
             return { sent: true, messageId: info.messageId };
