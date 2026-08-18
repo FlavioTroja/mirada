@@ -77,6 +77,26 @@ services:
       NODE_ENV: production
       PORT: "4000"
       TZ: "${TZ:-Europe/Rome}"
+      # ⚠️ SENZA QUESTA, LE PAGINE SI RENDONO VUOTE — e non lo dice nessuno.
+      #
+      # Nel browser `ApiClient` chiama `/api/...` relativo, che il proxy
+      # instrada. Ma durante la resa lato server `fetch` non ha un'origine da
+      # cui risolvere un percorso relativo, quindi il client antepone
+      # `API_ORIGIN`, che in mancanza vale `http://localhost:5000` — e dentro
+      # QUESTO container `localhost` e' il container stesso, non il backend.
+      #
+      # Il guasto e' subdolo perche' il browser non lo vede: la pagina arriva
+      # vuota, si idrata, richiama l'API dal browser (dove il percorso relativo
+      # funziona) e si riempie. A occhio e' tutto a posto. A vederlo sono i
+      # crawler, che non idratano niente: WhatsApp e Telegram ricevevano il
+      # ramo «Evento non trovato» di ogni scheda, e Google indicizzava una
+      # ricerca che dice «Ricerca non riuscita». Misurato il 18/08/2026.
+      #
+      # Si punta al CONTAINER NAME sulla rete del proxy, non al dominio
+      # pubblico: uscire e rientrare dal proxy per una chiamata interna
+      # aggiungerebbe TLS, un giro di DNS pubblico e una dipendenza dal
+      # certificato a ogni resa di pagina.
+      API_ORIGIN: http://mirada-production-backend:5000
     ports:
       - "127.0.0.1:8082:4000"
     networks:
