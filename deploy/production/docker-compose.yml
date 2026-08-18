@@ -88,7 +88,17 @@ services:
     container_name: mirada-production-files
     restart: unless-stopped
     volumes:
-      - public:/usr/share/nginx/html:ro
+      # ⚠️ /srv/public e NON /usr/share/nginx/html.
+      # Docker inizializza un volume vuoto con il contenuto che l'immagine ha
+      # in quel percorso, e lo fa per il PRIMO servizio che lo monta. Con il
+      # volume su /usr/share/nginx/html vinceva la corsa nginx, che ci
+      # riversava la propria pagina di serie (index.html, 50x.html): da quel
+      # momento il volume non era piu' vuoto, e le quattro cartelle del backend
+      # — create dal suo Dockerfile con chown node:node — non ci entravano piu'.
+      # Il risultato era /app/public di proprieta' di root e un backend, che
+      # gira come `node`, incapace di scrivere un biglietto. Misurato il
+      # 18/08/2026.
+      - public:/srv/public:ro
       - ./files/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "127.0.0.1:8083:80"
