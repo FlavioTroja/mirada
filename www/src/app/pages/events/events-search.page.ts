@@ -105,9 +105,14 @@ import { EventFiltersComponent } from './event-filters.component';
         align-items: center;
         gap: 0.5rem;
       }
+      /* Bacheca: colonne strette, tante per riga. Erano da 24rem, cioè due per
+         riga su uno schermo normale, perché la scheda era orizzontale — la
+         locandina a sinistra e il testo a destra. Ora la scheda è verticale e
+         la locandina è il contenuto: 15rem dà quattro o cinque colonne su un
+         portatile, che è la densità con cui si scorre una bacheca. */
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
         gap: 1rem;
       }
       .pager {
@@ -117,9 +122,14 @@ import { EventFiltersComponent } from './event-filters.component';
         justify-content: center;
         gap: 1rem;
       }
+      /* Sul telefono DUE colonne, non una: a colonna singola una locandina 2:3
+         occupa quasi tutto lo schermo e per vedere il terzo evento si scorre
+         tre schermate. Due colonne da ~9rem restano leggibili e fanno vedere
+         quattro eventi per schermata. */
       @media (max-width: 560px) {
         .grid {
-          grid-template-columns: 1fr;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 0.6rem;
         }
       }
     `,
