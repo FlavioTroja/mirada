@@ -10,7 +10,38 @@ import { join } from 'node:path';
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
-const angularApp = new AngularNodeAppEngine();
+
+/**
+ * ⚠️ `trustProxyHeaders` NON è una rifinitura: senza, dietro un reverse proxy
+ * **l'SSR non avviene affatto**.
+ *
+ * Angular 20 rifiuta di fidarsi delle intestazioni `X-Forwarded-*` finché non
+ * gliene si dà licenza, e quando ne trova di non autorizzate rinuncia a
+ * costruire l'URL della richiesta e ripiega sul guscio da rendere nel browser.
+ * Il sintomo, misurato in produzione il 18/08/2026:
+ *
+ *   curl https://mirada.dance/eventi        → 5 635 byte, nessun contenuto
+ *   curl http://127.0.0.1:8082/eventi       → 20 171 byte, ng-server-context="ssr"
+ *
+ * cioè il sito rendeva benissimo sul loopback e serviva un guscio vuoto dal
+ * dominio pubblico. Nel log del container, a ogni richiesta:
+ *
+ *   Received "x-forwarded-for" header but "trustProxyHeaders" was not set up to allow it.
+ *
+ * La conseguenza vera non era la velocità: era che **i crawler non eseguono
+ * JavaScript**. WhatsApp, Telegram, Facebook e Google ricevevano l'`index.html`
+ * statico, quindi il titolo del sito al posto di quello dell'evento e nessuna
+ * anteprima — che è esattamente ciò per cui questa applicazione è SSR.
+ *
+ * Si dichiarano le DUE intestazioni che il nostro nginx manda davvero
+ * (`deploy/production/nginx-proxy/`), non `true`. `true` autorizzerebbe anche
+ * `X-Forwarded-Host`, con cui chiunque riuscisse a parlare direttamente al
+ * container potrebbe far generare URL assoluti — quelli di `og:url`, del link
+ * canonico e dei link nelle email — verso un dominio scelto da lui.
+ */
+const angularApp = new AngularNodeAppEngine({
+  trustProxyHeaders: ['x-forwarded-proto', 'x-forwarded-for'],
+});
 
 /**
  * Example Express Rest API endpoints can be defined here.

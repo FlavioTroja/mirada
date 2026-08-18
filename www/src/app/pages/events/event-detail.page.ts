@@ -249,13 +249,44 @@ export class EventDetailPage implements OnDestroy {
       const descr = resolveText(e.description);
       const where = [e.venue.address?.city, e.venue.address?.region].filter(Boolean).join(', ');
 
+      // ⚠️ ORIZZONTALE per prima, poi quadrata, poi verticale — l'ordine
+      // OPPOSTO a quello che serve nella pagina.
+      //
+      // Qui si sceglie l'immagine che WhatsApp, Telegram e Facebook mostreranno
+      // nell'anteprima, e quelle reti ritagliano su 1.91:1. Una locandina
+      // verticale in quel riquadro viene mostrata piccola, di fianco al testo,
+      // oppure tagliata sulla fascia centrale — cioè proprio dove una locandina
+      // non ha nulla, perché titolo e date stanno in alto e in basso.
+      // L'ordine era `quadrata → orizzontale → verticale` e sceglieva la meno
+      // adatta delle due disponibili.
+      const social =
+        e.posterHorizontalFile ?? e.posterSquareFile ?? e.posterVerticalFile ?? null;
+
       this.seo.apply({
         title: `${text(e.title)} — ${where || e.venue.name} | Mirada Tango`,
         description: (descr.text || `${text(e.title)} a ${where}.`).replace(/\s+/g, ' ').slice(0, 300),
         path,
-        image: e.posterSquareFile?.url ?? e.posterHorizontalFile?.url ?? e.posterVerticalFile?.url,
+        image: social?.url
+          ? {
+              // `PublicFile` non espone il tipo MIME, quindi si ricava
+              // dall'estensione. E' un'inferenza, ma su un file che il backend
+              // ha salvato con la sua estensione e' affidabile — e l'alternativa
+              // sarebbe allargare il contratto pubblico dell'API per un solo
+              // attributo di anteprima.
+              url: social.url,
+              mimeType: tipoMime(social.url),
+              // L'alternativa testuale dell'anteprima: la leggono i lettori di
+              // schermo dentro X, e vale come didascalia quando l'immagine non
+              // si carica. Non ripete il titolo — lo affianca dicendo COS'E'.
+              alt: `Locandina di ${text(e.title)}${where ? ` — ${where}` : ''}`,
+              // Le dimensioni restano assenti: le locandine caricate dagli
+              // organizzatori non le hanno in banca dati, e inventarle e' peggio
+              // che ometterle (vedi `SeoImage.width`).
+            }
+          : null,
         type: 'event',
         locale: e.contentLanguage,
+        altLocales: e.secondLanguage ? [e.secondLanguage] : undefined,
       });
       this.seo.setJsonLd(buildEventJsonLd(e, this.store.availability(), url));
     });
@@ -277,5 +308,29 @@ export class EventDetailPage implements OnDestroy {
   protected langName(code: string | null | undefined): string {
     const map: Record<string, string> = { it: 'italiano', en: 'inglese', es: 'spagnolo' };
     return code ? (map[code] ?? code) : '';
+  }
+}
+
+/**
+ * Tipo MIME dall'estensione dell'URL, per `og:image:type`.
+ *
+ * Restituisce `null` su un'estensione che non riconosce: dichiarare un tipo
+ * sbagliato e' peggio che non dichiararlo — alcuni crawler scartano l'immagine
+ * quando il tipo annunciato non corrisponde a quello che scaricano.
+ */
+function tipoMime(url: string): string | null {
+  const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    default:
+      return null;
   }
 }

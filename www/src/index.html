@@ -7,6 +7,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Scopri festival, marathon, encuentro e stage di tango argentino: cerca per città, regione, date e ruolo di ballo, e iscriviti online.">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!--
+    ── Anteprime di condivisione: la RETE DI SICUREZZA ─────────────────────────
+
+    Questi tag sono un DUPLICATO di quelli che `SeoService` scrive a ogni rotta,
+    ed è voluto. In esercizio normale l'SSR li sovrascrive con quelli della
+    pagina — il titolo dell'evento, la sua locandina — e questi non si vedono
+    mai. Contano nel caso in cui l'SSR non avvenga.
+
+    Non è un'ipotesi: il 18/08/2026 la resa lato server è stata silenziosamente
+    disattivata dietro il proxy (vedi `trustProxyHeaders` in `src/server.ts`), e
+    per giorni ogni indirizzo condiviso su WhatsApp è apparso come un rettangolo
+    grigio col solo dominio. Con questi tag, lo stesso guasto costa
+    un'anteprima *generica* invece di nessuna anteprima.
+
+    ⚠️ Vanno tenuti allineati a `IMMAGINE_PREDEFINITA` in `seo.service.ts`: sono
+    la stessa promessa scritta in due posti, e due copie divergono.
+  -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Mirada Tango">
+  <meta property="og:locale" content="it_IT">
+  <meta property="og:title" content="Mirada Tango — eventi di tango argentino">
+  <meta property="og:description" content="Scopri festival, marathon, encuentro e stage di tango argentino: cerca per città, regione, date e ruolo di ballo, e iscriviti online.">
+  <meta property="og:image" content="/social-card.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Mirada Tango — eventi di tango argentino">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Mirada Tango — eventi di tango argentino">
+  <meta name="twitter:description" content="Scopri festival, marathon, encuentro e stage di tango argentino: cerca per città, regione, date e ruolo di ballo, e iscriviti online.">
+  <meta name="twitter:image" content="/social-card.jpg">
+  <meta name="twitter:image:alt" content="Mirada Tango — eventi di tango argentino">
+
+  <!-- Il colore della barra del browser su Android e della finestra su desktop. -->
+  <meta name="theme-color" content="#0F0A0C">
 </head>
 <body>
   <app-root></app-root>
