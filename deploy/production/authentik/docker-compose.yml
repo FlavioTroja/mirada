@@ -1,0 +1,138 @@
+# Authentik — il fornitore di identità della macchina.
+#
+# Vive in /home/manager/orch/authentik/docker-compose.yml. La copia versionata
+# è questa.
+#
+#   [internet] → proxy (auth.mirada.dance) → authentik-server:9000
+#                                                 │
+#                                                 └── authentik-db (rete interna)
+#
+# ── Perché uno stack SEPARATO da quello di mirada ────────────────────────────
+# Le identità e i dati applicativi hanno cicli di vita diversi. Un ripristino
+# del database di mirada dal dump — cosa già successa in questo progetto — non
+# deve poter travolgere le credenziali di chi deve poi rientrare per accorgersi
+# del guaio. Vale anche al contrario: un aggiornamento maggiore di Authentik non
+# tocca i biglietti venduti.
+#
+# ── Cosa NON c'è, e perché ───────────────────────────────────────────────────
+#
+#  * **Redis.** Il compose ufficiale di Authentik lo ha avuto per anni; dalle
+#    versioni 2026 la coda dei task è passata su PostgreSQL e non serve più.
+#    Se leggi una guida che lo pretende, sta parlando di una versione vecchia.
+#
+#  * **/var/run/docker.sock nel worker.** Il compose ufficiale lo monta ancora.
+#    Serve agli outpost «proxy», che qui non usiamo: per l'OIDC non se ne fa
+#    nulla. In cambio darebbe al container il controllo del demone Docker
+#    dell'host — cioè root sulla macchina, a un servizio esposto su internet.
+name: authentik
+
+x-authentik-common: &authentik-common
+  image: ghcr.io/goauthentik/server:${AUTHENTIK_TAG:-2026.5.6}
+  restart: unless-stopped
+  # Authentik usa la memoria condivisa per la generazione delle immagini e per
+  # alcune operazioni di PostgreSQL: i 64 MB predefiniti di Docker non bastano.
+  shm_size: 512mb
+  env_file:
+    - .env
+  environment:
+    AUTHENTIK_POSTGRESQL__HOST: authentik-db
+    AUTHENTIK_POSTGRESQL__NAME: ${PG_DB:-authentik}
+    AUTHENTIK_POSTGRESQL__USER: ${PG_USER:-authentik}
+    AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS:?serve la password del database}
+    AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?serve la chiave segreta}
+    TZ: "${TZ:-Europe/Rome}"
+  depends_on:
+    authentik-db:
+      condition: service_healthy
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+
+  authentik-db:
+    image: postgres:16-alpine
+    container_name: authentik-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PG_DB:-authentik}
+      POSTGRES_USER: ${PG_USER:-authentik}
+      POSTGRES_PASSWORD: ${PG_PASS:?serve la password del database}
+      # Authentik interroga molto per nome utente ed email: la collazione C
+      # rende quei confronti prevedibili e indipendenti dal locale dell'immagine.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: "${TZ:-Europe/Rome}"
+    volumes:
+      # ⚠️ Qui /var/lib/postgresql/DATA è GIUSTO, al contrario dello stack di
+      # mirada. Quello gira su PostgreSQL 18, che ha spostato la directory dei
+      # dati e va montato su /var/lib/postgresql; questo è il 16, dove il
+      # percorso storico è ancora quello. Copiare la riga dall'altro compose
+      # manda il container in ciclo di riavvio.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - internal
+    logging: *logging
+
+  authentik-server:
+    <<: *authentik-common
+    container_name: authentik-server
+    command: server
+    ports:
+      # Solo loopback: da internet ci si arriva dal proxy, che parla al
+      # container per nome sulla rete condivisa. La porta serve per le
+      # diagnosi dal server e per il periodo in cui il DNS non c'è ancora.
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - media:/media
+      - ./custom-templates:/templates
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+    networks:
+      - internal
+      - proxy_network
+
+  authentik-worker:
+    <<: *authentik-common
+    container_name: authentik-worker
+    command: worker
+    volumes:
+      - media:/media
+      - ./certs:/certs
+      - ./custom-templates:/templates
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+    name: authentik-pgdata
+  media:
+    name: authentik-media
+
+networks:
+
+  internal:
+    name: authentik-internal
+    driver: bridge
+
+  # Creata dallo stack del proxy (orch/docker-compose.yml).
+  proxy_network:
+    name: proxy_network
+    external: true

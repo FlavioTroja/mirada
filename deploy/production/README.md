@@ -52,6 +52,7 @@ diagnosticabili dal server senza passare da DNS e TLS.
 | `s3-backup/` | modello e manuale del **backup notturno su S3** (predisposto, spento) |
 | `nginx-proxy/` | copia versionata di **tutta** `/etc/nginx` del proxy |
 | `orch/docker-compose.yml` | lo stack del **proxy stesso** (nginx + certbot) |
+| `authentik/` | lo stack di **Authentik**, il fornitore di identità: compose, modello del `.env` e manuale |
 | `README.md` | questo: come si conduce lo stack |
 
 Sul server la stessa struttura, con i file veri al posto dei modelli:
@@ -64,8 +65,14 @@ Sul server la stessa struttura, con i file veri al posto dei modelli:
 │   ├── mime.types              ← estratto dall'immagine, vedi §2
 │   ├── mirada.dance.conf
 │   ├── app.mirada.dance.conf
+│   ├── auth.mirada.dance.conf
 │   └── snippets/{ssl,mirada-backend}.conf
 ├── certbot/{conf,www}/         ← certificati e webroot ACME
+├── authentik/                  ← il fornitore di identità (vedi authentik/README.md)
+│   ├── docker-compose.yml
+│   ├── .env                    ← a mano, 600. Segreti, SMTP, credenziali Google
+│   ├── custom-templates/
+│   └── certs/
 └── mirada/production/
     ├── docker-compose.yml      ← lo copia il deploy a ogni corsa
     ├── .env                    ← a mano, 600. IMAGE_TAG, POSTGRES_*, TZ
@@ -300,6 +307,7 @@ perché sembra intermittente e non lo è.
 | `/home/manager/orch/nginx/nginx.conf` | `nginx-proxy/nginx.conf` |
 | `…/nginx/mirada.dance.conf` | `nginx-proxy/mirada.dance.conf` |
 | `…/nginx/app.mirada.dance.conf` | `nginx-proxy/app.mirada.dance.conf` |
+| `…/nginx/auth.mirada.dance.conf` | `nginx-proxy/auth.mirada.dance.conf` |
 | `…/nginx/snippets/ssl.conf` | `nginx-proxy/snippets/ssl.conf` |
 | `…/nginx/snippets/mirada-backend.conf` | `nginx-proxy/snippets/mirada-backend.conf` |
 | `…/nginx/mime.types` | — (dell'immagine) |
@@ -346,18 +354,22 @@ domini. Non è la stessa cosa fatta in due modi.
 
 ### I certificati
 
-Emissione già fatta per `mirada.dance` e `www.mirada.dance`. Il rinnovo è
-automatico (certbot ci prova ogni 12 ore, Let's Encrypt rinnova a 30 giorni dalla
-scadenza).
+**Un solo certificato per quattro nomi**: `mirada.dance`, `www.mirada.dance`,
+`app.mirada.dance`, `auth.mirada.dance`. Vive in
+`/etc/letsencrypt/live/mirada.dance/` e tutti i vhost puntano lì. Uno per nome
+significherebbe quattro scadenze da sorvegliare invece di una.
+
+Il rinnovo è automatico (certbot ci prova ogni 12 ore, Let's Encrypt rinnova a 30
+giorni dalla scadenza).
 
 ```bash
 cd ~/orch
 docker compose run --rm --entrypoint certbot certbot certificates
 ```
 
-**Aggiungere `app.mirada.dance`** quando il record DNS esisterà — è
-un'**estensione** del certificato esistente, non un secondo certificato, e per
-questo la lista dei domini va ripetuta **intera**:
+**Aggiungere un nome** è un'**estensione** del certificato esistente, non un
+secondo certificato — e per questo la lista dei domini va ripetuta **intera**:
+`--expand` la sostituisce, non la somma, quindi un nome omesso viene *tolto*.
 
 ```bash
 cd ~/orch
@@ -365,7 +377,7 @@ docker compose run --rm --entrypoint certbot certbot \
   certonly --webroot -w /var/www/certbot \
   --email info@overzoom.it --agree-tos --no-eff-email --non-interactive \
   --cert-name mirada.dance --expand \
-  -d mirada.dance -d www.mirada.dance -d app.mirada.dance
+  -d mirada.dance -d www.mirada.dance -d app.mirada.dance -d auth.mirada.dance
 
 docker exec proxy nginx -t && docker exec proxy nginx -s reload
 ```
