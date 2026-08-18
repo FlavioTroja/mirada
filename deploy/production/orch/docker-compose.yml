@@ -1,0 +1,72 @@
+# Il PROXY della macchina — nginx che termina il TLS e smista, e certbot che
+# tiene vivi i certificati. Vive in /home/manager/orch/docker-compose.yml.
+#
+# Non è lo stack di Mirada: è l'infrastruttura della macchina, e un domani
+# potrebbe servire altri domini. Sta in questo repository perché oggi Mirada è
+# la sola cosa che ci gira, e un proxy allestito a mano e mai versionato è il
+# modo classico di non poterlo più rifare.
+#
+# ⚠️ Le porte 80 e 443 sono SUE. L'nginx di sistema (il pacchetto Ubuntu) non
+# è installato, e non va installato: due nginx che si contendono la 443 danno
+# un «address already in use» all'avvio del secondo, e quale dei due sia il
+# secondo dipende dall'ordine di boot.
+name: orch
+
+services:
+
+  proxy:
+    image: nginx:stable-alpine
+    container_name: proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # L'intera /etc/nginx arriva da disco: la configurazione si modifica sul
+      # server e si ricarica, senza ricostruire né riavviare nulla.
+      - ./nginx:/etc/nginx
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    networks:
+      - proxy_network
+    # Ricarica nginx una volta al giorno per far entrare in servizio i
+    # certificati che certbot ha rinnovato nel frattempo.
+    #
+    # ⚠️ Questo è anche il motivo per cui un upstream sbagliato «si aggiusta da
+    # solo» entro 24 ore: è il modo peggiore in cui un guasto possa
+    # manifestarsi, perché sembra intermittente e non lo è.
+    command: >-
+      /bin/sh -c "while :; do sleep 24h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t >/dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    restart: unless-stopped
+    volumes:
+      # Qui NON in sola lettura: certbot ci scrive i certificati rinnovati.
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    # Tenta il rinnovo ogni 12 ore. Let's Encrypt rinnova a 30 giorni dalla
+    # scadenza, quindi quasi tutte le corse non fanno nulla: è voluto — è ciò
+    # che rende il rinnovo indipendente dal fatto che qualcuno se ne ricordi.
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;"
+    logging: *logging
+
+networks:
+
+  # ⚠️ Creata QUI, e dichiarata `external` da tutti gli stack applicativi.
+  # Il nome è fissato esplicitamente: senza `name:`, Compose la chiamerebbe
+  # `orch_proxy_network` e nessun altro compose la troverebbe.
+  proxy_network:
+    name: proxy_network
+    driver: bridge
