@@ -1,0 +1,4 @@
+# ⚠️ Il contesto di build è la RADICE del repository (vedi Dockerfile), quindi
+# questo file NON viene usato: Docker legge il `.dockerignore` accanto al
+# contesto, cioè quello di radice. Sta qui per chi lo cerca dove se lo aspetta.
+# Le esclusioni vere sono in `/.dockerignore`.

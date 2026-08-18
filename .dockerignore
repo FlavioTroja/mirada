@@ -1,0 +1,36 @@
+# Contesto di build: la RADICE del repository. Entrambi i frontend si
+# costruiscono da qui (leggono `shared/` e `tools/`), quindi questo è l'unico
+# `.dockerignore` che Docker guarda per loro.
+#
+# `node_modules` va escluso non per velocità ma per CORRETTEZZA: i binari
+# nativi installati sulla macchina di sviluppo (rollup, esbuild) non sono
+# quelli che l'immagine deve usare, e copiarli dentro li farebbe sopravvivere
+# all'installazione, portando in immagine la variante sbagliata.
+**/node_modules
+**/.angular
+**/dist
+**/coverage
+
+# I segreti non entrano nel contesto. `.npmrc` (senza barra iniziale, quindi a
+# qualsiasi profondità) NON è escluso di proposito: quelli di `app/` e `www/`
+# dichiarano solo lo scope @keijo e servono al build. Il token arriva a parte,
+# come secret BuildKit.
+**/.env
+**/.env.*
+!**/.env.example
+**/.npmrc.local
+
+# Rumore che allungherebbe il contesto senza servire a nessuno stadio.
+.git
+.github
+.claude
+**/.vscode
+**/.idea
+**/.DS_Store
+docs
+deploy
+*.md
+backend/public/images
+backend/public/tickets
+backend/public/receipts
+backend/public/exports

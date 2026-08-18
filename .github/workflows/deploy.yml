@@ -1,0 +1,498 @@
+# Distribuisce in produzione immagini GIÀ costruite dal workflow «Build».
+# Non costruisce nulla: se il tag non esiste su GHCR, il `pull` fallisce ed è
+# giusto così.
+# Si lancia SOLO a mano da Actions.
+name: Deploy — produzione su mirada.dance
+
+on:
+  workflow_dispatch:
+    inputs:
+      componente:
+        description: "Cosa distribuire"
+        type: choice
+        options:
+          - backend
+          - app
+          - www
+          - frontend (app + www)
+          - tutti
+        default: tutti
+        required: true
+      tag:
+        description: "Tag dell'immagine: «production» per l'ultima build del ramo principale, oppure lo sha corto (es. a1b2c3d) per tornare indietro"
+        type: string
+        default: production
+        required: true
+      migrazioni:
+        description: "Confermo che il deploy del backend può applicare le migrazioni Prisma allo schema. A spunta tolta il deploy del backend NON parte (il container migra sempre all'avvio: non si può distribuirlo «senza migrare»)."
+        type: boolean
+        default: true
+        required: true
+
+# Sul deploy serve solo LEGGERE i pacchetti: le immagini le ha già pubblicate
+# la build.
+permissions:
+  contents: read
+  packages: read
+
+# Mai due deploy sovrapposti sulla stessa macchina: si contenderebbero il compose.
+concurrency:
+  group: deploy-produzione
+  cancel-in-progress: false
+
+env:
+  SSH_HOST: mirada.dance
+  SSH_PORT: "1022"
+  SSH_USER: manager
+  REMOTE_DIR: /home/manager/orch/mirada/production
+  COMPOSE_LOCALE: deploy/production/docker-compose.yml
+  FILES_CONF_LOCALE: deploy/production/files/nginx.conf
+  # Il container impiega qualche secondo a essere pronto e `prisma migrate deploy`
+  # può allungare i tempi: si attende una CONDIZIONE fino a questo limite, non
+  # un `sleep` a caso.
+  ATTESA_MAX_SECONDI: "240"
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.componente }} @ ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v7
+
+      - name: Traduci l'input in servizi del compose
+        id: piano
+        env:
+          COMPONENTE: ${{ inputs.componente }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # Qui i nomi coincidono — componente `app` → servizio `app` — ma la
+          # tabella resta ESPLICITA lo stesso: scriverla come «il servizio si
+          # chiama come il componente» è il tipo di scorciatoia che regge finché
+          # qualcuno non rinomina un servizio, e allora rompe in esercizio senza
+          # che nulla lo dica.
+          #
+          # `db` e `files` non compaiono MAI: un `up -d` sull'intero stack li
+          # ricreerebbe senza motivo, e `db` in un deploy applicativo non si tocca.
+          case "$COMPONENTE" in
+            backend)            servizi="backend" ;;
+            app)                servizi="app" ;;
+            www)                servizi="www" ;;
+            "frontend (app + www)") servizi="app www" ;;
+            tutti)              servizi="backend app www" ;;
+            *)
+              echo "::error::Componente non riconosciuto: ${COMPONENTE}"
+              exit 1
+              ;;
+          esac
+
+          # Il tag finisce dentro un comando eseguito via ssh: si accetta solo
+          # ciò che un tag Docker può davvero essere, così non c'è nulla da citare.
+          if ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9._-]{0,126}$'; then
+            echo "::error::Tag non valido: «${TAG}». Ammessi lettere, cifre, punto, trattino e underscore."
+            exit 1
+          fi
+
+          tocca_backend=false
+          case " $servizi " in *" backend "*) tocca_backend=true ;; esac
+
+          # Il proxy si ricarica solo se è cambiato un container che il proxy
+          # raggiunge. Li raggiunge tutti e tre, quindi in pratica è sempre —
+          # ma la condizione resta scritta, così resta vera se domani un
+          # servizio smette di stare dietro al proxy.
+          tocca_proxy=false
+          case " $servizi " in *" app "*|*" www "*|*" backend "*) tocca_proxy=true ;; esac
+
+          {
+            echo "servizi=${servizi}"
+            echo "tocca_backend=${tocca_backend}"
+            echo "tocca_proxy=${tocca_proxy}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Servizi da distribuire: ${servizi}"
+
+      - name: Conferma delle migrazioni
+        env:
+          TOCCA_BACKEND: ${{ steps.piano.outputs.tocca_backend }}
+          MIGRAZIONI: ${{ inputs.migrazioni }}
+        run: |
+          set -euo pipefail
+          # Semantica ONESTA dell'input: il container del backend esegue
+          # `prisma migrate deploy` a ogni avvio (`start:migrate:prod`, che è il
+          # CMD del Dockerfile). La spunta non può quindi «aggiungere» le
+          # migrazioni — ci sono comunque. È una CONFERMA: a spunta tolta ci si
+          # ferma qui, invece di distribuire fingendo di non migrare.
+          if [ "$TOCCA_BACKEND" = "true" ] && [ "$MIGRAZIONI" != "true" ]; then
+            echo "::error::Il deploy del backend applica sempre le migrazioni Prisma all'avvio del container. Con «migrazioni» a spunta tolta non si procede. Rilancia con la spunta, oppure scegli un componente che non tocchi il backend."
+            exit 1
+          fi
+          if [ "$TOCCA_BACKEND" != "true" ]; then
+            echo "Il backend non è fra i servizi: l'input «migrazioni» non ha effetto, lo schema non viene toccato."
+          else
+            echo "Migrazioni confermate: all'avvio il container backend eseguirà «prisma migrate deploy»."
+          fi
+
+      - name: Verifica che i file versionati esistano
+        run: |
+          set -euo pipefail
+          for f in "$COMPOSE_LOCALE" "$FILES_CONF_LOCALE"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Manca ${f} nel repository: è uno dei file che il deploy copia sul server."
+              exit 1
+            fi
+          done
+          echo "Trovati ${COMPOSE_LOCALE} e ${FILES_CONF_LOCALE}."
+
+      - name: Prepara la chiave SSH
+        id: ssh
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+
+          # Il controllo sul secret sta DENTRO uno step: nelle espressioni `if:`
+          # di livello job il contesto `secrets` non è affidabile.
+          if [ -z "${SSH_PRIVATE_KEY:-}" ]; then
+            echo "::error::Il secret SSH_PRIVATE_KEY non è impostato."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+
+          key="${RUNNER_TEMP}/deploy_key"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$key"
+          chmod 600 "$key"
+          echo "key=${key}" >> "$GITHUB_OUTPUT"
+
+          # L'identità dell'host si verifica: `StrictHostKeyChecking=no` è una
+          # scorciatoia che regge finché non c'è un problema vero.
+          if [ -n "${SSH_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" >> "$HOME/.ssh/known_hosts"
+            echo "known_hosts preso dal secret SSH_KNOWN_HOSTS (chiave dell'host fissata)."
+          else
+            ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null
+            echo "known_hosts popolato con ssh-keyscan su ${SSH_HOST}:${SSH_PORT}."
+          fi
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          if ! grep -q . "$HOME/.ssh/known_hosts"; then
+            echo "::error::known_hosts vuoto: l'host ${SSH_HOST}:${SSH_PORT} non ha risposto a ssh-keyscan."
+            exit 1
+          fi
+
+      - name: Copia i file versionati sul server
+        env:
+          KEY: ${{ steps.ssh.outputs.key }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                    -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20)
+
+          # Viaggiano SOLO i file versionati: i segreti stanno nei `.env`
+          # scritti a mano sul server, e il deploy non li tocca né li legge.
+          scp "${SSH_OPTS[@]}" -P "$SSH_PORT" "$COMPOSE_LOCALE" \
+            "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/docker-compose.yml"
+          scp "${SSH_OPTS[@]}" -P "$SSH_PORT" "$FILES_CONF_LOCALE" \
+            "${SSH_USER}@${SSH_HOST}:${REMOTE_DIR}/files/nginx.conf"
+          echo "docker-compose.yml e files/nginx.conf copiati in ${REMOTE_DIR}."
+
+      - name: Accedi a GHCR dal server
+        env:
+          KEY: ${{ steps.ssh.outputs.key }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-i "$KEY" -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                    -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20)
+
+          # Il token entra dallo stdin di ssh e arriva allo stdin di
+          # `docker login`: non compare né nei log né nella riga di comando del
+          # server (`ps`).
+          printf '%s' "$GHCR_TOKEN" | ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" \
+            "docker login ghcr.io --username '${GHCR_USER}' --password-stdin"
+
+      - name: Distribuisci
+        env:
+          KEY: ${{ steps.ssh.outputs.key }}
+          TAG: ${{ inputs.tag }}
+          SERVIZI: ${{ steps.piano.outputs.servizi }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-i "$KEY" -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                    -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20)
+
+          # Ciò che deve essere espanso QUI sta nel prefisso di ambiente del
+          # comando; il corpo dello script viaggia LETTERALE grazie al
+          # delimitatore quotato ('REMOTE'), così nessuna variabile del server
+          # viene risolta dal runner.
+          ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" \
+            "IMAGE_TAG='${TAG}' SERVIZI='${SERVIZI}' REMOTE_DIR='${REMOTE_DIR}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          export IMAGE_TAG
+
+          if [ ! -d "$REMOTE_DIR" ]; then
+            echo "ERRORE: la cartella $REMOTE_DIR non esiste sul server."
+            exit 1
+          fi
+          cd "$REMOTE_DIR"
+
+          # I file d'ambiente si scrivono a mano sul server e contengono i
+          # segreti: intoccabili. Se mancano ci si ferma qui, con un messaggio
+          # che dice cosa fare.
+          #
+          # Quello del backend va controllato a parte perché `env_file:` su un
+          # percorso inesistente fa fallire compose con un errore che parla di
+          # percorsi, non di segreti mancanti.
+          #
+          # `s3-backup/.env` NON è in questa lista: il servizio `backup` sta
+          # sotto un profilo e non viene mai avviato da qui, quindi il suo
+          # `env_file` non viene nemmeno risolto. Pretenderlo bloccherebbe ogni
+          # deploy per un servizio spento.
+          for f in "$REMOTE_DIR/.env" "$REMOTE_DIR/backend/.env"; do
+            if [ ! -f "$f" ]; then
+              echo "ERRORE: manca $f — è un file d'ambiente, si scrive a mano sul server partendo dal .env.example corrispondente nel repository. Crealo e rilancia."
+              exit 1
+            fi
+          done
+
+          if [ ! -f "$REMOTE_DIR/docker-compose.yml" ]; then
+            echo "ERRORE: manca $REMOTE_DIR/docker-compose.yml."
+            exit 1
+          fi
+
+          # La base dati non si tocca in un deploy applicativo: dev'essere già
+          # in piedi. Avviarla è una decisione che si prende a mano.
+          if ! docker compose ps --status running --services | grep -Fxq db; then
+            echo "ERRORE: il servizio 'db' non è in esecuzione. Il deploy applicativo non lo avvia né lo ricrea di proposito. Avvialo a mano ('docker compose up -d db') e rilancia."
+            exit 1
+          fi
+
+          # `files` serve i binari generati dal backend. Non si distribuisce (è
+          # un nginx di serie, non una nostra immagine) ma se è giù, biglietti e
+          # locandine danno 502: si avvia qui, che è idempotente.
+          docker compose up -d files
+
+          echo "== Tag richiesto: ${IMAGE_TAG} — servizi: ${SERVIZI}"
+
+          # shellcheck disable=SC2086  # $SERVIZI è una lista di parole, va splittata
+          docker compose pull $SERVIZI
+
+          # --no-deps: si ricreano SOLO i servizi scelti. Senza, un `depends_on`
+          # potrebbe trascinarsi dietro `db`.
+          # shellcheck disable=SC2086
+          docker compose up -d --no-deps $SERVIZI
+
+          docker compose ps
+
+          # Il disco della macchina non è infinito: le immagini orfane vanno via.
+          docker image prune -f
+
+          # Il login a GHCR ha lasciato in ~/.docker/config.json una credenziale
+          # col GITHUB_TOKEN di QUESTA corsa, che scade appena la corsa finisce.
+          # Lasciarla lì non è un buco: è peggio come sintomo — chi domani entra
+          # sul server e fa `docker compose pull` a mano si becca un 401 da un
+          # token morto, invece del comportamento anonimo che si aspetta.
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          REMOTE
+
+      - name: Ricarica il proxy
+        if: steps.piano.outputs.tocca_proxy == 'true'
+        env:
+          KEY: ${{ steps.ssh.outputs.key }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-i "$KEY" -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                    -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20)
+
+          ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" bash -s <<'REMOTE'
+          set -euo pipefail
+
+          # PERCHÉ questo passo esiste, che è la parte non ovvia.
+          #
+          # L'nginx del container `proxy` risolve i nomi degli upstream UNA
+          # VOLTA, all'avvio, e poi tiene l'indirizzo. `docker compose up -d`
+          # ricrea i container, che ripartono con un IP NUOVO su
+          # `proxy_network`: da quel momento il proxy manda il traffico a un
+          # indirizzo che non risponde più. Il sintomo è un 502 sul dominio
+          # pubblico mentre il container nuovo è sanissimo — e chi guarda i log
+          # dell'applicazione non trova niente, perché la richiesta non ci arriva.
+          #
+          # Lo stack del proxy ricarica nginx da sé una volta al giorno, per far
+          # entrare in servizio i certificati rinnovati da certbot: quindi il
+          # guasto «si risolve da solo» entro 24 ore, che è il modo peggiore di
+          # manifestarsi.
+          #
+          # `nginx -s reload` e non `docker restart proxy`: rilegge la
+          # configurazione e ririsolve gli upstream SENZA far cadere le
+          # connessioni in corso, e senza toccare il ciclo di vita di un
+          # container che termina il TLS per tutti i domini della macchina.
+          if ! docker ps --format '{{.Names}}' | grep -Fxq proxy; then
+            echo "ATTENZIONE: il container 'proxy' non è in esecuzione: nessun reload da fare."
+            exit 0
+          fi
+
+          # Si verifica la configurazione PRIMA di ricaricarla: un reload su una
+          # configurazione rotta lascia il proxy con quella vecchia in memoria
+          # ma segnala un errore che sembra nostro, e nasconde il problema vero.
+          if ! docker exec proxy nginx -t; then
+            echo "ERRORE: la configurazione del proxy non passa 'nginx -t'. Nessun reload: il proxy resta com'è."
+            exit 1
+          fi
+
+          docker exec proxy nginx -s reload
+          echo "Proxy ricaricato: gli upstream sono stati ririsolti."
+          REMOTE
+
+      - name: Verifica dall'interno della macchina
+        env:
+          KEY: ${{ steps.ssh.outputs.key }}
+          SERVIZI: ${{ steps.piano.outputs.servizi }}
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-i "$KEY" -p "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                    -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20)
+
+          ssh "${SSH_OPTS[@]}" "${SSH_USER}@${SSH_HOST}" \
+            "SERVIZI='${SERVIZI}' REMOTE_DIR='${REMOTE_DIR}' ATTESA='${ATTESA_MAX_SECONDI}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$REMOTE_DIR"
+
+          # Le sonde interrogano il LOOPBACK del server, non il dominio: questa
+          # verifica misura una cosa sola — «lo stack è sano?» — e un DNS rotto
+          # per ragioni che con questo deploy non c'entrano non deve poterla far
+          # fallire. La catena intera la percorre il passo dopo.
+          sonda_app() {
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8081/ 2>/dev/null || echo 000)"
+            [ "$code" != "000" ] && [ "$code" -lt 500 ]
+          }
+
+          sonda_www() {
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://127.0.0.1:8082/ 2>/dev/null || echo 000)"
+            [ "$code" != "000" ] && [ "$code" -lt 500 ]
+          }
+
+          # Il backend si interroga da DENTRO il suo container: la porta 5000
+          # NON è pubblicata sull'host (il servizio non ha `ports:`, sta solo
+          # sulle reti interne). Si usa `node`, che nell'immagine c'è di sicuro,
+          # mentre curl e wget no.
+          #
+          # Il percorso è `/docs/json`: è l'unica GET ANONIMA che risponde 200,
+          # perché tutto ciò che sta sotto /api risponde 401, che per una sonda
+          # è indistinguibile da un guasto. Si accetta qualunque risposta < 500
+          # — una rotta spostata non deve far fallire un deploy per la ragione
+          # sbagliata. Un 'connection refused' invece sì: quello è il guasto vero.
+          sonda_backend() {
+            docker compose exec -T backend node -e '
+              var req = require("http").get("http://127.0.0.1:5000/docs/json", function (r) {
+                console.log("HTTP " + r.statusCode);
+                process.exit(r.statusCode < 500 ? 0 : 1);
+              });
+              req.on("error", function () { process.exit(1); });
+              req.setTimeout(4000, function () { process.exit(1); });
+            ' >/dev/null 2>&1
+          }
+
+          # Un container che riparte in ciclo non compare fra i 'running': non è
+          # «pronto», è rotto, e la sonda non deve nemmeno provarci.
+          vivo() { docker compose ps --status running --services | grep -Fxq "$1"; }
+
+          # shellcheck disable=SC2086
+          set -- $SERVIZI
+          attesi=$#
+
+          scadenza=$(( $(date +%s) + ATTESA ))
+          esito=1
+
+          while :; do
+            ok=0
+            for s in $SERVIZI; do
+              case "$s" in
+                backend) vivo backend && sonda_backend && ok=$((ok + 1)) || true ;;
+                app)     vivo app     && sonda_app     && ok=$((ok + 1)) || true ;;
+                www)     vivo www     && sonda_www     && ok=$((ok + 1)) || true ;;
+              esac
+            done
+
+            if [ "$ok" -eq "$attesi" ]; then esito=0; break; fi
+            if [ "$(date +%s)" -ge "$scadenza" ]; then break; fi
+            sleep 5
+          done
+
+          if [ "$esito" -ne 0 ]; then
+            echo "ERRORE: dopo ${ATTESA}s rispondono ${ok} servizi su ${attesi}. I log:"
+            # shellcheck disable=SC2086
+            docker compose logs --tail 80 $SERVIZI
+            exit 1
+          fi
+
+          echo "Tutti i ${attesi} servizi distribuiti rispondono."
+          REMOTE
+
+      - name: Verifica dal mondo esterno
+        id: esterno
+        if: steps.piano.outputs.tocca_proxy == 'true'
+        run: |
+          set -euo pipefail
+
+          # È l'unica verifica che percorre la catena INTERA — DNS, TLS, proxy,
+          # reload appena fatto, container nuovo — e quindi l'unica che si
+          # accorge dello scenario per cui il passo di reload esiste:
+          # applicazione sana sul loopback, dominio pubblico in 502. Sta DOPO il
+          # reload di proposito: prima, misurerebbe lo stato precedente e
+          # sarebbe verde proprio nel caso che deve scoprire.
+          prova() {
+            nome="$1"; url="$2"
+            for tentativo in 1 2 3; do
+              code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$url" 2>/dev/null || echo 000)"
+              echo "  ${nome}: tentativo ${tentativo} → HTTP ${code}"
+              if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then return 0; fi
+              sleep 5
+            done
+            return 1
+          }
+
+          guasti=0
+          prova "sito"       "https://mirada.dance/"          || guasti=$((guasti+1))
+          prova "API (docs)" "https://mirada.dance/docs/json" || guasti=$((guasti+1))
+
+          # app.mirada.dance si prova solo se ha un DNS: finché il record non
+          # esiste, un fallimento qui direbbe «il deploy è andato male» mentre
+          # il deploy è andato benissimo e manca un record DNS.
+          # `getent hosts` e non `host`: il comando `host` viene da bind9-host, che
+          # sull'immagine del runner c'e' oggi e potrebbe non esserci domani.
+          # `getent` fa parte della libc, e usa lo stesso resolver del sistema.
+          if getent hosts app.mirada.dance >/dev/null 2>&1; then
+            prova "gestionale" "https://app.mirada.dance/" || guasti=$((guasti+1))
+          else
+            echo "  gestionale: app.mirada.dance non risolve, verifica saltata (vedi README §Domini)."
+          fi
+
+          if [ "$guasti" -gt 0 ]; then
+            echo "::error::${guasti} verifiche pubbliche fallite. Il guasto è quasi sempre FUORI dallo stack applicativo: guarda 'docker exec proxy nginx -t' e i blocchi server in /home/manager/orch/nginx/."
+            exit 1
+          fi
+          echo "La catena pubblica risponde."
+
+      - name: Riepilogo
+        if: always()
+        run: |
+          {
+            echo "### Deploy in produzione"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| servizi | \`${{ steps.piano.outputs.servizi }}\` |"
+            echo "| tag distribuito | \`${{ inputs.tag }}\` |"
+            echo "| macchina | \`${{ env.SSH_USER }}@${{ env.SSH_HOST }}:${{ env.SSH_PORT }}\` |"
+            echo "| cartella | \`${{ env.REMOTE_DIR }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rimuovi la chiave SSH
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/deploy_key"

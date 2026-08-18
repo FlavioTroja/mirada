@@ -1,0 +1,238 @@
+# Costruisce le immagini Docker di Mirada e le pubblica su GHCR.
+#
+# Parte a OGNI push, su qualunque ramo, e costruisce SOLO i componenti toccati.
+# Il DEPLOY resta manuale: costruire non è distribuire, ed è il motivo per cui
+# esistono due workflow invece di uno — è anche l'unica cosa che rende
+# possibile un rollback, cioè poter distribuire un'immagine VECCHIA.
+name: Build — immagini Docker su GHCR
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+    inputs:
+      componente:
+        description: "Cosa costruire e pubblicare su GHCR"
+        type: choice
+        options:
+          - backend
+          - app
+          - www
+          - tutti
+        default: tutti
+        required: true
+
+# GITHUB_TOKEN: sola lettura sul codice, scrittura sui pacchetti (GHCR).
+# Nessun PAT: il token della corsa basta a pubblicare su ghcr.io/<owner>/<repo>/*.
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  # Su push la corsa precedente dello STESSO ramo si annulla: se hai spinto tre
+  # volte in due minuti, l'unica build che interessa è l'ultima. A mano no —
+  # una corsa lanciata da una persona non si annulla da sola sotto i piedi.
+  group: build-${{ github.ref }}-${{ inputs.componente || 'tutti' }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Cosa costruire. Su push si guarda cosa è cambiato davvero.
+  # ───────────────────────────────────────────────────────────────────────────
+  scopri:
+    name: Cosa c'è da costruire
+    runs-on: ubuntu-latest
+    outputs:
+      matrice: ${{ steps.decidi.outputs.matrice }}
+      qualcosa: ${{ steps.decidi.outputs.qualcosa }}
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v7
+        with:
+          # Serve il commit precedente per poter fare il diff. 0 = storia
+          # intera: su un repository di questa taglia costa poco, e `fetch-depth: 2`
+          # non basta quando il push porta più commit insieme.
+          fetch-depth: 0
+
+      - name: Decidi
+        id: decidi
+        env:
+          EVENTO: ${{ github.event_name }}
+          SCELTA: ${{ inputs.componente }}
+          PRIMA: ${{ github.event.before }}
+          DOPO: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          backend=false; app=false; www=false
+
+          if [ "$EVENTO" != "push" ]; then
+            case "$SCELTA" in
+              backend) backend=true ;;
+              app)     app=true ;;
+              www)     www=true ;;
+              tutti)   backend=true; app=true; www=true ;;
+              *) echo "::error::Componente non riconosciuto: ${SCELTA}"; exit 1 ;;
+            esac
+            echo "Scelta a mano: ${SCELTA}"
+          else
+            # Ramo nuovo, force-push, storia riscritta: `before` è tutto zeri o
+            # punta a un commit che non c'è più. Manca un termine di paragone,
+            # e in dubbio si costruisce tutto — meglio una build di troppo che
+            # un'immagine che non riflette il codice.
+            if [ -z "${PRIMA:-}" ] || [ "$PRIMA" = "0000000000000000000000000000000000000000" ] \
+               || ! git cat-file -e "${PRIMA}^{commit}" 2>/dev/null; then
+              echo "Nessun termine di paragone (ramo nuovo o storia riscritta): si costruisce tutto."
+              backend=true; app=true; www=true
+            else
+              cambiati="$(git diff --name-only "$PRIMA" "$DOPO")"
+              echo "File cambiati:"; echo "$cambiati" | sed 's/^/  /'
+
+              # Il filtro per percorso è ESATTO, non un'euristica: i contesti di
+              # build sono `backend/` per il backend e la RADICE per i due
+              # frontend, che leggono anche `shared/` (il tema Sass) e `tools/`
+              # (il controllo dei template invocato da `prebuild`). Un file
+              # fuori da queste cartelle non può cambiare un'immagine.
+              while IFS= read -r f; do
+                case "$f" in
+                  backend/*) backend=true ;;
+                  app/*)     app=true ;;
+                  www/*)     www=true ;;
+                  # shared/ e tools/ entrano in ENTRAMBI i frontend: toccarli e
+                  # ricostruirne uno solo lascerebbe l'altro con il tema vecchio.
+                  shared/*|tools/*) app=true; www=true ;;
+                  # È la sola occasione di accorgersi che il workflow nuovo non
+                  # costruisce. Un workflow rotto scoperto al deploy è tardi.
+                  .github/workflows/build.yml) backend=true; app=true; www=true ;;
+                  .dockerignore) backend=true; app=true; www=true ;;
+                esac
+              done <<< "$cambiati"
+            fi
+          fi
+
+          righe=""
+          $backend && righe="${righe}{\"componente\":\"backend\",\"contesto\":\"./backend\",\"dockerfile\":\"backend/Dockerfile\",\"segreto\":\"no\"},"
+          $app     && righe="${righe}{\"componente\":\"app\",\"contesto\":\".\",\"dockerfile\":\"app/Dockerfile\",\"segreto\":\"si\"},"
+          $www     && righe="${righe}{\"componente\":\"www\",\"contesto\":\".\",\"dockerfile\":\"www/Dockerfile\",\"segreto\":\"si\"},"
+
+          if [ -z "$righe" ]; then
+            echo "qualcosa=false" >> "$GITHUB_OUTPUT"
+            echo "matrice={\"include\":[]}" >> "$GITHUB_OUTPUT"
+            echo "### Niente da costruire" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nessun file dei contesti di build (\`backend/\`, \`app/\`, \`www/\`, \`shared/\`, \`tools/\`) è cambiato." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "qualcosa=true" >> "$GITHUB_OUTPUT"
+          echo "matrice={\"include\":[${righe%,}]}" >> "$GITHUB_OUTPUT"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # La costruzione vera.
+  # ───────────────────────────────────────────────────────────────────────────
+  costruisci:
+    name: Costruisci ${{ matrix.componente }}
+    needs: scopri
+    if: needs.scopri.outputs.qualcosa == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      # Una immagine che non si costruisce non deve impedire alle altre di
+      # farlo: se il frontend è rotto, il backend va pubblicato lo stesso.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.scopri.outputs.matrice) }}
+
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v7
+
+      - name: Nomi e tag
+        id: nomi
+        run: |
+          set -euo pipefail
+          # GHCR non accetta maiuscole nel percorso, e GITHUB_REPOSITORY le ha
+          # ("FlavioTroja/mirada"): si abbassa qui, una volta.
+          repo="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          immagine="ghcr.io/${repo}/${{ matrix.componente }}"
+          sha="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+
+          # Il tag MOBILE si sposta SOLO dal ramo principale. Se lo muovesse
+          # ogni push di qualunque ramo, un deploy lanciato col default
+          # `tag: production` metterebbe in linea l'ultimo esperimento spinto, e
+          # nessuno se ne accorgerebbe finché non guarda `docker ps`.
+          # I rami di lavoro pubblicano comunque il loro sha corto, quindi
+          # distribuirne uno resta possibile — va solo chiesto per nome.
+          tags="${immagine}:${sha}"
+          if [ "${GITHUB_REF}" = "refs/heads/master" ] || [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            tags="${tags},${immagine}:production"
+            echo "Ramo principale: si sposta anche il tag mobile 'production'."
+          else
+            echo "Ramo di lavoro: si pubblica SOLO lo sha ${sha}, il tag 'production' non si muove."
+          fi
+
+          {
+            echo "immagine=${immagine}"
+            echo "sha=${sha}"
+            echo "tags=${tags}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Il token del registry privato
+        id: npm
+        if: matrix.segreto == 'si'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Il controllo sta DENTRO uno step: nelle espressioni `if:` di livello
+          # job il contesto `secrets` non è affidabile.
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "::error::Il secret NPM_TOKEN non è impostato, e ${{ matrix.componente }} ha bisogno di @keijo/ui da npm.overzoom.it."
+            exit 1
+          fi
+          # Del segreto si stampa la SOLA lunghezza: distingue «assente» da
+          # «presente ma sbagliato» senza rivelarne un carattere.
+          echo "NPM_TOKEN presente, ${#NPM_TOKEN} caratteri."
+          printf '%s' "$NPM_TOKEN" > "${RUNNER_TEMP}/npm_token"
+          echo "file=${RUNNER_TEMP}/npm_token" >> "$GITHUB_OUTPUT"
+
+      - name: Prepara buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Accedi a GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Costruisci e pubblica
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.contesto }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.nomi.outputs.tags }}
+          # Il token entra come SECRET BuildKit, non come build-arg: un
+          # build-arg resterebbe leggibile per sempre in `docker history`.
+          secret-files: ${{ matrix.segreto == 'si' && format('npm_token={0}', steps.npm.outputs.file) || '' }}
+          # `scope` distinto per componente: senza, le tre build si
+          # sovrascriverebbero la cache a vicenda e ogni corsa ripartirebbe da
+          # zero senza che si capisca perché.
+          cache-from: type=gha,scope=${{ matrix.componente }}
+          cache-to: type=gha,scope=${{ matrix.componente }},mode=max
+
+      - name: Cancella il token dal disco del runner
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/npm_token"
+
+      - name: Riepilogo
+        run: |
+          {
+            echo "### ${{ matrix.componente }}"
+            echo ""
+            echo "Pubblicati:"
+            echo '```'
+            echo "${{ steps.nomi.outputs.tags }}" | tr ',' '\n'
+            echo '```'
+            echo ""
+            echo "Per distribuire questa versione esatta, nel workflow *Deploy* usa \`tag\` = \`${{ steps.nomi.outputs.sha }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
