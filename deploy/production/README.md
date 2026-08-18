@@ -492,6 +492,7 @@ ipotesi; la terza la causa che quel comando conferma.
 | il proxy non riparte, e cadono **tutti** i domini | `docker exec proxy nginx -t` | *«host not found in upstream»*: qualcuno ha rimesso l'host letterale al posto della variabile, e i container sono giù |
 | `nginx -t` → *«open() /etc/nginx/mime.types failed»* | `ls ~/orch/nginx/mime.types` | il file è stato perso: si riestrae dall'immagine (§2) |
 | 502 anche su `curl http://127.0.0.1:8082/` | `docker compose ps` | `www` giù, o mai partito |
+| il sito risponde **400** con *«Header "host" with value "mirada.dance" is not allowed»* | `grep -A8 '"security"' www/angular.json` | `security.allowedHosts` in `www/angular.json` non contiene il dominio. È **compilato dentro il build**: non si corregge sul server né nel proxy, va aggiunto lì e l'immagine ricostruita. ⚠️ Il container resta `healthy` e la sonda interna passa, perché entrambe interrogano `127.0.0.1`, che è in lista: il guasto si vede **solo** dal dominio pubblico |
 | `docker compose pull` → `manifest unknown` | pagina *Packages* del repository | il tag di `IMAGE_TAG` non esiste su GHCR: la build non è mai passata, o il tag è sbagliato |
 | `docker compose pull` → `denied` a mano | `docker login ghcr.io` | il deploy chiude con `docker logout`: la sessione manuale è anonima su un pacchetto privato |
 | `up -d` → `network proxy_network … could not be found` | `docker network ls \| grep proxy_network` | il proxy non è in esecuzione. **Non** creare la rete a mano: una rete senza proxy attaccato fa riuscire `up` e restituisce 502 |

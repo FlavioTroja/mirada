@@ -446,12 +446,26 @@ jobs:
           # applicazione sana sul loopback, dominio pubblico in 502. Sta DOPO il
           # reload di proposito: prima, misurerebbe lo stato precedente e
           # sarebbe verde proprio nel caso che deve scoprire.
+          # ⚠️ `-L` e la soglia a 400, e non a 500 come nella sonda interna.
+          #
+          # La versione precedente accettava qualunque stato < 500 e senza
+          # seguire i redirect: il 18/08/2026 ha dato VERDE su un sito
+          # completamente rotto. Il server SSR di `www` rifiutava ogni
+          # richiesta con `Host: mirada.dance` — «Header "host" with value
+          # "mirada.dance" is not allowed» — rispondendo **400**; e la radice
+          # risponde comunque 302 verso /eventi, quindi senza `-L` la sonda
+          # misurava il redirect e non la pagina.
+          #
+          # Qui fuori si misura la catena INTERA e si pretende una pagina
+          # vera: i 4xx sono guasti. La tolleranza ai 4xx resta solo nella
+          # sonda interna, dove serve a non far fallire un deploy per una
+          # rotta spostata.
           prova() {
             nome="$1"; url="$2"
             for tentativo in 1 2 3; do
-              code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$url" 2>/dev/null || echo 000)"
+              code="$(curl -sL -o /dev/null -w '%{http_code}' --max-time 20 "$url" 2>/dev/null || echo 000)"
               echo "  ${nome}: tentativo ${tentativo} → HTTP ${code}"
-              if [ "$code" != "000" ] && [ "$code" -lt 500 ]; then return 0; fi
+              if [ "$code" != "000" ] && [ "$code" -lt 400 ]; then return 0; fi
               sleep 5
             done
             return 1
