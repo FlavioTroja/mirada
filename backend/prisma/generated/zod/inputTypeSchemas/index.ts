@@ -17,6 +17,7 @@ export { ServiceTypeScalarFieldEnumSchema } from './ServiceTypeScalarFieldEnumSc
 export { OrganizationScalarFieldEnumSchema } from './OrganizationScalarFieldEnumSchema';
 export { DancerProfileScalarFieldEnumSchema } from './DancerProfileScalarFieldEnumSchema';
 export { OrganizationMemberScalarFieldEnumSchema } from './OrganizationMemberScalarFieldEnumSchema';
+export { OrganizationInvitationScalarFieldEnumSchema } from './OrganizationInvitationScalarFieldEnumSchema';
 export { VenueScalarFieldEnumSchema } from './VenueScalarFieldEnumSchema';
 export { ArtistScalarFieldEnumSchema } from './ArtistScalarFieldEnumSchema';
 export { RefundPolicyScalarFieldEnumSchema } from './RefundPolicyScalarFieldEnumSchema';
@@ -62,6 +63,7 @@ export { FileOrderByRelevanceFieldEnumSchema } from './FileOrderByRelevanceField
 export { EventTypeOrderByRelevanceFieldEnumSchema } from './EventTypeOrderByRelevanceFieldEnumSchema';
 export { OrganizationOrderByRelevanceFieldEnumSchema } from './OrganizationOrderByRelevanceFieldEnumSchema';
 export { DancerProfileOrderByRelevanceFieldEnumSchema } from './DancerProfileOrderByRelevanceFieldEnumSchema';
+export { OrganizationInvitationOrderByRelevanceFieldEnumSchema } from './OrganizationInvitationOrderByRelevanceFieldEnumSchema';
 export { VenueOrderByRelevanceFieldEnumSchema } from './VenueOrderByRelevanceFieldEnumSchema';
 export { ArtistOrderByRelevanceFieldEnumSchema } from './ArtistOrderByRelevanceFieldEnumSchema';
 export { EventOrderByRelevanceFieldEnumSchema } from './EventOrderByRelevanceFieldEnumSchema';

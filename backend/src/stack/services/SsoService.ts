@@ -4,7 +4,10 @@ import { Log } from "@utils/adapters/log";
 import { AuthenticatedUser, AuthService } from "@services/AuthService";
 import { UserService } from "@services/UserService";
 import { UserRepository } from "@repositories/UserRepository";
-import { SsoConfigDTO, SsoLoginDTO } from "@DTOs/login/SsoLoginDTO";
+import { SsoConfigDTO, SsoLoginDTO, SsoSignupDTO } from "@DTOs/login/SsoLoginDTO";
+import { OrganizationService } from "@services/OrganizationService";
+import { OrganizationInvitationService } from "@services/OrganizationInvitationService";
+import { signSsoTicket, verifySsoTicket } from "@utils/helpers/ssoTicket";
 import { authorizationEndpoint, exchangeCode, IdTokenClaims, oidcConfig } from "@utils/adapters/oidc";
 
 /**
@@ -33,12 +36,30 @@ import { authorizationEndpoint, exchangeCode, IdTokenClaims, oidcConfig } from "
  * ruolo giusto esiste ed è sempre lo stesso (`DANCER`) — e questo è il punto in
  * cui aggiungerlo.
  */
+/**
+ * I due esiti di un accesso dal fornitore di identità. Discriminati su `esito`
+ * invece che «token oppure eccezione»: non avere ancora un'utenza è un passo
+ * del percorso, non un guasto.
+ */
+export type SsoLoginOutcome =
+    | { esito: "sessione"; user: AuthenticatedUser }
+    | {
+          esito: "registrazione";
+          /** Identità già verificata, firmata da noi, valida quindici minuti. */
+          ticket: string;
+          email: string;
+          nome: string | null;
+          invito: { organizationId: number; organizzazione: string; ruolo: string } | null;
+      };
+
 @Service()
 export class SsoService {
     constructor(
         private readonly authService: AuthService,
         private readonly userService: UserService,
         private readonly userRepository: UserRepository,
+        private readonly organizationService: OrganizationService,
+        private readonly organizationInvitationService: OrganizationInvitationService,
     ) {}
 
     /** Quel poco che serve alla SPA per comporre la richiesta di autorizzazione. */
@@ -69,10 +90,20 @@ export class SsoService {
     }
 
     /**
-     * Scambia il codice di autorizzazione e restituisce l'utenza di mirada
-     * corrispondente, pronta per essere firmata come qualsiasi altro accesso.
+     * Scambia il codice di autorizzazione e dice **cosa succede adesso**.
+     *
+     * Due esiti, e non uno più un errore. Chi ha già un'utenza entra. Chi non
+     * ce l'ha non ha sbagliato nulla: si è autenticato correttamente e non è
+     * ancora nessuno **qui** — è il primo passo di un'iscrizione, non un
+     * fallimento, e trattarlo come un `403` costringerebbe l'interfaccia a
+     * leggere gli errori per capire cosa mostrare.
+     *
+     * Nel secondo caso torna un **biglietto firmato** con l'identità già
+     * verificata. Serve perché il codice di autorizzazione è monouso e l'abbiamo
+     * appena speso: senza il biglietto, alla conferma del modulo dovremmo o
+     * rifare tutto il giro OIDC, o fidarci del browser su chi è la persona.
      */
-    public async login(dto: SsoLoginDTO): Promise<AuthenticatedUser> {
+    public async login(dto: SsoLoginDTO): Promise<SsoLoginOutcome> {
         const config = oidcConfig();
         if (!config) {
             Log.error("[Sso Service]: login attempted but OIDC_ISSUER/OIDC_CLIENT_ID are not configured");
@@ -93,17 +124,121 @@ export class SsoService {
 
         Log.info(`[Sso Service]: identity verified for sub '${claims.sub}'`);
 
-        const existing = await this.userService.findOneForAuthentication(
+        const bySub = await this.userService.findOneForAuthentication(
             { authentikSub: claims.sub },
             { populate: "roles" },
         );
 
-        const user = existing ?? await this.linkByEmail(claims);
+        const user = bySub ?? await this.linkByEmail(claims);
 
-        this.authService.assertAccountCanLogin(user);
+        if (user) {
+            this.authService.assertAccountCanLogin(user);
+            Log.info(`[Sso Service]: SSO login allowed for user '${user.username}' (id ${user.id})`);
+            return { esito: "sessione", user };
+        }
 
-        Log.info(`[Sso Service]: SSO login allowed for user '${user.username}' (id ${user.id})`);
-        return user;
+        // Nessuna utenza: la persona deve ancora iscriversi. Se ha in mano un
+        // invito valido glielo si descrive, perché la pagina possa dire «stai
+        // per unirti a Tango Club Bari» invece di chiedergli di aprire
+        // un'organizzazione che non voleva aprire.
+        const invito = dto.invito ? await this.descriviInvito(dto.invito, claims.email) : null;
+
+        Log.info(
+            `[Sso Service]: no mirada account for sub '${claims.sub}' — issuing a signup ticket`
+            + (invito ? ` with a pending invitation to organization (id ${invito.organizationId})` : ""),
+        );
+
+        return {
+            esito: "registrazione",
+            ticket: signSsoTicket(
+                { sub: claims.sub, email: claims.email!, name: claims.name },
+                process.env.JWT_SECRET!,
+            ),
+            email: claims.email!,
+            nome: claims.name ?? null,
+            invito,
+        };
+    }
+
+    /**
+     * **La registrazione vera e propria**, con la regola che tiene insieme tutto:
+     *
+     * > è il gettone dell'invito a decidere se nasce un tenant.
+     *
+     * Senza invito si apre un'organizzazione nuova. Con un invito valido si
+     * entra in quella indicata e **nessuna organizzazione viene creata**. Le due
+     * strade stanno nello stesso metodo di proposito: sono mutuamente esclusive,
+     * e separarle in due endpoint vorrebbe dire che qualcuno, un giorno, potrà
+     * chiamarli tutti e due.
+     */
+    public async signup(dto: SsoSignupDTO): Promise<AuthenticatedUser> {
+        const esito = verifySsoTicket(dto.ticket, process.env.JWT_SECRET!);
+        if (!esito.ok) {
+            Log.warn(`[Sso Service]: signup refused — ticket ${esito.reason}`);
+            throw esito.reason === "EXPIRED"
+                ? new httpErrors.Gone("La registrazione è rimasta aperta troppo a lungo: rifai l'accesso.")
+                : new httpErrors.Unauthorized("Registrazione non valida: rifai l'accesso.");
+        }
+
+        const { sub, email, name } = esito.payload;
+
+        // Fra il biglietto e questa chiamata possono essere passati minuti: in
+        // mezzo la stessa persona potrebbe aver completato la registrazione in
+        // un'altra scheda. Ricontrollare qui evita di creare la seconda utenza —
+        // e di farla fallire sul vincolo di unicità con un errore che non
+        // spiegherebbe nulla.
+        const esistente = await this.userService.findOneForAuthentication(
+            { OR: [{ authentikSub: sub }, { person: { contact: { email } } }] },
+            { populate: "roles" },
+        );
+        if (esistente) {
+            Log.info(`[Sso Service]: signup found an account already created for '${email}' — logging in instead`);
+            this.authService.assertAccountCanLogin(esistente);
+            return esistente;
+        }
+
+        const user = await this.userService.createFromSso({ sub, email, name });
+
+        if (dto.invito) {
+            await this.organizationInvitationService.accept(dto.invito, user.id, email);
+        } else {
+            await this.organizationService.openSelfService(user.id, {
+                name: dto.organizzazione!.nome,
+                contactEmail: dto.organizzazione!.emailContatto ?? email,
+            });
+        }
+
+        // Si rilegge: fra creazione dell'utenza e assegnazione del ruolo sono
+        // passate due transazioni, e il token va firmato con i ruoli VERI —
+        // altrimenti la persona entra autenticata e senza alcun permesso, cioè
+        // in un backoffice vuoto che sembra rotto.
+        const definitivo = await this.userService.findOneForAuthentication({ id: user.id }, { populate: "roles" });
+        if (!definitivo) {
+            throw new httpErrors.InternalServerError("Registrazione completata ma utenza non rileggibile.");
+        }
+
+        Log.info(
+            `[Sso Service]: signup completed for '${definitivo.username}' (id ${definitivo.id}) `
+            + (dto.invito ? "by accepting an invitation" : "by opening a new organization"),
+        );
+        return definitivo;
+    }
+
+    /** L'invito dietro il gettone, se è spendibile **e** intestato a questa persona. */
+    private async descriviInvito(token: string, email?: string) {
+        const invito = await this.organizationInvitationService.findSpendibile(token);
+        if (!invito) return null;
+
+        // Un invito valido ma intestato a un altro indirizzo non si descrive
+        // nemmeno: dirne il nome dell'organizzazione a chi non è il destinatario
+        // sarebbe già dire qualcosa che non gli spetta.
+        if (!email || invito.email !== email.trim().toLowerCase()) return null;
+
+        return {
+            organizationId: invito.organizationId,
+            organizzazione: (invito as { organization?: { name: string } }).organization?.name ?? "",
+            ruolo: invito.role,
+        };
     }
 
     /**
@@ -115,7 +250,7 @@ export class SsoService {
      * riassegnata, il `sub` no. Continuare a cercare per email significherebbe
      * che chi eredita un indirizzo eredita l'account.
      */
-    private async linkByEmail(claims: IdTokenClaims): Promise<AuthenticatedUser> {
+    private async linkByEmail(claims: IdTokenClaims): Promise<AuthenticatedUser | null> {
         const email = claims.email?.trim().toLowerCase();
 
         if (!email) {
@@ -137,12 +272,12 @@ export class SsoService {
             { populate: "roles" },
         );
 
+        // Nessuna utenza: NON è un errore. Da quando gli organizzatori possono
+        // iscriversi da soli, questo è il caso normale del primo accesso — e chi
+        // chiama lo traduce in «registrati», non in «non puoi entrare».
         if (!user) {
-            Log.warn(`[Sso Service]: no mirada account for '${email}' (sub '${claims.sub}') — access refused`);
-            throw new httpErrors.Forbidden(
-                "Il tuo accesso è valido, ma non esiste un'utenza su questa piattaforma collegata al tuo indirizzo. "
-                + "Chiedi a un amministratore di crearla.",
-            );
+            Log.info(`[Sso Service]: no mirada account for '${email}' (sub '${claims.sub}') — signup needed`);
+            return null;
         }
 
         // ── L'indirizzo, se il fornitore lo dà per verificato, È verificato ──

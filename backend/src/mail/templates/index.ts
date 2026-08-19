@@ -347,3 +347,60 @@ export function ticketTransferredMail(input: TicketTransferredInput): Rendered {
         facts: [{ label: "Evento", value: eventTitle }],
     });
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Invito a entrare in un'organizzazione
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface OrganizationInvitationInput {
+    locale: MailLocale;
+    /** Il nome dell'organizzazione in cui si è invitati. */
+    organizzazione: string;
+    /** Il link completo, gettone compreso: la composizione non è cosa del modello. */
+    inviteUrl: string;
+    /** Giorni di validità — scritti nel testo perché il lettore possa regolarsi. */
+    validForDays: number;
+}
+
+/**
+ * L'invito a diventare titolare di un'organizzazione che esiste già.
+ *
+ * Dice **due** cose che non sono ovvie a chi la riceve, e che se taciute
+ * producono entrambe una segnalazione: che il link è **personale** — vale solo
+ * per l'indirizzo a cui è arrivato, quindi inoltrarlo non serve a nulla — e che
+ * porta a diventare titolare, cioè a poter operare sui dati e sugli incassi di
+ * quell'organizzazione. Un invito che non dichiara cosa concede è un invito che
+ * qualcuno accetta senza sapere cosa sta accettando.
+ */
+export function organizationInvitationMail(input: OrganizationInvitationInput): Rendered {
+    const { locale, organizzazione, inviteUrl, validForDays } = input;
+
+    if (locale === "en") {
+        return build(`You have been invited to ${organizzazione}`, {
+            locale,
+            heading: "An organization is waiting for you.",
+            paragraphs: [
+                `You have been invited to join ${organizzazione} on Mirada as an owner: you will be able to create events, manage registrations and see the takings.`,
+                "Tap the button below and sign in. If you do not have an account yet, you will create one along the way.",
+                `The link works for ${validForDays} days and only for this email address: forwarding it to someone else will not let them in.`,
+            ],
+            action: { label: "Accept the invitation", url: inviteUrl },
+            footnote:
+                "If you were not expecting this, ignore the message: without your confirmation nothing happens, and whoever invited you can revoke it at any time.",
+        });
+    }
+
+    return build(`Sei stato invitato in ${organizzazione}`, {
+        locale,
+        heading: "C'è un'organizzazione che ti aspetta.",
+        paragraphs: [
+            `Sei stato invitato a entrare in ${organizzazione} su Mirada come titolare: potrai creare eventi, seguire le iscrizioni e vedere gli incassi.`,
+            "Premi il tasto qui sotto e accedi. Se non hai ancora un account, lo crei strada facendo.",
+            `Il link vale ${validForDays} giorni e soltanto per questo indirizzo email: inoltrarlo a qualcun altro non gli permetterà di entrare.`,
+        ],
+        action: { label: "Accetta l'invito", url: inviteUrl },
+        footnote:
+            "Se non te lo aspettavi, ignora il messaggio: senza la tua conferma non succede nulla, e chi ti ha invitato può revocarlo in qualsiasi momento.",
+    });
+}

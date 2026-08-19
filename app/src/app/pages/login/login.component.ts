@@ -51,6 +51,11 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
               Accedi con le credenziali della tua organizzazione. Se sei un ballerino, la tua
               area è il sito pubblico: questa applicazione è riservata a chi organizza.
             </p>
+            @if (oidc.config()?.enabled) {
+              <p class="mirada-hint">
+                Non hai ancora un’organizzazione? Accedi lo stesso: te la apri in un minuto.
+              </p>
+            }
 
             @if (failure()) {
               <keijo-info-box

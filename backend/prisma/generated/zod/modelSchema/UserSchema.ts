@@ -11,6 +11,8 @@ import { DancerProfileWithRelationsSchema, DancerProfilePartialWithRelationsSche
 import type { DancerProfileWithRelations, DancerProfilePartialWithRelations, DancerProfileOptionalDefaultsWithRelations } from './DancerProfileSchema'
 import { OrganizationMemberWithRelationsSchema, OrganizationMemberPartialWithRelationsSchema, OrganizationMemberOptionalDefaultsWithRelationsSchema } from './OrganizationMemberSchema'
 import type { OrganizationMemberWithRelations, OrganizationMemberPartialWithRelations, OrganizationMemberOptionalDefaultsWithRelations } from './OrganizationMemberSchema'
+import { OrganizationInvitationWithRelationsSchema, OrganizationInvitationPartialWithRelationsSchema, OrganizationInvitationOptionalDefaultsWithRelationsSchema } from './OrganizationInvitationSchema'
+import type { OrganizationInvitationWithRelations, OrganizationInvitationPartialWithRelations, OrganizationInvitationOptionalDefaultsWithRelations } from './OrganizationInvitationSchema'
 import { FiscalDeclarationWithRelationsSchema, FiscalDeclarationPartialWithRelationsSchema, FiscalDeclarationOptionalDefaultsWithRelationsSchema } from './FiscalDeclarationSchema'
 import type { FiscalDeclarationWithRelations, FiscalDeclarationPartialWithRelations, FiscalDeclarationOptionalDefaultsWithRelations } from './FiscalDeclarationSchema'
 import { RegistrationWithRelationsSchema, RegistrationPartialWithRelationsSchema, RegistrationOptionalDefaultsWithRelationsSchema } from './RegistrationSchema'
@@ -117,6 +119,8 @@ export type UserRelations = {
   logs: LogWithRelations[];
   dancerProfile?: DancerProfileWithRelations | null;
   organizationMemberships: OrganizationMemberWithRelations[];
+  invitationsSent: OrganizationInvitationWithRelations[];
+  invitationsAccepted: OrganizationInvitationWithRelations[];
   fiscalDeclarations: FiscalDeclarationWithRelations[];
   registrations: RegistrationWithRelations[];
   guardedRegistrations: RegistrationWithRelations[];
@@ -138,6 +142,8 @@ export const UserWithRelationsSchema: z.ZodType<UserWithRelations> = UserSchema.
   logs: z.lazy(() => LogWithRelationsSchema).array(),
   dancerProfile: z.lazy(() => DancerProfileWithRelationsSchema).nullish(),
   organizationMemberships: z.lazy(() => OrganizationMemberWithRelationsSchema).array(),
+  invitationsSent: z.lazy(() => OrganizationInvitationWithRelationsSchema).array(),
+  invitationsAccepted: z.lazy(() => OrganizationInvitationWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationWithRelationsSchema).array(),
   registrations: z.lazy(() => RegistrationWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationWithRelationsSchema).array(),
@@ -161,6 +167,8 @@ export type UserOptionalDefaultsRelations = {
   logs: LogOptionalDefaultsWithRelations[];
   dancerProfile?: DancerProfileOptionalDefaultsWithRelations | null;
   organizationMemberships: OrganizationMemberOptionalDefaultsWithRelations[];
+  invitationsSent: OrganizationInvitationOptionalDefaultsWithRelations[];
+  invitationsAccepted: OrganizationInvitationOptionalDefaultsWithRelations[];
   fiscalDeclarations: FiscalDeclarationOptionalDefaultsWithRelations[];
   registrations: RegistrationOptionalDefaultsWithRelations[];
   guardedRegistrations: RegistrationOptionalDefaultsWithRelations[];
@@ -182,6 +190,8 @@ export const UserOptionalDefaultsWithRelationsSchema: z.ZodType<UserOptionalDefa
   logs: z.lazy(() => LogOptionalDefaultsWithRelationsSchema).array(),
   dancerProfile: z.lazy(() => DancerProfileOptionalDefaultsWithRelationsSchema).nullish(),
   organizationMemberships: z.lazy(() => OrganizationMemberOptionalDefaultsWithRelationsSchema).array(),
+  invitationsSent: z.lazy(() => OrganizationInvitationOptionalDefaultsWithRelationsSchema).array(),
+  invitationsAccepted: z.lazy(() => OrganizationInvitationOptionalDefaultsWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationOptionalDefaultsWithRelationsSchema).array(),
   registrations: z.lazy(() => RegistrationOptionalDefaultsWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationOptionalDefaultsWithRelationsSchema).array(),
@@ -205,6 +215,8 @@ export type UserPartialRelations = {
   logs?: LogPartialWithRelations[];
   dancerProfile?: DancerProfilePartialWithRelations | null;
   organizationMemberships?: OrganizationMemberPartialWithRelations[];
+  invitationsSent?: OrganizationInvitationPartialWithRelations[];
+  invitationsAccepted?: OrganizationInvitationPartialWithRelations[];
   fiscalDeclarations?: FiscalDeclarationPartialWithRelations[];
   registrations?: RegistrationPartialWithRelations[];
   guardedRegistrations?: RegistrationPartialWithRelations[];
@@ -226,6 +238,8 @@ export const UserPartialWithRelationsSchema: z.ZodType<UserPartialWithRelations>
   logs: z.lazy(() => LogPartialWithRelationsSchema).array(),
   dancerProfile: z.lazy(() => DancerProfilePartialWithRelationsSchema).nullish(),
   organizationMemberships: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  invitationsSent: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
+  invitationsAccepted: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
   registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
@@ -247,6 +261,8 @@ export const UserOptionalDefaultsWithPartialRelationsSchema: z.ZodType<UserOptio
   logs: z.lazy(() => LogPartialWithRelationsSchema).array(),
   dancerProfile: z.lazy(() => DancerProfilePartialWithRelationsSchema).nullish(),
   organizationMemberships: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  invitationsSent: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
+  invitationsAccepted: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
   registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
@@ -268,6 +284,8 @@ export const UserWithPartialRelationsSchema: z.ZodType<UserWithPartialRelations>
   logs: z.lazy(() => LogPartialWithRelationsSchema).array(),
   dancerProfile: z.lazy(() => DancerProfilePartialWithRelationsSchema).nullish(),
   organizationMemberships: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  invitationsSent: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
+  invitationsAccepted: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
   registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),

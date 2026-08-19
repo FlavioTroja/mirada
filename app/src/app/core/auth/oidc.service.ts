@@ -37,7 +37,36 @@ interface Transito {
   nonce: string;
   /** Dove riportare l'utente dopo l'accesso. */
   redirect: string | null;
+  /**
+   * Il gettone dell'invito, quando si è arrivati da un link d'invito.
+   *
+   * Deve sopravvivere al viaggio dal fornitore di identità, e per questo sta
+   * **qui** e non in un parametro dell'indirizzo di ritorno: l'URI di
+   * reindirizzamento è registrato su Authentik a corrispondenza stretta, e
+   * appendergli un parametro lo farebbe rifiutare prima ancora di partire.
+   */
+  invito: string | null;
 }
+
+/** Cosa è successo al ritorno dal fornitore. */
+export type EsitoAccesso =
+  | { esito: 'sessione'; redirect: string }
+  | {
+      esito: 'registrazione';
+      ticket: string;
+      email: string | null;
+      nome: string | null;
+      /** Cosa mostrare: il nome dell'organizzazione che ha invitato. */
+      invito: { organizationId: number; organizzazione: string; ruolo: string } | null;
+      /**
+       * Il gettone grezzo dell'invito, da rispedire alla conferma.
+       *
+       * Sta qui e non nell'indirizzo: dopo il ritorno dal fornitore la pagina è
+       * `/registrazione` **senza** parametri, perché l'URI di reindirizzamento è
+       * registrato su Authentik a corrispondenza stretta e non può portarne.
+       */
+      invitoToken: string | null;
+    };
 
 export type PasswordLoginMode = 'on' | 'god-only' | 'off';
 
@@ -95,8 +124,22 @@ export class OidcService {
     }
   }
 
+  /**
+   * L'esito della registrazione in corso, se ce n'è una.
+   *
+   * Vive in memoria e non in `sessionStorage` di proposito: contiene un
+   * biglietto d'identità firmato, e non deve sopravvivere alla scheda. Il prezzo
+   * è che un ricaricamento della pagina di registrazione perde il filo e
+   * costringe a rifare l'accesso — trenta secondi, contro un gettone che resta
+   * su disco.
+   */
+  private readonly _registrazione = signal<Extract<EsitoAccesso, { esito: 'registrazione' }> | null>(
+    null,
+  );
+  readonly registrazione = this._registrazione.asReadonly();
+
   /** Manda il browser dal fornitore. Non ritorna: la pagina viene abbandonata. */
-  async start(redirect: string | null): Promise<void> {
+  async start(redirect: string | null, invito: string | null = null): Promise<void> {
     const config = this._config() ?? (await this.loadConfig());
     if (!config.enabled || !config.authorizationEndpoint || !config.clientId) {
       throw new Error('Accesso tramite fornitore di identità non disponibile.');
@@ -108,6 +151,7 @@ export class OidcService {
       state: casuale(16),
       nonce: casuale(16),
       redirect,
+      invito,
     };
 
     // `sessionStorage` e non `localStorage`: il transito vale per QUESTA scheda
@@ -131,11 +175,13 @@ export class OidcService {
   }
 
   /**
-   * Il ritorno dal fornitore: consegna il codice al backend e apre la sessione.
+   * Il ritorno dal fornitore: consegna il codice al backend.
    *
-   * @returns il percorso su cui riportare l'utente
+   * Due esiti possibili, e il secondo non è un errore: chi non ha ancora
+   * un'utenza su mirada si è autenticato benissimo, semplicemente non è ancora
+   * nessuno **qui**.
    */
-  async complete(code: string, state: string): Promise<string> {
+  async complete(code: string, state: string): Promise<EsitoAccesso> {
     const grezzo = sessionStorage.getItem(CHIAVE_TRANSITO);
     // Si consuma SUBITO, prima ancora di sapere se andrà bene: un transito
     // lasciato lì dopo un tentativo fallito è un verificatore riutilizzabile.
@@ -154,17 +200,75 @@ export class OidcService {
       throw new Error('La risposta del fornitore di identità non corrisponde alla richiesta.');
     }
 
-    const res = await this.api.post<{ token: string }>('/auth/sso', {
+    const res = await this.api.post<{
+      esito: 'sessione' | 'registrazione';
+      token: string | null;
+      ticket: string | null;
+      email: string | null;
+      nome: string | null;
+      invito: { organizationId: number; organizzazione: string; ruolo: string } | null;
+    }>('/auth/sso', {
       code,
       codeVerifier: transito.codeVerifier,
       redirectUri: this.redirectUri,
       nonce: transito.nonce,
+      invito: transito.invito ?? undefined,
     });
 
+    if (res.esito === 'sessione' && res.token) {
+      this.auth.setToken(res.token);
+      await this.auth.loadProfile();
+      this._registrazione.set(null);
+      return { esito: 'sessione', redirect: transito.redirect || '/' };
+    }
+
+    const registrazione = {
+      esito: 'registrazione' as const,
+      ticket: res.ticket!,
+      email: res.email,
+      nome: res.nome,
+      invito: res.invito,
+      invitoToken: transito.invito,
+    };
+    this._registrazione.set(registrazione);
+    return registrazione;
+  }
+
+  /**
+   * Conclude la registrazione aprendo un'organizzazione nuova.
+   *
+   * ⚠️ **O questa, o `accettaInvito` — mai entrambe.** È la regola su cui poggia
+   * tutto: è il gettone dell'invito a decidere se nasce un tenant. Sono due
+   * metodi e non un parametro proprio perché non si possano chiamare insieme.
+   */
+  async apriOrganizzazione(dati: { nome: string; emailContatto?: string }): Promise<void> {
+    await this.concludi({
+      organizzazione: { nome: dati.nome, emailContatto: dati.emailContatto || undefined },
+    });
+  }
+
+  /** Conclude la registrazione entrando nell'organizzazione che ha invitato. */
+  async accettaInvito(): Promise<void> {
+    const token = this._registrazione()?.invitoToken;
+    if (!token) {
+      throw new Error('Il gettone dell’invito non è più disponibile: riapri il link dall’email.');
+    }
+    await this.concludi({ invito: token });
+  }
+
+  private async concludi(corpo: Record<string, unknown>): Promise<void> {
+    const registrazione = this._registrazione();
+    if (!registrazione) {
+      throw new Error('La registrazione non risulta iniziata: rifai l’accesso.');
+    }
+
+    const res = await this.api.post<{ token: string }>('/auth/sso/signup', {
+      ticket: registrazione.ticket,
+      ...corpo,
+    });
     this.auth.setToken(res.token);
     await this.auth.loadProfile();
-
-    return transito.redirect || '/';
+    this._registrazione.set(null);
   }
 }
 

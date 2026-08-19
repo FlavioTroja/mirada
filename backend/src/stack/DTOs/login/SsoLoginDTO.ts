@@ -24,6 +24,14 @@ export const SsoLoginSchema = z.object({
     redirectUri: z.string().url(),
     /** Lega la risposta alla richiesta partita da questo browser. */
     nonce: z.string().min(1).optional(),
+    /**
+     * Il gettone dell'invito, se la persona è arrivata da un link d'invito.
+     *
+     * Serve **già qui**, e non solo alla conferma: sapendolo, la risposta può
+     * dire «stai per unirti a Tango Club Bari» invece di proporre l'apertura di
+     * un'organizzazione che quella persona non voleva aprire.
+     */
+    invito: z.string().min(1).optional(),
 });
 
 export type SsoLoginDTO = z.infer<typeof SsoLoginSchema>;
@@ -58,3 +66,55 @@ export const SsoConfigSchema = z.object({
 });
 
 export type SsoConfigDTO = z.infer<typeof SsoConfigSchema>;
+
+/**
+ * Corpo di `POST /auth/sso/signup` — la registrazione vera e propria.
+ *
+ * ⚠️ **`invito` e `organizzazione` si escludono a vicenda**, e il rifiuto è
+ * scritto nello schema invece che nel servizio: è la regola su cui poggia tutta
+ * l'autoregistrazione — *è il gettone dell'invito a decidere se nasce un tenant*
+ * — e una regola del genere non va lasciata a un `if` che qualcuno, un giorno,
+ * riscriverà.
+ */
+export const SsoSignupSchema = z
+    .object({
+        /** Il biglietto ricevuto da `POST /auth/sso`: porta l'identità già verificata. */
+        ticket: z.string().min(1),
+        invito: z.string().min(1).optional(),
+        organizzazione: z
+            .object({
+                nome: z.string().trim().min(2, "Serve il nome dell'organizzazione."),
+                /**
+                 * Facoltativa: in assenza si usa l'indirizzo con cui la persona
+                 * si è autenticata. Chiedere due volte lo stesso indirizzo al
+                 * primo passo è attrito senza contropartita.
+                 */
+                emailContatto: z.string().email().optional(),
+            })
+            .optional(),
+    })
+    .refine(dto => !!dto.invito !== !!dto.organizzazione, {
+        message: "Serve o il gettone di un invito, o i dati della nuova organizzazione — non entrambi.",
+    });
+
+export type SsoSignupDTO = z.infer<typeof SsoSignupSchema>;
+
+/** Risposta di `POST /auth/sso`: sessione aperta, oppure registrazione da fare. */
+export const SsoLoginResponseSchema = z.object({
+    esito: z.enum(["sessione", "registrazione"]),
+    /** Valorizzato solo con `esito: "sessione"`. */
+    token: z.string().nullable(),
+    /** Valorizzati solo con `esito: "registrazione"`. */
+    ticket: z.string().nullable(),
+    email: z.string().nullable(),
+    nome: z.string().nullable(),
+    invito: z
+        .object({
+            organizationId: z.number().int(),
+            organizzazione: z.string(),
+            ruolo: z.string(),
+        })
+        .nullable(),
+});
+
+export type SsoLoginResponseDTO = z.infer<typeof SsoLoginResponseSchema>;

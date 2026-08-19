@@ -198,6 +198,35 @@ export class EventService {
             throw new httpErrors.NotFound("Organizzazione non trovata.");
         }
 
+        // ── I dati fiscali, rimandati fin qui ────────────────────────────
+        //
+        // Ragione sociale e forma giuridica sono facoltative all'apertura, da
+        // quando un organizzatore può aprirsi l'organizzazione da solo: chi
+        // prova la piattaforma la sera non ha sottomano la visura, e un modulo
+        // che la pretende al primo passo è un modulo che nessuno finisce.
+        //
+        // Il conto però si paga qui, ed è il posto giusto: pubblicare significa
+        // cominciare a vendere, e da una vendita nasce un documento fiscale
+        // intestato a qualcuno. Senza questi campi quel qualcuno non esiste.
+        const mancanti: string[] = [];
+        if (!organization.legalName?.trim()) mancanti.push("la ragione sociale");
+        if (!organization.legalForm?.trim()) mancanti.push("la forma giuridica");
+        if (!organization.vatNumber?.trim() && !organization.taxCode?.trim()) {
+            // O l'una o l'altro: un'associazione senza partita IVA ha comunque
+            // un codice fiscale, e pretenderle entrambe escluderebbe metà degli
+            // organizzatori di tango che esistono.
+            mancanti.push("la partita IVA o il codice fiscale");
+        }
+        if (mancanti.length) {
+            Log.warn(
+                `[Event Service]: publish refused for event (id ${id}) — organization (id ${organization.id}) `
+                + `is missing ${mancanti.join(", ")}`,
+            );
+            throw new httpErrors.BadRequest(
+                `Prima di pubblicare completa i dati dell'organizzazione: manca ${mancanti.join(", ")}.`,
+            );
+        }
+
         if (organization.status !== OrganizationStatus.APPROVED) {
             Log.warn(
                 `[Event Service]: publish refused for event (id ${id}) — organization (id ${organization.id}) `

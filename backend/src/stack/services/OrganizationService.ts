@@ -97,6 +97,72 @@ export class OrganizationService {
     }
 
     /**
+     * **L'organizzazione che si apre da sola**, al primo accesso di un
+     * organizzatore che arriva dal fornitore di identità senza invito.
+     *
+     * Fa gli stessi tre atti di `save` — organizzazione, membership `OWNER`,
+     * ruolo — nella stessa transazione e per la stessa ragione: ciascuno senza
+     * gli altri produce un cliente a metà. Cambia soltanto **chi decide**: lì un
+     * amministratore con i permessi, qui la persona stessa.
+     *
+     * ── Perché non è un caso particolare di `save` ─────────────────────────────
+     * `save` chiede un `principalId` e ne verifica i permessi, e passargli
+     * l'utente appena nato — che di permessi non ne ha ancora nessuno — vorrebbe
+     * dire aggirare quel controllo dall'interno. Due strade con due
+     * autorizzazioni diverse sono due metodi.
+     *
+     * ── Nasce PENDING, ed è il punto ─────────────────────────────────────────
+     * Chiunque può aprirsi un'organizzazione; nessuno può **vendere** finché
+     * `god` non l'ha approvata (`EventService.publish` pretende `APPROVED` e
+     * `payoutStatus` abilitato). L'autoregistrazione toglie un attrito
+     * commerciale, non un controllo: il danno di un'iscrizione fasulla si ferma
+     * a una riga da cancellare.
+     */
+    public async openSelfService(
+        userId: number,
+        data: { name: string; contactEmail: string },
+        tx?: Prisma.TransactionClient,
+    ): Promise<Organization> {
+        Log.info(`[Organization Service]: self-service opening of '${data.name}' by user (id ${userId})`);
+
+        const apri = async (prisma: Prisma.TransactionClient) => {
+            const created = await this.organizationRepository.save(
+                {
+                    name: data.name.trim(),
+                    contactEmail: data.contactEmail.trim().toLowerCase(),
+                    // Ragione sociale, forma giuridica e partita IVA restano
+                    // vuote: si chiedono prima di pubblicare, non prima di
+                    // entrare. Lo stato è quello di serie, `PENDING`.
+                },
+                prisma,
+            );
+
+            await this.organizationMemberRepository.save(
+                {
+                    organizationId: created.id,
+                    userId,
+                    role: OrgMemberRole.OWNER,
+                    invitedAt: new Date(),
+                    // Non c'è invito da accettare: se l'è aperta lei.
+                    acceptedAt: new Date(),
+                },
+                prisma,
+            );
+
+            await this.organizationMemberService.syncMembershipRoles(userId, prisma);
+            return created;
+        };
+
+        const organization = tx ? await apri(tx) : await getPrismaClient().$transaction(apri);
+
+        Log.info(
+            `[Organization Service]: organization '${organization.name}' (id ${organization.id}) `
+            + `opened self-service by user (id ${userId}), status ${organization.status}`,
+        );
+        return organization;
+    }
+
+    /**
      * Chi sarà il titolare.
      *
      * Se il campo arriva, è quello — dopo aver verificato che l'utente esista e

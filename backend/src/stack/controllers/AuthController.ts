@@ -6,7 +6,14 @@ import { LoginResponseSchema } from "@DTOs/login/LoginResponseDTO";
 import { LoginRequestDTO, LoginRequestSchema } from "@DTOs/login/LoginRequestDTO";
 import { EmailConfirmationService } from "@services/EmailConfirmationService";
 import { SsoService } from "@services/SsoService";
-import { SsoConfigSchema, SsoLoginDTO, SsoLoginSchema } from "@DTOs/login/SsoLoginDTO";
+import {
+    SsoConfigSchema,
+    SsoLoginDTO,
+    SsoLoginResponseSchema,
+    SsoLoginSchema,
+    SsoSignupDTO,
+    SsoSignupSchema,
+} from "@DTOs/login/SsoLoginDTO";
 import {
     ConfirmEmailRequestDTO,
     ConfirmEmailRequestSchema,
@@ -80,7 +87,7 @@ export class AuthController {
                 + "route links an identity, it never creates a user.",
             body: SsoLoginSchema,
             response: {
-                200: LoginResponseSchema.describe("Sign-in success"),
+                200: SsoLoginResponseSchema.describe("Session opened, or signup required"),
             },
         },
     })
@@ -88,9 +95,53 @@ export class AuthController {
         req: FastifyRequest<{ Body: SsoLoginDTO }>,
         reply: FastifyReply,
     ) {
-        const user = await this.ssoService.login(req.body);
-        // Lo STESSO payload dell'accesso con password (§3.1): da qui in poi le
-        // due strade sono indistinguibili, ed è il punto di tutta la fase.
+        const esito = await this.ssoService.login(req.body);
+
+        if (esito.esito === "sessione") {
+            // Lo STESSO payload dell'accesso con password (§3.1): da qui in poi
+            // le due strade sono indistinguibili, ed è il punto di tutta la fase.
+            reply.status(200).send({
+                esito: "sessione",
+                token: await reply.jwtSign(this.authService.toTokenPayload(esito.user)),
+                ticket: null,
+                email: null,
+                nome: null,
+                invito: null,
+            });
+            return;
+        }
+
+        reply.status(200).send({
+            esito: "registrazione",
+            token: null,
+            ticket: esito.ticket,
+            email: esito.email,
+            nome: esito.nome,
+            invito: esito.invito,
+        });
+    }
+
+    @POST("/sso/signup", {
+        schema: {
+            operationId: "ssoSignup",
+            summary: "Complete the first sign-in: open an organization, or accept an invitation",
+            description:
+                "Public, but not open: it takes the signed ticket issued by POST /auth/sso, which carries an already "
+                + "verified identity — the authorization code is single-use and has been spent. The invitation token "
+                + "is what decides whether a tenant is born: without one a new organization is opened (PENDING, so it "
+                + "cannot sell until approved), with a valid one the caller joins the organization it names and no "
+                + "organization is created. Answers with the very same session token the password login issues.",
+            body: SsoSignupSchema,
+            response: {
+                200: LoginResponseSchema.describe("Signup complete — the session token is ready to use"),
+            },
+        },
+    })
+    async ssoSignup(
+        req: FastifyRequest<{ Body: SsoSignupDTO }>,
+        reply: FastifyReply,
+    ) {
+        const user = await this.ssoService.signup(req.body);
         reply
             .status(200)
             .send({ token: await reply.jwtSign(this.authService.toTokenPayload(user)) });

@@ -7,6 +7,8 @@ import { FileWithRelationsSchema, FilePartialWithRelationsSchema, FileOptionalDe
 import type { FileWithRelations, FilePartialWithRelations, FileOptionalDefaultsWithRelations } from './FileSchema'
 import { OrganizationMemberWithRelationsSchema, OrganizationMemberPartialWithRelationsSchema, OrganizationMemberOptionalDefaultsWithRelationsSchema } from './OrganizationMemberSchema'
 import type { OrganizationMemberWithRelations, OrganizationMemberPartialWithRelations, OrganizationMemberOptionalDefaultsWithRelations } from './OrganizationMemberSchema'
+import { OrganizationInvitationWithRelationsSchema, OrganizationInvitationPartialWithRelationsSchema, OrganizationInvitationOptionalDefaultsWithRelationsSchema } from './OrganizationInvitationSchema'
+import type { OrganizationInvitationWithRelations, OrganizationInvitationPartialWithRelations, OrganizationInvitationOptionalDefaultsWithRelations } from './OrganizationInvitationSchema'
 import { OrderWithRelationsSchema, OrderPartialWithRelationsSchema, OrderOptionalDefaultsWithRelationsSchema } from './OrderSchema'
 import type { OrderWithRelations, OrderPartialWithRelations, OrderOptionalDefaultsWithRelations } from './OrderSchema'
 import { VenueWithRelationsSchema, VenuePartialWithRelationsSchema, VenueOptionalDefaultsWithRelationsSchema } from './VenueSchema'
@@ -29,8 +31,19 @@ export const OrganizationSchema = z.object({
   payoutStatus: PayoutStatusSchema,
   id: z.number().int(),
   name: z.string(),
-  legalName: z.string(),
-  legalForm: z.string(),
+  /**
+   * ⚠️ Ragione sociale e forma giuridica sono **facoltative alla nascita** e
+   * obbligatorie **prima di pubblicare** (`EventService.publish`).
+   * 
+   * Da quando un organizzatore può aprirsi l'organizzazione da solo, questi
+   * campi non possono più essere pretesi all'apertura: chi si iscrive la sera
+   * per provare la piattaforma non ha sottomano la visura, e un modulo che
+   * chiede la forma giuridica al primo passo è un modulo che nessuno finisce.
+   * Il dato serve quando serve davvero — cioè quando si comincia a vendere
+   * biglietti e a emettere documenti fiscali.
+   */
+  legalName: z.string().nullish(),
+  legalForm: z.string().nullish(),
   vatNumber: z.string().nullish(),
   taxCode: z.string().nullish(),
   addressId: z.number().int().nullish(),
@@ -83,6 +96,7 @@ export type OrganizationRelations = {
   address?: AddressWithRelations | null;
   logoFile?: FileWithRelations | null;
   members: OrganizationMemberWithRelations[];
+  invitations: OrganizationInvitationWithRelations[];
   orders: OrderWithRelations[];
   venues: VenueWithRelations[];
   artists: ArtistWithRelations[];
@@ -97,6 +111,7 @@ export const OrganizationWithRelationsSchema: z.ZodType<OrganizationWithRelation
   address: z.lazy(() => AddressWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FileWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberWithRelationsSchema).array(),
+  invitations: z.lazy(() => OrganizationInvitationWithRelationsSchema).array(),
   orders: z.lazy(() => OrderWithRelationsSchema).array(),
   venues: z.lazy(() => VenueWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistWithRelationsSchema).array(),
@@ -113,6 +128,7 @@ export type OrganizationOptionalDefaultsRelations = {
   address?: AddressOptionalDefaultsWithRelations | null;
   logoFile?: FileOptionalDefaultsWithRelations | null;
   members: OrganizationMemberOptionalDefaultsWithRelations[];
+  invitations: OrganizationInvitationOptionalDefaultsWithRelations[];
   orders: OrderOptionalDefaultsWithRelations[];
   venues: VenueOptionalDefaultsWithRelations[];
   artists: ArtistOptionalDefaultsWithRelations[];
@@ -127,6 +143,7 @@ export const OrganizationOptionalDefaultsWithRelationsSchema: z.ZodType<Organiza
   address: z.lazy(() => AddressOptionalDefaultsWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FileOptionalDefaultsWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberOptionalDefaultsWithRelationsSchema).array(),
+  invitations: z.lazy(() => OrganizationInvitationOptionalDefaultsWithRelationsSchema).array(),
   orders: z.lazy(() => OrderOptionalDefaultsWithRelationsSchema).array(),
   venues: z.lazy(() => VenueOptionalDefaultsWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistOptionalDefaultsWithRelationsSchema).array(),
@@ -143,6 +160,7 @@ export type OrganizationPartialRelations = {
   address?: AddressPartialWithRelations | null;
   logoFile?: FilePartialWithRelations | null;
   members?: OrganizationMemberPartialWithRelations[];
+  invitations?: OrganizationInvitationPartialWithRelations[];
   orders?: OrderPartialWithRelations[];
   venues?: VenuePartialWithRelations[];
   artists?: ArtistPartialWithRelations[];
@@ -157,6 +175,7 @@ export const OrganizationPartialWithRelationsSchema: z.ZodType<OrganizationParti
   address: z.lazy(() => AddressPartialWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FilePartialWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  invitations: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   orders: z.lazy(() => OrderPartialWithRelationsSchema).array(),
   venues: z.lazy(() => VenuePartialWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistPartialWithRelationsSchema).array(),
@@ -171,6 +190,7 @@ export const OrganizationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<O
   address: z.lazy(() => AddressPartialWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FilePartialWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  invitations: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   orders: z.lazy(() => OrderPartialWithRelationsSchema).array(),
   venues: z.lazy(() => VenuePartialWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistPartialWithRelationsSchema).array(),
@@ -185,6 +205,7 @@ export const OrganizationWithPartialRelationsSchema: z.ZodType<OrganizationWithP
   address: z.lazy(() => AddressPartialWithRelationsSchema).nullish(),
   logoFile: z.lazy(() => FilePartialWithRelationsSchema).nullish(),
   members: z.lazy(() => OrganizationMemberPartialWithRelationsSchema).array(),
+  invitations: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   orders: z.lazy(() => OrderPartialWithRelationsSchema).array(),
   venues: z.lazy(() => VenuePartialWithRelationsSchema).array(),
   artists: z.lazy(() => ArtistPartialWithRelationsSchema).array(),

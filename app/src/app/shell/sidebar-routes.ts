@@ -108,6 +108,7 @@ export function sidebarRoutesFor(can: Capabilities): KeijoSidebarRoute[] {
         { icon: domain, label: 'Incasso', path: '/organization/payout' },
         { icon: domain, label: 'Dichiarazioni', path: '/organization/fiscal' },
         { icon: domain, label: 'Membri', path: '/organization/members' },
+        { icon: domain, label: 'Inviti', path: '/organization/invitations' },
         { icon: domain, label: 'Policy di rimborso', path: '/organization/refund-policies' },
       ],
     });

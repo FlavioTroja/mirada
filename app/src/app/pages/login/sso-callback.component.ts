@@ -100,8 +100,15 @@ export class SsoCallbackComponent implements OnInit {
     }
 
     try {
-      const target = await this.oidc.complete(code, state);
-      await this.router.navigateByUrl(target);
+      const esito = await this.oidc.complete(code, state);
+
+      // Chi non ha ancora un'utenza su mirada non ha sbagliato nulla: si è
+      // autenticato correttamente e non è ancora nessuno **qui**. Prosegue sulla
+      // pagina che gli chiede di aprire l'organizzazione, o di accettare
+      // l'invito che ha in mano.
+      await this.router.navigateByUrl(
+        esito.esito === 'sessione' ? esito.redirect : '/registrazione',
+      );
     } catch (err) {
       if (err instanceof ApiError) {
         // `forbidden` è il caso che vale la pena distinguere: l'identità è

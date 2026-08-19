@@ -13,6 +13,8 @@ import {
     reservationExpiredMail,
     ticketTransferredMail,
     welcomeMail,
+    organizationInvitationMail,
+    OrganizationInvitationInput,
 } from "@mail/templates";
 
 /**
@@ -89,6 +91,23 @@ export class MailService {
     ): Promise<boolean> {
         return this.dispatch("email-confirmation", to, input.firstName, () =>
             confirmEmailMail({ ...input, locale: this.localeFor(to) }),
+        );
+    }
+
+    /**
+     * Invito a entrare in un'organizzazione come titolare.
+     *
+     * Non restituisce l'esito, al contrario della conferma dell'indirizzo: qui
+     * l'invito **è già scritto in banca dati** e resta revocabile e rinviabile
+     * dal backoffice. Se la posta non parte, chi ha invitato lo vede — l'invito
+     * resta lì, in attesa — e può rimandarlo.
+     */
+    public async sendOrganizationInvitation(
+        to: string,
+        input: Omit<OrganizationInvitationInput, "locale">,
+    ): Promise<void> {
+        await this.dispatch("organization-invitation", to, input.organizzazione, () =>
+            organizationInvitationMail({ ...input, locale: this.localeFor(to) }),
         );
     }
 

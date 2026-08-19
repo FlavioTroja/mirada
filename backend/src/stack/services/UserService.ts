@@ -24,7 +24,7 @@ import { PermissionScope } from "@enums/PermissionScope";
 import { RoleToUserUpdateDTO } from "@DTOs/role_to_user/RoleToUserUpdateDTO";
 import { splitLinkableEntities } from "@utils/helpers/mergeEntities";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
-import { generateRandomString } from "@utils/helpers/crypto";
+import { encryptPasswordSync, generateRandomString } from "@utils/helpers/crypto";
 import { regionForProvince } from "@utils/helpers/italianProvinces";
 import { FileService } from "@services/FileService";
 import { EmailConfirmationService } from "@services/EmailConfirmationService";
@@ -205,6 +205,81 @@ export class UserService {
      * Riservato al login (`AuthService`): è l'unico percorso che legge l'hash
      * della password, omesso dal client Prisma su tutti gli altri (§3.1).
      */
+    /**
+     * **L'utenza che nasce dal fornitore di identità**, al primo accesso di chi
+     * su mirada non c'era ancora.
+     *
+     * Non passa da `save` né da `register`, e per motivi diversi. `save` è la
+     * strada amministrativa e pretende un `principalId` con i permessi: qui non
+     * c'è nessun amministratore, c'è una persona che si sta iscrivendo da sola.
+     * `register` è la strada del ballerino e crea una password, manda l'email di
+     * conferma e attende un clic: tutte cose che qui sarebbero di troppo, perché
+     * l'indirizzo l'ha già dimostrato Authentik.
+     *
+     * ── La password che nessuno conosce ─────────────────────────────────────
+     * `User.password` non è nullable, e renderlo tale vorrebbe dire che ogni
+     * percorso che confronta una password debba ricordarsi del caso «assente».
+     * Si scrive invece l'impronta di una stringa casuale che **non esiste
+     * altrove**: la colonna resta onesta, e l'accesso con password per questa
+     * utenza semplicemente non può riuscire. Chi vorrà usarlo passerà dal
+     * recupero password, che è il posto giusto per assegnarsene una.
+     */
+    public async createFromSso(params: {
+        sub: string;
+        email: string;
+        name?: string | null;
+    }): Promise<UserWithRelations> {
+        const email = params.email.trim().toLowerCase();
+        const [nome, ...resto] = (params.name ?? "").trim().split(/\s+/).filter(Boolean);
+        const cognome = resto.join(" ");
+
+        // Lo username deriva dall'indirizzo, che è univoco. Se è occupato — due
+        // persone con `mario@` su domini diversi — si accoda un progressivo
+        // invece di fallire: il nome utente è un'etichetta, non un'identità, e
+        // quella vera è il `sub`.
+        const base = (email.split("@")[0] || "utente").replace(/[^a-z0-9._-]/gi, "").toLowerCase() || "utente";
+        let username = base;
+        for (let i = 2; await this.userRepository.findOne({ username }); i++) {
+            username = `${base}${i}`;
+        }
+
+        Log.info(`[User Service]: creating account from SSO identity for '${email}' as '${username}'`);
+
+        const created = await getPrismaClient().$transaction(async prisma => {
+            const contact = await this.contactRepository.save({ email }, prisma);
+            const person = await this.personRepository.save(
+                {
+                    name: nome || email.split("@")[0] || "Organizzatore",
+                    surname: cognome || "",
+                    personType: "USER",
+                    contact: { connect: { id: contact.id } },
+                } as never,
+                prisma,
+            );
+            return this.userRepository.save(
+                {
+                    username,
+                    password: encryptPasswordSync(generateRandomString(32)),
+                    wsCode: generateRandomString(6),
+                    authentikSub: params.sub,
+                    // L'indirizzo l'ha già dimostrato il fornitore di identità:
+                    // chiedere in più il clic su un'email di conferma sarebbe
+                    // pretendere due volte la stessa prova.
+                    emailVerifiedAt: new Date(),
+                    person: { connect: { id: person.id } },
+                } as never,
+                prisma,
+            );
+        });
+
+        Log.info(`[User Service]: account created from SSO identity '${username}' (id ${created.id})`);
+
+        return (await this.userRepository.findOneForAuthentication(
+            { id: created.id },
+            { populate: "roles" },
+        )) as unknown as UserWithRelations;
+    }
+
     public async findOneForAuthentication(query: Prisma.UserWhereInput, options?: FindOptions) {
         return await this.userRepository.findOneForAuthentication(query, options);
     }

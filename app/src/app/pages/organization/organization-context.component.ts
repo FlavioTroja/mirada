@@ -194,6 +194,7 @@ export class OrganizationContextComponent {
     { id: 'payout', label: 'Incasso', icon: payments, path: '/organization/payout' },
     { id: 'fiscal', label: 'Dichiarazioni', icon: description, path: '/organization/fiscal' },
     { id: 'members', label: 'Membri', icon: groups, path: '/organization/members' },
+    { id: 'invitations', label: 'Inviti', icon: groups, path: '/organization/invitations' },
     {
       id: 'refund-policies',
       label: 'Policy di rimborso',

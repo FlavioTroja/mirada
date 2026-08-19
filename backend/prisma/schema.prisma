@@ -122,9 +122,11 @@ model User {
 
   dancerProfile           DancerProfile?
   organizationMemberships OrganizationMember[]
-  fiscalDeclarations      FiscalDeclaration[]  @relation("FiscalDeclarationDeclaredBy")
-  registrations           Registration[]       @relation("RegistrationPerson")
-  guardedRegistrations    Registration[]       @relation("RegistrationGuardian")
+  invitationsSent         OrganizationInvitation[] @relation("OrganizationInvitationInvitedBy")
+  invitationsAccepted     OrganizationInvitation[] @relation("OrganizationInvitationAcceptedBy")
+  fiscalDeclarations      FiscalDeclaration[]      @relation("FiscalDeclarationDeclaredBy")
+  registrations           Registration[]           @relation("RegistrationPerson")
+  guardedRegistrations    Registration[]           @relation("RegistrationGuardian")
 
   // Fase D1 — passi 17, 23→26 (più i gusci 18→22 del checkout).
   reviewedRequirementOutcomes RequirementOutcome[] @relation("RequirementOutcomeReviewer")
@@ -464,9 +466,19 @@ model ServiceType {
 model Organization {
   id Int @id @default(autoincrement())
 
-  name      String
-  legalName String
-  legalForm String
+  name String
+
+  /// ⚠️ Ragione sociale e forma giuridica sono **facoltative alla nascita** e
+  /// obbligatorie **prima di pubblicare** (`EventService.publish`).
+  ///
+  /// Da quando un organizzatore può aprirsi l'organizzazione da solo, questi
+  /// campi non possono più essere pretesi all'apertura: chi si iscrive la sera
+  /// per provare la piattaforma non ha sottomano la visura, e un modulo che
+  /// chiede la forma giuridica al primo passo è un modulo che nessuno finisce.
+  /// Il dato serve quando serve davvero — cioè quando si comincia a vendere
+  /// biglietti e a emettere documenti fiscali.
+  legalName String?
+  legalForm String?
   vatNumber String?
   taxCode   String?
 
@@ -491,6 +503,7 @@ model Organization {
   logoFile   File? @relation("OrganizationLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
 
   members            OrganizationMember[]
+  invitations        OrganizationInvitation[]
   orders             Order[]
   venues             Venue[]
   artists            Artist[]
@@ -566,6 +579,65 @@ model OrganizationMember {
   @@unique([organizationId, userId, role])
   @@index([userId])
   @@index([organizationId])
+}
+
+/// **L'invito a entrare in un'organizzazione che esiste già.**
+///
+/// È ciò che permette a un secondo organizzatore di raggiungere un tenant che
+/// non ha aperto lui. La regola che governa tutta l'autoregistrazione è che sia
+/// **il gettone a decidere se nasce un tenant**: chi arriva senza invito apre
+/// un'organizzazione nuova, chi arriva con un invito valido entra in quella
+/// indicata e nessuna organizzazione viene creata.
+///
+/// ── Perché una riga, e non un gettone firmato ────────────────────────────────
+/// I link di conferma dell'email sono gettoni firmati **senza stato**
+/// (`@utils/helpers/emailToken`), e lì è la scelta giusta. Qui no: un invito
+/// deve poter essere **revocato** prima della scadenza, e speso **una volta
+/// sola**. Una firma non sa fare né l'una né l'altra cosa — dice soltanto
+/// «questo l'ho emesso io» — mentre una riga porta `revokedAt` e `acceptedAt` e
+/// risponde a entrambe le domande.
+model OrganizationInvitation {
+  id Int @id @default(autoincrement())
+
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// L'indirizzo a cui l'invito è stato mandato, normalizzato in minuscolo.
+  ///
+  /// ⚠️ Chi accetta deve autenticarsi **con questo indirizzo**. Senza il
+  /// vincolo, un link inoltrato — anche solo per sbaglio, anche solo perché la
+  /// casella è condivisa — regalerebbe a un estraneo il ruolo di titolare di
+  /// un'organizzazione altrui.
+  email String
+
+  /// Oggi vale solo `OWNER`: si invitano altri titolari. Gli altri due ruoli si
+  /// assegnano dal backoffice a chi un'utenza ce l'ha già, e non hanno bisogno
+  /// di una strada d'ingresso propria.
+  role OrgMemberRole @default(OWNER)
+
+  /// **L'impronta** del gettone, non il gettone. Chi legge la banca dati non
+  /// deve poter entrare in un'organizzazione: l'originale esiste solo dentro il
+  /// link, cioè nella casella di posta dell'invitato.
+  tokenHash String @unique
+
+  invitedById Int
+  invitedBy   User @relation("OrganizationInvitationInvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  expiresAt  DateTime
+  acceptedAt DateTime?
+
+  /// Chi ha accettato. Resta anche dopo, perché «chi ha fatto entrare chi» è
+  /// esattamente la domanda che ci si pone mesi più tardi.
+  acceptedById Int?
+  acceptedBy   User? @relation("OrganizationInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([email])
 }
 
 // -----------------------------------------------------------------------------

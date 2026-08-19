@@ -20,6 +20,7 @@ export const ModelNameItalian: Record<Prisma.ModelName, string> = {
     ServiceType: "tipo di servizio",
     Organization: "organizzazione",
     OrganizationMember: "membro dell'organizzazione",
+    OrganizationInvitation: "invito all'organizzazione",
     DancerProfile: "profilo da ballerino",
     Venue: "sala",
     Artist: "artista",

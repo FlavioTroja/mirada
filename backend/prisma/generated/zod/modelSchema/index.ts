@@ -16,6 +16,7 @@ export * from './ServiceTypeSchema';
 export * from './OrganizationSchema';
 export * from './DancerProfileSchema';
 export * from './OrganizationMemberSchema';
+export * from './OrganizationInvitationSchema';
 export * from './VenueSchema';
 export * from './ArtistSchema';
 export * from './RefundPolicySchema';

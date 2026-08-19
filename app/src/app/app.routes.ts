@@ -32,6 +32,16 @@ export const routes: Routes = [
   // ⚠️ Il percorso è registrato fra gli URI di reindirizzamento del provider su
   // Authentik, con corrispondenza stretta: rinominarlo qui senza rinominarlo
   // là fa fallire l'accesso con un 400 del fornitore.
+  // Il primo accesso di chi su mirada non c'era ancora: apre la sua
+  // organizzazione, oppure accetta l'invito che ha in mano. Fuori dalla shell e
+  // senza guardia, come `/login`: qui la sessione non c'è ancora.
+  {
+    path: 'registrazione',
+    loadComponent: () =>
+      import('./pages/login/registrazione.component').then((m) => m.RegistrazioneComponent),
+    data: { showBackButton: false },
+  },
+
   {
     path: 'auth/callback',
     loadComponent: () =>
@@ -175,6 +185,14 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/organization/organization-profile.component').then(
         (m) => m.OrganizationProfileComponent,
+      ),
+  },
+  {
+    path: 'organization/invitations',
+    canActivate: [requireCapability('organization')],
+    loadComponent: () =>
+      import('./pages/organization/organization-invitations.component').then(
+        (m) => m.OrganizationInvitationsComponent,
       ),
   },
   {

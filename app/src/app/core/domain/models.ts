@@ -112,6 +112,24 @@ export interface OrganizationMember extends Entity {
   organization?: Organization | null;
 }
 
+/**
+ * L'invito a entrare in un'organizzazione come titolare.
+ *
+ * Nessun campo porta il gettone, ed è voluto: l'API restituisce l'invito senza
+ * di esso, perché l'originale esiste solo dentro il link partito per posta e in
+ * banca dati ne resta la sola impronta.
+ */
+export interface OrganizationInvitation extends Entity {
+  organizationId: number;
+  email: string;
+  role: OrgMemberRole;
+  invitedById: number;
+  expiresAt: string;
+  acceptedAt?: string | null;
+  acceptedById?: number | null;
+  revokedAt?: string | null;
+}
+
 export interface FiscalDeclaration extends Entity {
   organizationId: number;
   eventId?: number | null;
