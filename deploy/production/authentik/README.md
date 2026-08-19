@@ -144,6 +144,65 @@ mano, dopo aver letto le note di rilascio, e con un dump fresco:
 docker compose exec -T authentik-db pg_dump -U authentik authentik | gzip > ~/authentik-$(date +%F).sql.gz
 ```
 
+## Come ci passa l'applicazione
+
+```
+[SPA app.mirada.dance]          [Authentik]                  [backend mirada]
+
+  /login ──"Accedi con Authentik"─▶ /authorize (code + PKCE)
+                                      │ password, TOTP, Google
+  /auth/callback ◀───── code ─────────┘
+       │
+       └─ POST /api/auth/sso { code, codeVerifier, redirectUri, nonce }
+                    │
+                    └──▶ scambia il codice con Authentik (lato server)
+                         verifica la firma dell'id_token su JWKS
+                         controlla iss · aud · exp · nonce
+                         sub → User.authentikSub, altrimenti aggancio per email
+                    ◀──  JWT di mirada, identico a quello dell'accesso con password
+```
+
+**Lo scambio del codice avviene nel backend, non nel browser.** Il client è
+`public` e la SPA potrebbe farlo da sé: facendolo lato server nessun token di
+Authentik entra mai nella pagina — l'unica cosa che resta in `localStorage` è il
+JWT di mirada, come prima dell'SSO — e non si dipende dalle intestazioni CORS del
+token endpoint, che sono configurazione di Authentik. PKCE conserva il suo scopo:
+il verificatore nasce nel browser e viaggia insieme al codice.
+
+**Dal `POST /auth/sso` in poi le due strade sono indistinguibili**: stesso
+payload firmato, stesso `wsCode`, stessi cancelli d'accesso. È il motivo per cui
+`Authenticate.ts` e la catena dei permessi non sono cambiati.
+
+**L'SSO non crea utenze.** Chi si autentica senza avere un'utenza su mirada viene
+respinto con un messaggio che dice cosa fare. Crearla vorrebbe dire decidere che
+ruolo darle, e nascerebbe un utente che entra e non vede nulla — indistinguibile
+da un guasto. Quando entreranno i ballerini il ruolo giusto esisterà (`DANCER`) e
+quello sarà il punto in cui aggiungerlo (`SsoService.linkByEmail`).
+
+**Il primo accesso aggancia per email, poi vale il `sub`.** `User.authentikSub`
+è un UUID che Authentik non riusa: l'email cambia e può essere riassegnata, e
+continuare a cercare per email significherebbe che chi eredita un indirizzo
+eredita l'account.
+
+### Le tre righe che lo accendono
+
+Nel `.env` del backend (`~/orch/mirada/production/backend/.env`):
+
+```
+OIDC_ISSUER=https://auth.mirada.dance/application/o/mirada-backoffice/
+OIDC_CLIENT_ID=mirada-backoffice
+OIDC_SCOPE=openid profile email
+```
+
+⚠️ **Senza queste righe l'SSO è spento, non guasto**: `GET /auth/sso/config`
+risponde `enabled: false` e la pagina di accesso mostra il solo form con utente e
+password. Vale anche quando Authentik è irraggiungibile — un fornitore di
+identità che non risponde non deve poter rendere inaccessibile il backoffice.
+
+⚠️ **L'issuer termina con lo slash.** `jose` confronta la stringa esatta, e uno
+slash mancante fa fallire ogni verifica con un messaggio che non dice quale dei
+due issuer sia quello sbagliato.
+
 ## Quel che resta da fare
 
 - **Il backup su S3 non copre questo database.** Lo stack `backup` di mirada
@@ -151,9 +210,9 @@ docker compose exec -T authentik-db pg_dump -U authentik authentik | gzip > ~/au
 - **Le email dello staff sono segnaposto** (`ragno@mirada.dance` e simili): il
   recupero password e l'agganciamento a Google non possono funzionare finché non
   diventano indirizzi veri, e vanno corretti **in due posti** — qui e in mirada.
-- **L'integrazione applicativa non c'è ancora** (fase 3): il backoffice continua
-  a usare `POST /auth/login` con utente e password. Authentik è in piedi e
-  configurato, ma nessuno ci passa ancora.
+- **Il secondo fattore è disponibile ma nessuno l'ha registrato.** Finché non lo
+  fa, l'accesso via Authentik è una password come le altre — con in più il
+  recupero autonomo e l'accesso con Google.
 - **Sulla 443 non esiste un `default_server`.** Un nome sconosciuto che risolva a
   questa macchina viene servito dal primo blocco della 443 invece di essere
   chiuso: sulla 80 il blocco che risponde `444` c'è, sulla 443 no.
