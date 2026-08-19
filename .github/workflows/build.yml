@@ -29,11 +29,24 @@ permissions:
   packages: write
 
 concurrency:
-  # Su push la corsa precedente dello STESSO ramo si annulla: se hai spinto tre
-  # volte in due minuti, l'unica build che interessa è l'ultima. A mano no —
-  # una corsa lanciata da una persona non si annulla da sola sotto i piedi.
+  # ⚠️ NON si annulla nulla, e la ragione è costata un deploy sbagliato.
+  #
+  # Qui c'era `cancel-in-progress: ${{ github.event_name == 'push' }}`, con la
+  # motivazione «se hai spinto tre volte in due minuti, l'unica build che
+  # interessa è l'ultima». È falso, perché ogni corsa costruisce solo ciò che il
+  # SUO push ha toccato: l'ultima non è un sovrainsieme della precedente.
+  #
+  # Il 19/08/2026, due push a due minuti l'uno dall'altro — il primo con tutto
+  # il backend e la app, il secondo con un solo README. Il secondo ha annullato
+  # la build del primo, poi ha guardato il proprio diff e ha concluso «niente da
+  # costruire». Nessuna immagine pubblicata, `:production` fermo al giorno
+  # prima, e il deploy ha rimesso in linea il codice vecchio senza che nulla
+  # fallisse: né la build né il deploy hanno segnalato alcun errore.
+  #
+  # Qualche minuto di runner sprecato è più economico di un'immagine che non
+  # esiste e di cui nessuno si accorge.
   group: build-${{ github.ref }}-${{ inputs.componente || 'tutti' }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  cancel-in-progress: false
 
 jobs:
 
@@ -211,6 +224,18 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.nomi.outputs.tags }}
+          # ⚠️ Il commit scritto DENTRO l'immagine. Senza, l'unico modo di
+          # sapere quale codice sta girando è confrontare a mano dei digest, e
+          # `docker inspect` risponde solo la data di costruzione — che non dice
+          # nulla su cosa c'è dentro. Con questa etichetta la domanda «l'immagine
+          # in produzione contiene la mia modifica?» si risponde in un comando:
+          #
+          #   docker image inspect <immagine> \
+          #     --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.created=${{ github.event.repository.updated_at }}
           # Il token entra come SECRET BuildKit, non come build-arg: un
           # build-arg resterebbe leggibile per sempre in `docker history`.
           secret-files: ${{ matrix.segreto == 'si' && format('npm_token={0}', steps.npm.outputs.file) || '' }}
