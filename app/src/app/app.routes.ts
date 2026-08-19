@@ -25,6 +25,20 @@ export const routes: Routes = [
     data: { showBackButton: false },
   },
 
+  // Il ritorno da Authentik. Fuori dalla shell come `/login`, e senza guardia:
+  // ci si arriva **prima** di avere una sessione, che è proprio ciò che questa
+  // rotta serve ad aprire.
+  //
+  // ⚠️ Il percorso è registrato fra gli URI di reindirizzamento del provider su
+  // Authentik, con corrispondenza stretta: rinominarlo qui senza rinominarlo
+  // là fa fallire l'accesso con un 400 del fornitore.
+  {
+    path: 'auth/callback',
+    loadComponent: () =>
+      import('./pages/login/sso-callback.component').then((m) => m.SsoCallbackComponent),
+    data: { showBackButton: false },
+  },
+
   // ------------------------------------------------------------- /dashboard
   {
     path: 'dashboard',

@@ -10,9 +10,10 @@ import {
   PageSectionWrapperComponent,
   PageWrapperComponent,
 } from '@keijo/ui';
-import { login as loginIcon, warning } from '@keijo/ui/icons';
+import { login as loginIcon, shield, warning } from '@keijo/ui/icons';
 import { ApiError } from '../../core/api/api-error';
 import { AuthService } from '../../core/auth/auth.service';
+import { OidcService } from '../../core/auth/oidc.service';
 import { landingFor } from '../../shell/sidebar-routes';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
 
@@ -59,6 +60,19 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
               >
                 <span>{{ failure() }}</span>
               </keijo-info-box>
+            }
+
+            @if (oidc.config()?.enabled) {
+              <div class="sso-row">
+                <keijo-button
+                  [icon]="ssoIcon"
+                  label="Accedi con Authentik"
+                  variant="default"
+                  [loading]="ssoStarting()"
+                  (action)="accediConIdp()"
+                />
+              </div>
+              <p class="sso-separatore"><span>oppure</span></p>
             }
 
             <keijo-form-wrapper [formGroup]="form">
@@ -124,17 +138,44 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
         justify-content: flex-end;
         margin-top: 0.5rem;
       }
+      .sso-row {
+        display: flex;
+        margin-bottom: 1rem;
+      }
+      .sso-row > * {
+        flex: 1;
+      }
+      /* Separatore con la parola al centro: una riga sola, tagliata dal testo. */
+      .sso-separatore {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0 0 1rem;
+        font-size: 0.8rem;
+        opacity: 0.6;
+      }
+      .sso-separatore::before,
+      .sso-separatore::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: currentColor;
+        opacity: 0.35;
+      }
     `,
   ],
 })
 export class LoginComponent implements OnInit {
   readonly auth = inject(AuthService);
+  readonly oidc = inject(OidcService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
   readonly loginIcon = loginIcon;
   readonly warningIcon = warning;
+  readonly ssoIcon = shield;
   readonly failure = signal<string | null>(null);
+  readonly ssoStarting = signal(false);
 
   readonly form = new FormGroup({
     usernameOrEmail: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
@@ -142,7 +183,27 @@ export class LoginComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    if (this.auth.isAuthenticated()) void this.router.navigateByUrl(this.redirectTarget());
+    if (this.auth.isAuthenticated()) {
+      void this.router.navigateByUrl(this.redirectTarget());
+      return;
+    }
+    // Non si attende: il form con utente e password è già utilizzabile, e il
+    // tasto del fornitore compare quando la risposta arriva. `loadConfig` non
+    // solleva mai — un fornitore spento o irraggiungibile lascia questa pagina
+    // esattamente com'era prima dell'SSO.
+    void this.oidc.loadConfig();
+  }
+
+  async accediConIdp(): Promise<void> {
+    this.failure.set(null);
+    this.ssoStarting.set(true);
+    try {
+      // Non ritorna: la pagina viene abbandonata per andare dal fornitore.
+      await this.oidc.start(this.route.snapshot.queryParamMap.get('redirect'));
+    } catch (err) {
+      this.ssoStarting.set(false);
+      this.failure.set((err as Error).message);
+    }
   }
 
   error(control: FormControl<string>): string | null {

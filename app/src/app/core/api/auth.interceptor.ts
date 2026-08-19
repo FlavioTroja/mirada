@@ -24,6 +24,14 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const domainErrors = inject(DomainErrorBus);
   const toast = inject(ToastService);
 
+  // Le rotte che SERVONO ad aprire una sessione non ne hanno una da perdere:
+  // un tentativo di accesso rifiutato è «credenziali sbagliate», non «la tua
+  // sessione è scaduta». Trattarlo come il secondo caso porta via dalla pagina
+  // — e sulla rotta di ritorno da Authentik porterebbe via proprio mentre sta
+  // per spiegare cosa non ha funzionato.
+  const tentativoDiAccesso =
+    req.url.startsWith('/api/auth/login') || req.url.startsWith('/api/auth/sso');
+
   const token = auth.token();
   const authorized =
     token && req.url.startsWith('/api')
@@ -36,11 +44,14 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
       switch (err.kind) {
         case 'unauthorized':
-          // Nessun refresh token: il 401 è un logout (§3.1).
-          auth.logout();
-          void router.navigate(['/login'], {
-            queryParams: { redirect: router.url !== '/login' ? router.url : null },
-          });
+          // Nessun refresh token: il 401 è un logout (§3.1). Ma solo se una
+          // sessione c'era: vedi `tentativoDiAccesso` sopra.
+          if (!tentativoDiAccesso) {
+            auth.logout();
+            void router.navigate(['/login'], {
+              queryParams: { redirect: router.url !== '/login' ? router.url : null },
+            });
+          }
           break;
 
         case 'domain':

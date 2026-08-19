@@ -11,7 +11,7 @@ import { domainError } from "@utils/helpers/domainError";
 import { DomainErrorCode } from "@enums/DomainErrorCode";
 
 /** Riga utente arricchita dei soli ruoli, come la restituisce `findOneForAuthentication`. */
-type AuthenticatedUser = User & { roles?: { roleName: string; isActive: boolean }[] };
+export type AuthenticatedUser = User & { roles?: { roleName: string; isActive: boolean }[] };
 
 @Service()
 export class AuthService {
@@ -85,8 +85,14 @@ export class AuthService {
      * tuo indirizzo», andrebbe a cercare l'email, premerebbe il tasto e si
      * ritroverebbe davanti «Account disabilitato»: due passaggi per arrivare
      * all'informazione che contava fin dall'inizio.
+     *
+     * ⚠️ È **pubblico** perché anche l'accesso tramite fornitore di identità
+     * deve passare di qui (`SsoService`). Autenticarsi su Authentik dimostra
+     * *chi sei*, non che il tuo account su mirada sia attivo: sospensione,
+     * scadenza e cancellazione sono decisioni di questa applicazione, e un
+     * secondo percorso d'ingresso che le saltasse le renderebbe inefficaci.
      */
-    private assertAccountCanLogin(user: User): void {
+    public assertAccountCanLogin(user: User): void {
         if (user.deleted) {
             Log.warn(`[${AuthService.name}][login][${user.id}] login negato: account eliminato`);
             throw new httpErrors.Unauthorized("Account non più attivo.");

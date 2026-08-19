@@ -5,6 +5,8 @@ import { Authenticate } from "@middleware/Authenticate";
 import { LoginResponseSchema } from "@DTOs/login/LoginResponseDTO";
 import { LoginRequestDTO, LoginRequestSchema } from "@DTOs/login/LoginRequestDTO";
 import { EmailConfirmationService } from "@services/EmailConfirmationService";
+import { SsoService } from "@services/SsoService";
+import { SsoConfigSchema, SsoLoginDTO, SsoLoginSchema } from "@DTOs/login/SsoLoginDTO";
 import {
     ConfirmEmailRequestDTO,
     ConfirmEmailRequestSchema,
@@ -23,6 +25,7 @@ export class AuthController {
     constructor(
         private readonly authService: AuthService,
         private readonly emailConfirmationService: EmailConfirmationService,
+        private readonly ssoService: SsoService,
     ) {}
 
     @POST("/login", {
@@ -43,6 +46,51 @@ export class AuthController {
         // §3.1 — si firma il payload **minimo** `{ id, username, wsCode, roles }`.
         // Non `{ ...user }`: quello spandeva l'intera riga utente, hash bcrypt
         // compreso, dentro un blob base64 conservato in `localStorage`.
+        reply
+            .status(200)
+            .send({ token: await reply.jwtSign(this.authService.toTokenPayload(user)) });
+    }
+
+    @GET("/sso/config", {
+        schema: {
+            operationId: "ssoConfig",
+            summary: "Identity provider settings for the sign-in page",
+            description:
+                "Public. Returns what the SPA needs to build the authorization request: the provider's authorization "
+                + "endpoint, the client id and the scopes. Answers enabled=false — never an error — when the provider "
+                + "is not configured or is unreachable, so the sign-in page falls back to username and password "
+                + "instead of becoming unusable.",
+            response: {
+                200: SsoConfigSchema.describe("Identity provider settings, or enabled=false"),
+            },
+        },
+    })
+    async ssoConfig(req: FastifyRequest, reply: FastifyReply) {
+        reply.status(200).send(await this.ssoService.config());
+    }
+
+    @POST("/sso", {
+        schema: {
+            operationId: "ssoLogin",
+            summary: "Sign in through the identity provider",
+            description:
+                "Public. Takes the authorization code returned by Authentik together with the PKCE verifier, exchanges "
+                + "it server-side, verifies the id_token signature against the provider's JWKS and answers with the "
+                + "very same session token the password login issues. The account must already exist on mirada: this "
+                + "route links an identity, it never creates a user.",
+            body: SsoLoginSchema,
+            response: {
+                200: LoginResponseSchema.describe("Sign-in success"),
+            },
+        },
+    })
+    async ssoLogin(
+        req: FastifyRequest<{ Body: SsoLoginDTO }>,
+        reply: FastifyReply,
+    ) {
+        const user = await this.ssoService.login(req.body);
+        // Lo STESSO payload dell'accesso con password (§3.1): da qui in poi le
+        // due strade sono indistinguibili, ed è il punto di tutta la fase.
         reply
             .status(200)
             .send({ token: await reply.jwtSign(this.authService.toTokenPayload(user)) });

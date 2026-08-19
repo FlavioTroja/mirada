@@ -57,6 +57,24 @@ export const UserSchema = z.object({
    * diventa «già confermato, entra pure» invece di un errore.
    */
   emailVerifiedAt: z.coerce.date().nullish(),
+  /**
+   * L'identità su Authentik — il `sub` del token OIDC — quando l'utente
+   * accede tramite il fornitore di identità invece che con la password.
+   * 
+   * **È il `sub` e non l'email di proposito.** L'email cambia: una persona
+   * passa da un indirizzo personale a uno dell'organizzazione, e nel
+   * frattempo il vecchio indirizzo può essere riassegnato a qualcun altro.
+   * Il `sub` è un UUID che Authentik non riusa e che non cambia nemmeno
+   * rinominando l'utente (`sub_mode: user_uuid` sul provider). Legare
+   * l'identità all'email significherebbe che cambiare indirizzo equivale a
+   * cambiare persona — o, peggio, che riassegnarlo equivale a cedere
+   * l'account.
+   * 
+   * Nullo per chi non è mai passato dall'SSO: l'accesso con utente e
+   * password resta attivo, quindi le due strade convivono. Si valorizza al
+   * primo accesso SSO, agganciando l'utenza esistente (§SsoService).
+   */
+  authentikSub: z.string().nullish(),
   logoFileId: z.number().int().nullish(),
   personId: z.number().int(),
   deleted: z.boolean(),

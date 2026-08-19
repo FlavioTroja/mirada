@@ -1,23 +1,23 @@
 generator client {
-     provider        = "prisma-client-js"
-     binaryTargets   = ["native", "linux-musl", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "linux-musl-openssl-3.0.x"]
-     previewFeatures = ["fullTextSearchPostgres"]
+  provider        = "prisma-client-js"
+  binaryTargets   = ["native", "linux-musl", "debian-openssl-3.0.x", "debian-openssl-1.1.x", "linux-musl-openssl-3.0.x"]
+  previewFeatures = ["fullTextSearchPostgres"]
 }
 
 generator zod {
-     provider                         = "zod-prisma-types"
-     output                           = "./generated/zod"
-     useMultipleFiles                 = true
-     createOptionalDefaultValuesTypes = true
-     createPartialTypes               = true
-     createInputTypes                 = false
-     addInputTypeValidation           = false
-     createRelationValuesTypes        = true
-     writeNullishInModelTypes         = true
+  provider                         = "zod-prisma-types"
+  output                           = "./generated/zod"
+  useMultipleFiles                 = true
+  createOptionalDefaultValuesTypes = true
+  createPartialTypes               = true
+  createInputTypes                 = false
+  addInputTypeValidation           = false
+  createRelationValuesTypes        = true
+  writeNullishInModelTypes         = true
 }
 
 datasource db {
-     provider = "postgresql"
+  provider = "postgresql"
 }
 
 /// Ruoli di piattaforma (backend-brief §1.3 / §3.8).
@@ -30,307 +30,322 @@ datasource db {
 /// Non hanno e non devono avere ALCUNA riga in PermissionConfig: nessun permesso,
 /// in nessuno scope. Ogni concessione del progetto vive sui cinque ruoli del §3.8.
 enum RoleName {
-     GOD
-     ADMIN // legacy template — nessun permesso concesso
-     USER // legacy template — nessun permesso concesso
-     OWNER
-     EVENT_MANAGER
-     CHECKIN_OPERATOR
-     DANCER
+  GOD
+  ADMIN // legacy template — nessun permesso concesso
+  USER // legacy template — nessun permesso concesso
+  OWNER
+  EVENT_MANAGER
+  CHECKIN_OPERATOR
+  DANCER
 }
 
 enum UiScope {
-     EDITABLE
-     VISIBLE
-     INVISIBLE
+  EDITABLE
+  VISIBLE
+  INVISIBLE
 }
 
 enum ValueType {
-     float
-     integer
-     string
-     boolean
-     json
+  float
+  integer
+  string
+  boolean
+  json
 }
 
 enum Level {
-     INFO
-     WARNING
-     ERROR
+  INFO
+  WARNING
+  ERROR
 }
 
 enum Gender {
-     M
-     F
-     OTHER
+  M
+  F
+  OTHER
 }
 
-
 enum PersonType {
-     USER
+  USER
 }
 
 model User {
-     id        Int     @id @default(autoincrement())
-     username  String  @unique
-     password  String
-     wsCode    String?
-     avatarUrl String?
-     note      String?
+  id        Int     @id @default(autoincrement())
+  username  String  @unique
+  password  String
+  wsCode    String?
+  avatarUrl String?
+  note      String?
 
-     enabled     Boolean   @default(true) // sospensione account (gate login)
-     activatedAt DateTime? // "valido da"; null = nessun vincolo di inizio
-     expiresAt   DateTime? // scadenza; null = nessuna scadenza
+  enabled     Boolean   @default(true) // sospensione account (gate login)
+  activatedAt DateTime? // "valido da"; null = nessun vincolo di inizio
+  expiresAt   DateTime? // scadenza; null = nessuna scadenza
 
-     /// Quando il proprietario dell'indirizzo ha premuto il tasto nell'email di
-     /// conferma. **Nullo = mai confermato**, e l'accesso è rifiutato con
-     /// `EMAIL_NOT_CONFIRMED`.
-     ///
-     /// Serve un campo suo e non `enabled`: `enabled` è la sospensione decisa da
-     /// un amministratore, questo è «l'indirizzo non è ancora stato dimostrato».
-     /// Confonderli darebbe a chi si è appena iscritto il messaggio «account
-     /// disabilitato» — che è falso e non dice cosa fare.
-     ///
-     /// È anche ciò che rende il link di conferma **usabile una volta sola in
-     /// modo utile**: al secondo clic il campo è già valorizzato e la risposta
-     /// diventa «già confermato, entra pure» invece di un errore.
-     emailVerifiedAt DateTime?
+  /// Quando il proprietario dell'indirizzo ha premuto il tasto nell'email di
+  /// conferma. **Nullo = mai confermato**, e l'accesso è rifiutato con
+  /// `EMAIL_NOT_CONFIRMED`.
+  ///
+  /// Serve un campo suo e non `enabled`: `enabled` è la sospensione decisa da
+  /// un amministratore, questo è «l'indirizzo non è ancora stato dimostrato».
+  /// Confonderli darebbe a chi si è appena iscritto il messaggio «account
+  /// disabilitato» — che è falso e non dice cosa fare.
+  ///
+  /// È anche ciò che rende il link di conferma **usabile una volta sola in
+  /// modo utile**: al secondo clic il campo è già valorizzato e la risposta
+  /// diventa «già confermato, entra pure» invece di un errore.
+  emailVerifiedAt DateTime?
 
-     logoFileId Int?
-     logoFile   File? @relation("UserLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  /// L'identità su Authentik — il `sub` del token OIDC — quando l'utente
+  /// accede tramite il fornitore di identità invece che con la password.
+  ///
+  /// **È il `sub` e non l'email di proposito.** L'email cambia: una persona
+  /// passa da un indirizzo personale a uno dell'organizzazione, e nel
+  /// frattempo il vecchio indirizzo può essere riassegnato a qualcun altro.
+  /// Il `sub` è un UUID che Authentik non riusa e che non cambia nemmeno
+  /// rinominando l'utente (`sub_mode: user_uuid` sul provider). Legare
+  /// l'identità all'email significherebbe che cambiare indirizzo equivale a
+  /// cambiare persona — o, peggio, che riassegnarlo equivale a cedere
+  /// l'account.
+  ///
+  /// Nullo per chi non è mai passato dall'SSO: l'accesso con utente e
+  /// password resta attivo, quindi le due strade convivono. Si valorizza al
+  /// primo accesso SSO, agganciando l'utenza esistente (§SsoService).
+  authentikSub String? @unique
 
-     personId Int      @unique
-     person   Person   @relation(fields: [personId], references: [id])
-     roles    RoleToUser[]
-     logs   Log[]
+  logoFileId Int?
+  logoFile   File? @relation("UserLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
 
-     dancerProfile           DancerProfile?
-     organizationMemberships OrganizationMember[]
-     fiscalDeclarations      FiscalDeclaration[]  @relation("FiscalDeclarationDeclaredBy")
-     registrations           Registration[]       @relation("RegistrationPerson")
-     guardedRegistrations    Registration[]       @relation("RegistrationGuardian")
+  personId Int          @unique
+  person   Person       @relation(fields: [personId], references: [id])
+  roles    RoleToUser[]
+  logs     Log[]
 
-     // Fase D1 — passi 17, 23→26 (più i gusci 18→22 del checkout).
-     reviewedRequirementOutcomes RequirementOutcome[] @relation("RequirementOutcomeReviewer")
-     purchases                   Purchase[]           @relation("PurchaseBuyer")
-     reservations                Reservation[]        @relation("ReservationUser")
-     passIssuances               PassIssuance[]       @relation("PassIssuanceIssuedBy")
-     ticketTransfersFrom         TicketTransfer[]     @relation("TicketTransferFrom")
-     ticketTransfersTo           TicketTransfer[]     @relation("TicketTransferTo")
-     checkIns                    CheckIn[]            @relation("CheckInOperator")
+  dancerProfile           DancerProfile?
+  organizationMemberships OrganizationMember[]
+  fiscalDeclarations      FiscalDeclaration[]  @relation("FiscalDeclarationDeclaredBy")
+  registrations           Registration[]       @relation("RegistrationPerson")
+  guardedRegistrations    Registration[]       @relation("RegistrationGuardian")
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  // Fase D1 — passi 17, 23→26 (più i gusci 18→22 del checkout).
+  reviewedRequirementOutcomes RequirementOutcome[] @relation("RequirementOutcomeReviewer")
+  purchases                   Purchase[]           @relation("PurchaseBuyer")
+  reservations                Reservation[]        @relation("ReservationUser")
+  passIssuances               PassIssuance[]       @relation("PassIssuanceIssuedBy")
+  ticketTransfersFrom         TicketTransfer[]     @relation("TicketTransferFrom")
+  ticketTransfersTo           TicketTransfer[]     @relation("TicketTransferTo")
+  checkIns                    CheckIn[]            @relation("CheckInOperator")
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PermissionConfig {
-     id       Int      @id @default(autoincrement())
-     roleName RoleName
-     role     Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
-     action   String
-     entity   String
-     scope    String
+  id       Int      @id @default(autoincrement())
+  roleName RoleName
+  role     Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
+  action   String
+  entity   String
+  scope    String
 
-     @@unique([action, entity, scope, roleName])
-     @@index([action, entity, scope])
+  @@unique([action, entity, scope, roleName])
+  @@index([action, entity, scope])
 }
 
 model HiddenComponentConfig {
-     id        Int      @id @default(autoincrement())
-     roleName  RoleName
-     role      Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
-     context   String
-     section   String
-     component String
-     isActive  Boolean
+  id        Int      @id @default(autoincrement())
+  roleName  RoleName
+  role      Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
+  context   String
+  section   String
+  component String
+  isActive  Boolean
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@unique([context, section, component, roleName])
-     @@index([context, section, component])
+  @@unique([context, section, component, roleName])
+  @@index([context, section, component])
 }
 
 model Role {
-     name                   RoleName                @id
-     label                  String?
-     rank                   Float
-     isActive               Boolean?                @default(true)
-     users                  RoleToUser[]
-     permissionConfigs      PermissionConfig[]
-     hiddenComponentConfigs HiddenComponentConfig[]
+  name                   RoleName                @id
+  label                  String?
+  rank                   Float
+  isActive               Boolean?                @default(true)
+  users                  RoleToUser[]
+  permissionConfigs      PermissionConfig[]
+  hiddenComponentConfigs HiddenComponentConfig[]
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model RoleToUser {
-     id       Int      @id @default(autoincrement())
-     roleName RoleName
-     userId   Int
-     role     Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
-     user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-     isActive Boolean  @default(true)
+  id       Int      @id @default(autoincrement())
+  roleName RoleName
+  userId   Int
+  role     Role     @relation(fields: [roleName], references: [name], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isActive Boolean  @default(true)
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@unique([roleName, userId])
+  @@unique([roleName, userId])
 }
 
 model Log {
-     id               Int        @id @default(autoincrement())
-     level            Level      @default(INFO)
-     description      String?
-     entityId         Int?
-     entityName       String?
-     input            Json?
-     output           Json?
-     toRoles          RoleName[] @default([ADMIN, USER])
-     actionByUsername String?
-     actionById       Int?
-     actionBy         User?      @relation(fields: [actionById], references: [id], onDelete: SetNull)
-     isNotification   Boolean?   @default(false)
-     hasError         Boolean?   @default(false)
-     createdAt        DateTime   @default(now())
+  id               Int        @id @default(autoincrement())
+  level            Level      @default(INFO)
+  description      String?
+  entityId         Int?
+  entityName       String?
+  input            Json?
+  output           Json?
+  toRoles          RoleName[] @default([ADMIN, USER])
+  actionByUsername String?
+  actionById       Int?
+  actionBy         User?      @relation(fields: [actionById], references: [id], onDelete: SetNull)
+  isNotification   Boolean?   @default(false)
+  hasError         Boolean?   @default(false)
+  createdAt        DateTime   @default(now())
 
-     recipients Json?
+  recipients Json?
 }
 
 model Config {
-     name      String    @id
-     scope     String
-     uiScope   UiScope   @default(INVISIBLE)
-     type      ValueType @default(boolean)
-     boolean   Boolean?
-     integer   Int?
-     float     Float?
-     string    String?
-     json      Json?
-     createdAt DateTime  @default(now())
-     updatedAt DateTime  @updatedAt
+  name      String    @id
+  scope     String
+  uiScope   UiScope   @default(INVISIBLE)
+  type      ValueType @default(boolean)
+  boolean   Boolean?
+  integer   Int?
+  float     Float?
+  string    String?
+  json      Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Person {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     name       String
-     surname    String
-     birthDate  DateTime?
-     fiscalCode String?
-     vatNumber  String?
-     gender     Gender?
-     personType PersonType
-     note       String?
-     avatarUrl  String?
+  name       String
+  surname    String
+  birthDate  DateTime?
+  fiscalCode String?
+  vatNumber  String?
+  gender     Gender?
+  personType PersonType
+  note       String?
+  avatarUrl  String?
 
-     bornIn  String? // City of birth
-     livesIn String? // City of residence
+  bornIn  String? // City of birth
+  livesIn String? // City of residence
 
-     user        User?
-     contactId   Int          @unique
-     contact     Contact      @relation(fields: [contactId], references: [id])
-     addresses   Address[]
-     files       PersonFile[]
+  user      User?
+  contactId Int          @unique
+  contact   Contact      @relation(fields: [contactId], references: [id])
+  addresses Address[]
+  files     PersonFile[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Contact {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     email       String  @unique
-     phoneNumber String?
-     note        String?
-     telephone   String?
-     pec         String?
+  email       String  @unique
+  phoneNumber String?
+  note        String?
+  telephone   String?
+  pec         String?
 
-     person Person?
+  person Person?
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Address {
-     id       Int      @id @default(autoincrement())
-     country  String?
-     state    String?
-     province String?
-     city     String?
-     zipCode  String?
-     address  String?
-     number   String?
-     note     String?
-     default  Boolean? @default(false)
-     billing  Boolean? @default(false)
+  id       Int      @id @default(autoincrement())
+  country  String?
+  state    String?
+  province String?
+  city     String?
+  zipCode  String?
+  address  String?
+  number   String?
+  note     String?
+  default  Boolean? @default(false)
+  billing  Boolean? @default(false)
 
-     /// **Non si digita** (§3.4): il servizio la deriva dalla sigla di provincia
-     /// con la tabella delle province italiane (`@utils/helpers/italianProvinces`),
-     /// su `create` e su `update`. Non compare in alcun DTO di scrittura.
-     ///
-     /// È una colonna e non un calcolo in lettura perché il filtro geografico
-     /// della ricerca pubblica dev'essere una condizione INDICIZZATA, e perché un
-     /// campo libero produrrebbe «Puglia», «PUGLIA» e «Apulia» come tre regioni
-     /// diverse.
-     region String?
+  /// **Non si digita** (§3.4): il servizio la deriva dalla sigla di provincia
+  /// con la tabella delle province italiane (`@utils/helpers/italianProvinces`),
+  /// su `create` e su `update`. Non compare in alcun DTO di scrittura.
+  ///
+  /// È una colonna e non un calcolo in lettura perché il filtro geografico
+  /// della ricerca pubblica dev'essere una condizione INDICIZZATA, e perché un
+  /// campo libero produrrebbe «Puglia», «PUGLIA» e «Apulia» come tre regioni
+  /// diverse.
+  region String?
 
-     personId Int?
-     person   Person? @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId Int?
+  person   Person? @relation(fields: [personId], references: [id], onDelete: Cascade)
 
-     organizations Organization[]
-     venues        Venue[]
+  organizations Organization[]
+  venues        Venue[]
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     /// Le due colonne del filtro pubblico di `POST /api/public/events/` (§3.7):
-     /// la ricerca per città e per regione passa da qui attraverso `Venue`.
-     @@index([region])
-     @@index([city])
+  /// Le due colonne del filtro pubblico di `POST /api/public/events/` (§3.7):
+  /// la ricerca per città e per regione passa da qui attraverso `Venue`.
+  @@index([region])
+  @@index([city])
 }
 
 model File {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     name     String
-     path     String
-     url      String @unique
-     mimeType String
-     size     Int
+  name     String
+  path     String
+  url      String @unique
+  mimeType String
+  size     Int
 
-     personFiles PersonFile[]
-     userLogos   User[]       @relation("UserLogo")
+  personFiles PersonFile[]
+  userLogos   User[]       @relation("UserLogo")
 
-     organizationLogos   Organization[]  @relation("OrganizationLogo")
-     dancerProfileAvatar DancerProfile[] @relation("DancerProfileAvatar")
-     artistPhotos        Artist[]        @relation("ArtistPhoto")
+  organizationLogos   Organization[]  @relation("OrganizationLogo")
+  dancerProfileAvatar DancerProfile[] @relation("DancerProfileAvatar")
+  artistPhotos        Artist[]        @relation("ArtistPhoto")
 
-     eventPostersVertical   Event[] @relation("EventPosterVertical")
-     eventPostersHorizontal Event[] @relation("EventPosterHorizontal")
-     eventPostersSquare     Event[] @relation("EventPosterSquare")
+  eventPostersVertical   Event[] @relation("EventPosterVertical")
+  eventPostersHorizontal Event[] @relation("EventPosterHorizontal")
+  eventPostersSquare     Event[] @relation("EventPosterSquare")
 
-     ticketPdfs Ticket[] @relation("TicketPdf")
+  ticketPdfs Ticket[] @relation("TicketPdf")
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model PersonFile {
-     personId Int
-     fileId   Int
+  personId Int
+  fileId   Int
 
-     person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
-     file   File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  file   File   @relation(fields: [fileId], references: [id], onDelete: Cascade)
 
-     createdAt DateTime @default(now())
+  createdAt DateTime @default(now())
 
-     @@id([personId, fileId])
-     @@index([fileId])
+  @@id([personId, fileId])
+  @@index([fileId])
 }
-
 
 // =============================================================================
 // Mirada Tango — Fase A (backend-brief §2 passi 1→6)
@@ -338,40 +353,40 @@ model PersonFile {
 // =============================================================================
 
 enum OrganizationStatus {
-     PENDING
-     APPROVED
-     SUSPENDED
-     REJECTED
+  PENDING
+  APPROVED
+  SUSPENDED
+  REJECTED
 }
 
 enum PayoutStatus {
-     NOT_CONNECTED
-     PENDING
-     ENABLED
-     DISABLED
+  NOT_CONNECTED
+  PENDING
+  ENABLED
+  DISABLED
 }
 
 enum OrgMemberRole {
-     OWNER
-     EVENT_MANAGER
-     CHECKIN_OPERATOR
+  OWNER
+  EVENT_MANAGER
+  CHECKIN_OPERATOR
 }
 
 enum PreferredDanceRole {
-     LEADER
-     FOLLOWER
-     BOTH
+  LEADER
+  FOLLOWER
+  BOTH
 }
 
 enum ArtistKind {
-     TEACHER
-     DJ
-     ORCHESTRA
+  TEACHER
+  DJ
+  ORCHESTRA
 }
 
 enum RequirementKind {
-     DECLARATION
-     CUSTOM_FIELD
+  DECLARATION
+  CUSTOM_FIELD
 }
 
 // -----------------------------------------------------------------------------
@@ -379,67 +394,67 @@ enum RequirementKind {
 // -----------------------------------------------------------------------------
 
 model EventType {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     /// I18nText { it, en? }
-     name Json
-     slug String @unique
+  /// I18nText { it, en? }
+  name Json
+  slug String @unique
 
-     /// Le cinque capacità generano il wizard di creazione evento (§4.1).
-     capMultiSession Boolean @default(false)
-     capRoleQuotas   Boolean @default(false)
-     capLevels       Boolean @default(false)
-     capCast         Boolean @default(false)
-     capCouple       Boolean @default(false)
+  /// Le cinque capacità generano il wizard di creazione evento (§4.1).
+  capMultiSession Boolean @default(false)
+  capRoleQuotas   Boolean @default(false)
+  capLevels       Boolean @default(false)
+  capCast         Boolean @default(false)
+  capCouple       Boolean @default(false)
 
-     defaultTemplate Json    @default("{}")
-     active          Boolean @default(true)
-     sortOrder       Int     @default(0)
+  defaultTemplate Json    @default("{}")
+  active          Boolean @default(true)
+  sortOrder       Int     @default(0)
 
-     events Event[]
+  events Event[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([active])
-     @@index([sortOrder])
+  @@index([active])
+  @@index([sortOrder])
 }
 
 model RequirementType {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     /// I18nText { it, en? }
-     name         Json
-     kind         RequirementKind
-     configSchema Json            @default("{}")
-     active       Boolean         @default(true)
+  /// I18nText { it, en? }
+  name         Json
+  kind         RequirementKind
+  configSchema Json            @default("{}")
+  active       Boolean         @default(true)
 
-     eventRequirements EventRequirement[]
+  eventRequirements EventRequirement[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([active])
-     @@index([kind])
+  @@index([active])
+  @@index([kind])
 }
 
 model ServiceType {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     /// I18nText { it, en? }
-     name             Json
-     attributesSchema Json    @default("{}")
-     active           Boolean @default(true)
+  /// I18nText { it, en? }
+  name             Json
+  attributesSchema Json    @default("{}")
+  active           Boolean @default(true)
 
-     eventServices EventService[]
+  eventServices EventService[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([active])
+  @@index([active])
 }
 
 // -----------------------------------------------------------------------------
@@ -447,48 +462,48 @@ model ServiceType {
 // -----------------------------------------------------------------------------
 
 model Organization {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     name      String
-     legalName String
-     legalForm String
-     vatNumber String?
-     taxCode   String?
+  name      String
+  legalName String
+  legalForm String
+  vatNumber String?
+  taxCode   String?
 
-     addressId Int?
-     address   Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  addressId Int?
+  address   Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
 
-     contactEmail String
-     contactPhone String?
-     website      String?
+  contactEmail String
+  contactPhone String?
+  website      String?
 
-     status OrganizationStatus @default(PENDING)
+  status OrganizationStatus @default(PENDING)
 
-     /// Calcolati dal server a partire da Stripe — mai accettati dal client (§4.2, §5).
-     stripeAccountId String?      @unique
-     payoutStatus    PayoutStatus @default(NOT_CONNECTED)
-     payoutCheckedAt DateTime?
+  /// Calcolati dal server a partire da Stripe — mai accettati dal client (§4.2, §5).
+  stripeAccountId String?      @unique
+  payoutStatus    PayoutStatus @default(NOT_CONNECTED)
+  payoutCheckedAt DateTime?
 
-     termsVersion    String?
-     termsAcceptedAt DateTime?
+  termsVersion    String?
+  termsAcceptedAt DateTime?
 
-     logoFileId Int?
-     logoFile   File? @relation("OrganizationLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  logoFileId Int?
+  logoFile   File? @relation("OrganizationLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
 
-     members            OrganizationMember[]
-     orders             Order[]
-     venues             Venue[]
-     artists            Artist[]
-     refundPolicies     RefundPolicy[]
-     events             Event[]
-     fiscalDeclarations FiscalDeclaration[]
+  members            OrganizationMember[]
+  orders             Order[]
+  venues             Venue[]
+  artists            Artist[]
+  refundPolicies     RefundPolicy[]
+  events             Event[]
+  fiscalDeclarations FiscalDeclaration[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([status])
-     @@index([payoutStatus])
+  @@index([status])
+  @@index([payoutStatus])
 }
 
 // -----------------------------------------------------------------------------
@@ -496,35 +511,35 @@ model Organization {
 // -----------------------------------------------------------------------------
 
 model DancerProfile {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     userId Int  @unique
-     user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-     nickname      String             @unique
-     preferredRole PreferredDanceRole @default(BOTH)
-     city          String?
-     /// `@default([])` è necessario, non cosmetico: senza, `zod-prisma-types` rende
-     /// la lista OBBLIGATORIA nel DTO Create e il client dovrebbe mandare `[]` per
-     /// creare un profilo senza lingue dichiarate. Stesso difetto già corretto su
-     /// `Event.tags` in fase B (backend-brief §C.4).
-     languages     String[]           @default([])
-     birthDate     DateTime?
-     declaredLevel String?
+  nickname      String             @unique
+  preferredRole PreferredDanceRole @default(BOTH)
+  city          String?
+  /// `@default([])` è necessario, non cosmetico: senza, `zod-prisma-types` rende
+  /// la lista OBBLIGATORIA nel DTO Create e il client dovrebbe mandare `[]` per
+  /// creare un profilo senza lingue dichiarate. Stesso difetto già corretto su
+  /// `Event.tags` in fase B (backend-brief §C.4).
+  languages     String[]           @default([])
+  birthDate     DateTime?
+  declaredLevel String?
 
-     avatarFileId Int?
-     avatarFile   File? @relation("DancerProfileAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  avatarFileId Int?
+  avatarFile   File? @relation("DancerProfileAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
 
-     /// Calcolati dal server dal servizio changeNickname (§4.3).
-     nicknameChangedAt   DateTime?
-     nicknameChangeCount Int       @default(0)
+  /// Calcolati dal server dal servizio changeNickname (§4.3).
+  nicknameChangedAt   DateTime?
+  nicknameChangeCount Int       @default(0)
 
-     /// Spazio riservato agli attributi di ballo estensibili di fase 2 (§4.3).
-     attributes Json @default("{}")
+  /// Spazio riservato agli attributi di ballo estensibili di fase 2 (§4.3).
+  attributes Json @default("{}")
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // -----------------------------------------------------------------------------
@@ -532,25 +547,25 @@ model DancerProfile {
 // -----------------------------------------------------------------------------
 
 model OrganizationMember {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     organizationId Int
-     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-     userId Int
-     user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-     role       OrgMemberRole
-     invitedAt  DateTime      @default(now())
-     acceptedAt DateTime?
+  role       OrgMemberRole
+  invitedAt  DateTime      @default(now())
+  acceptedAt DateTime?
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@unique([organizationId, userId, role])
-     @@index([userId])
-     @@index([organizationId])
+  @@unique([organizationId, userId, role])
+  @@index([userId])
+  @@index([organizationId])
 }
 
 // -----------------------------------------------------------------------------
@@ -558,64 +573,64 @@ model OrganizationMember {
 // -----------------------------------------------------------------------------
 
 model Venue {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     /// Null = sala di piattaforma, non appartenente ad alcuna organizzazione.
-     organizationId Int?
-     organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Null = sala di piattaforma, non appartenente ad alcuna organizzazione.
+  organizationId Int?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-     name String
+  name String
 
-     addressId Int
-     address   Address @relation(fields: [addressId], references: [id], onDelete: Restrict)
+  addressId Int
+  address   Address @relation(fields: [addressId], references: [id], onDelete: Restrict)
 
-     latitude  Float?
-     longitude Float?
-     /// Proposta come default alla quota di capienza della sala, mai imposta (§4.4).
-     capacity   Int?
-     floorNotes String?
+  latitude   Float?
+  longitude  Float?
+  /// Proposta come default alla quota di capienza della sala, mai imposta (§4.4).
+  capacity   Int?
+  floorNotes String?
 
-     airConditioning Boolean @default(false)
-     parking         Boolean @default(false)
-     accessibility   String?
-     notes           String?
+  airConditioning Boolean @default(false)
+  parking         Boolean @default(false)
+  accessibility   String?
+  notes           String?
 
-     events Event[]
+  events Event[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([organizationId])
-     @@index([addressId])
+  @@index([organizationId])
+  @@index([addressId])
 }
 
 model Artist {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     /// Null = anagrafica di piattaforma. Nessuna relazione a User: l'artista non ha account (§4.4).
-     organizationId Int?
-     organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Null = anagrafica di piattaforma. Nessuna relazione a User: l'artista non ha account (§4.4).
+  organizationId Int?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-     name String
-     kind ArtistKind
+  name String
+  kind ArtistKind
 
-     /// I18nText { it, en? }
-     bio Json?
+  /// I18nText { it, en? }
+  bio Json?
 
-     photoFileId Int?
-     photoFile   File? @relation("ArtistPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
+  photoFileId Int?
+  photoFile   File? @relation("ArtistPhoto", fields: [photoFileId], references: [id], onDelete: SetNull)
 
-     website String?
+  website String?
 
-     eventCasts EventCast[]
+  eventCasts EventCast[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([organizationId])
-     @@index([kind])
+  @@index([organizationId])
+  @@index([kind])
 }
 
 // -----------------------------------------------------------------------------
@@ -623,38 +638,38 @@ model Artist {
 // -----------------------------------------------------------------------------
 
 model RefundPolicy {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     /// I18nText { it, en? }
-     name Json
+  /// I18nText { it, en? }
+  name Json
 
-     /// [{ daysBefore, percent }]
-     tiers Json @default("[]")
+  /// [{ daysBefore, percent }]
+  tiers Json @default("[]")
 
-     transferDeadlineHours Int     @default(0)
-     feeRefundable         Boolean @default(false)
-     isPlatformPreset      Boolean @default(false)
+  transferDeadlineHours Int     @default(0)
+  feeRefundable         Boolean @default(false)
+  isPlatformPreset      Boolean @default(false)
 
-     /// Null = preset di piattaforma.
-     organizationId Int?
-     organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Null = preset di piattaforma.
+  organizationId Int?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-     /// Preset di piattaforma da cui la policy discende (emendamento B.0 al §3.6).
-     /// È il termine di paragone che rende verificabile la regola del §4.4:
-     /// una policy derivata può essere più favorevole al partecipante, mai più restrittiva.
-     derivedFromPolicyId Int?
-     derivedFromPolicy   RefundPolicy?  @relation("RefundPolicyDerivation", fields: [derivedFromPolicyId], references: [id], onDelete: SetNull)
-     derivedPolicies     RefundPolicy[] @relation("RefundPolicyDerivation")
+  /// Preset di piattaforma da cui la policy discende (emendamento B.0 al §3.6).
+  /// È il termine di paragone che rende verificabile la regola del §4.4:
+  /// una policy derivata può essere più favorevole al partecipante, mai più restrittiva.
+  derivedFromPolicyId Int?
+  derivedFromPolicy   RefundPolicy?  @relation("RefundPolicyDerivation", fields: [derivedFromPolicyId], references: [id], onDelete: SetNull)
+  derivedPolicies     RefundPolicy[] @relation("RefundPolicyDerivation")
 
-     events Event[]
+  events Event[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([organizationId])
-     @@index([isPlatformPreset])
-     @@index([derivedFromPolicyId])
+  @@index([organizationId])
+  @@index([isPlatformPreset])
+  @@index([derivedFromPolicyId])
 }
 
 // =============================================================================
@@ -662,57 +677,57 @@ model RefundPolicy {
 // =============================================================================
 
 enum DanceRole {
-     LEADER
-     FOLLOWER
+  LEADER
+  FOLLOWER
 }
 
 enum EventStatus {
-     DRAFT
-     PUBLISHED
-     SALES_CLOSED
-     RUNNING
-     ENDED
-     ARCHIVED
-     CANCELLED
+  DRAFT
+  PUBLISHED
+  SALES_CLOSED
+  RUNNING
+  ENDED
+  ARCHIVED
+  CANCELLED
 }
 
 enum SalesCloseCriterion {
-     DATE
-     QUOTA_EXHAUSTED
-     MANUAL
-     EVENT_START
+  DATE
+  QUOTA_EXHAUSTED
+  MANUAL
+  EVENT_START
 }
 
 enum FiscalDeclarationKind {
-     ORGANIZATION_FRAMEWORK
-     EVENT_ATTESTATION
+  ORGANIZATION_FRAMEWORK
+  EVENT_ATTESTATION
 }
 
 enum RequirementBlocking {
-     PURCHASE
-     ENTRY
-     NONE
+  PURCHASE
+  ENTRY
+  NONE
 }
 
 enum RequirementVerification {
-     AUTOMATIC
-     MANUAL
+  AUTOMATIC
+  MANUAL
 }
 
 enum SaleUnit {
-     PER_PERSON
-     PER_COUPLE
+  PER_PERSON
+  PER_COUPLE
 }
 
 enum TicketTypeVisibility {
-     PUBLIC
-     CODE_RESTRICTED
+  PUBLIC
+  CODE_RESTRICTED
 }
 
 enum PriceTierKind {
-     BY_DATE
-     BY_QUANTITY
-     COMBINED
+  BY_DATE
+  BY_QUANTITY
+  COMBINED
 }
 
 // -----------------------------------------------------------------------------
@@ -720,87 +735,87 @@ enum PriceTierKind {
 // -----------------------------------------------------------------------------
 
 model Event {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     organizationId Int
-     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-     eventTypeId Int
-     eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Restrict)
+  eventTypeId Int
+  eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Restrict)
 
-     venueId Int
-     venue   Venue @relation(fields: [venueId], references: [id], onDelete: Restrict)
+  venueId Int
+  venue   Venue @relation(fields: [venueId], references: [id], onDelete: Restrict)
 
-     /// I18nText { it, en? }
-     title Json
-     /// Unico GLOBALE: è la chiave di `GET /api/public/events/:slug` (§4.5).
-     slug String @unique
-     /// I18nText { it, en? }
-     description Json
+  /// I18nText { it, en? }
+  title       Json
+  /// Unico GLOBALE: è la chiave di `GET /api/public/events/:slug` (§4.5).
+  slug        String @unique
+  /// I18nText { it, en? }
+  description Json
 
-     startAt DateTime
-     endAt   DateTime
+  startAt DateTime
+  endAt   DateTime
 
-     contentLanguage String
-     secondLanguage  String?
-     /// `@default([])` è necessario, non cosmetico: senza, `zod-prisma-types` rende
-     /// la lista OBBLIGATORIA nel DTO Create e il client dovrebbe mandare `[]`
-     /// per dire «nessun tag». L'assenza deve significare l'insieme vuoto.
-     tags String[] @default([])
+  contentLanguage String
+  secondLanguage  String?
+  /// `@default([])` è necessario, non cosmetico: senza, `zod-prisma-types` rende
+  /// la lista OBBLIGATORIA nel DTO Create e il client dovrebbe mandare `[]`
+  /// per dire «nessun tag». L'assenza deve significare l'insieme vuoto.
+  tags            String[] @default([])
 
-     posterVerticalFileId Int?
-     posterVerticalFile   File? @relation("EventPosterVertical", fields: [posterVerticalFileId], references: [id], onDelete: SetNull)
+  posterVerticalFileId Int?
+  posterVerticalFile   File? @relation("EventPosterVertical", fields: [posterVerticalFileId], references: [id], onDelete: SetNull)
 
-     posterHorizontalFileId Int?
-     posterHorizontalFile   File? @relation("EventPosterHorizontal", fields: [posterHorizontalFileId], references: [id], onDelete: SetNull)
+  posterHorizontalFileId Int?
+  posterHorizontalFile   File? @relation("EventPosterHorizontal", fields: [posterHorizontalFileId], references: [id], onDelete: SetNull)
 
-     posterSquareFileId Int?
-     posterSquareFile   File? @relation("EventPosterSquare", fields: [posterSquareFileId], references: [id], onDelete: SetNull)
+  posterSquareFileId Int?
+  posterSquareFile   File? @relation("EventPosterSquare", fields: [posterSquareFileId], references: [id], onDelete: SetNull)
 
-     /// Governato dalle transizioni del servizio, mai scritto dal DTO Create (§4.5).
-     status EventStatus @default(DRAFT)
+  /// Governato dalle transizioni del servizio, mai scritto dal DTO Create (§4.5).
+  status EventStatus @default(DRAFT)
 
-     refundPolicyId Int?
-     refundPolicy   RefundPolicy? @relation(fields: [refundPolicyId], references: [id], onDelete: SetNull)
-     /// I18nText { it, en? }
-     refundPolicyText Json @default("{}")
+  refundPolicyId   Int?
+  refundPolicy     RefundPolicy? @relation(fields: [refundPolicyId], references: [id], onDelete: SetNull)
+  /// I18nText { it, en? }
+  refundPolicyText Json          @default("{}")
 
-     minorsAdmitted Boolean @default(false)
-     /// I18nText { it, en? }
-     minorsConditions Json?
+  minorsAdmitted   Boolean @default(false)
+  /// I18nText { it, en? }
+  minorsConditions Json?
 
-     salesCloseAt       DateTime?
-     /// Vedi la nota su `tags`: l'assenza di criteri configurati è l'insieme vuoto,
-     /// e `EVENT_START` resta comunque sempre attivo come ultimo (`RF-EVT-40`).
-     salesCloseCriteria SalesCloseCriterion[] @default([])
+  salesCloseAt       DateTime?
+  /// Vedi la nota su `tags`: l'assenza di criteri configurati è l'insieme vuoto,
+  /// e `EVENT_START` resta comunque sempre attivo come ultimo (`RF-EVT-40`).
+  salesCloseCriteria SalesCloseCriterion[] @default([])
 
-     manageExternalChannels Boolean @default(false)
+  manageExternalChannels Boolean @default(false)
 
-     publishedAt        DateTime?
-     cancelledAt        DateTime?
-     cancellationReason String?
+  publishedAt        DateTime?
+  cancelledAt        DateTime?
+  cancellationReason String?
 
-     sessions           Session[]
-     casts              EventCast[]
-     requirements       EventRequirement[]
-     services           EventService[]
-     ticketTypes        TicketType[]
-     fiscalDeclarations FiscalDeclaration[]
-     capacityQuotas     CapacityQuota[]
-     couples            Couple[]
-     registrations      Registration[]
-     orders             Order[]
-     reservations       Reservation[]
-     passIssuances      PassIssuance[]
-     tickets            Ticket[]
+  sessions           Session[]
+  casts              EventCast[]
+  requirements       EventRequirement[]
+  services           EventService[]
+  ticketTypes        TicketType[]
+  fiscalDeclarations FiscalDeclaration[]
+  capacityQuotas     CapacityQuota[]
+  couples            Couple[]
+  registrations      Registration[]
+  orders             Order[]
+  reservations       Reservation[]
+  passIssuances      PassIssuance[]
+  tickets            Ticket[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([organizationId, status])
-     @@index([startAt])
-     @@index([slug])
+  @@index([organizationId, status])
+  @@index([startAt])
+  @@index([slug])
 }
 
 // -----------------------------------------------------------------------------
@@ -810,38 +825,38 @@ model Event {
 /// Nessun `PATCH`, nessun `DELETE`: si crea una nuova versione (`RF-ORG-8`).
 /// Tutte le relazioni sono `Restrict`: una dichiarazione non si perde mai per cascata.
 model FiscalDeclaration {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     organizationId Int
-     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-     eventId Int?
-     event   Event? @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId Int?
+  event   Event? @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-     kind FiscalDeclarationKind
+  kind FiscalDeclarationKind
 
-     /// Progressivo per (organizationId, kind, eventId) — calcolato dal servizio.
-     version Int @default(1)
+  /// Progressivo per (organizationId, kind, eventId) — calcolato dal servizio.
+  version Int @default(1)
 
-     frameworkLabel String
-     statementText  String
+  frameworkLabel String
+  statementText  String
 
-     /// Calcolati dal server, mai accettati dal client (§4.3).
-     declaredAt       DateTime @default(now())
-     declaredByUserId Int
-     declaredBy       User     @relation("FiscalDeclarationDeclaredBy", fields: [declaredByUserId], references: [id], onDelete: Restrict)
-     ipAddress        String
+  /// Calcolati dal server, mai accettati dal client (§4.3).
+  declaredAt       DateTime @default(now())
+  declaredByUserId Int
+  declaredBy       User     @relation("FiscalDeclarationDeclaredBy", fields: [declaredByUserId], references: [id], onDelete: Restrict)
+  ipAddress        String
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     /// Regge il progressivo delle attestazioni di evento. Per le dichiarazioni di
-     /// inquadramento (`eventId` nullo) Postgres considera i NULL distinti: lì il
-     /// progressivo è garantito dal servizio, che calcola `max(version) + 1` in transazione.
-     @@unique([organizationId, kind, eventId, version])
-     @@index([organizationId, kind])
-     @@index([eventId])
+  /// Regge il progressivo delle attestazioni di evento. Per le dichiarazioni di
+  /// inquadramento (`eventId` nullo) Postgres considera i NULL distinti: lì il
+  /// progressivo è garantito dal servizio, che calcola `max(version) + 1` in transazione.
+  @@unique([organizationId, kind, eventId, version])
+  @@index([organizationId, kind])
+  @@index([eventId])
 }
 
 // -----------------------------------------------------------------------------
@@ -849,41 +864,41 @@ model FiscalDeclaration {
 // -----------------------------------------------------------------------------
 
 model Session {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-     /// I18nText { it, en? }
-     name Json
+  /// I18nText { it, en? }
+  name Json
 
-     startAt DateTime
-     endAt   DateTime
+  startAt DateTime
+  endAt   DateTime
 
-     room  String?
-     level String?
+  room  String?
+  level String?
 
-     /// Peso di ripartizione (`RF-EVT-36`): default uniforme calcolato dal servizio.
-     allocationWeight Int @default(1)
+  /// Peso di ripartizione (`RF-EVT-36`): default uniforme calcolato dal servizio.
+  allocationWeight Int @default(1)
 
-     /// Sessione implicita reale creata dal servizio quando l'EventType ha
-     /// `capMultiSession = false`: il check-in di una milonga singola gira sullo
-     /// stesso codice di quello di un festival (§4.6).
-     isImplicit Boolean @default(false)
+  /// Sessione implicita reale creata dal servizio quando l'EventType ha
+  /// `capMultiSession = false`: il check-in di una milonga singola gira sullo
+  /// stesso codice di quello di un festival (§4.6).
+  isImplicit Boolean @default(false)
 
-     cancelledAt        DateTime?
-     cancellationReason String?
-     sortOrder          Int       @default(0)
+  cancelledAt        DateTime?
+  cancellationReason String?
+  sortOrder          Int       @default(0)
 
-     ticketTypeSessions TicketTypeSession[]
-     checkIns           CheckIn[]
+  ticketTypeSessions TicketTypeSession[]
+  checkIns           CheckIn[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId])
-     @@index([eventId, startAt])
+  @@index([eventId])
+  @@index([eventId, startAt])
 }
 
 // -----------------------------------------------------------------------------
@@ -891,91 +906,91 @@ model Session {
 // -----------------------------------------------------------------------------
 
 model EventCast {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-     artistId Int
-     artist   Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
+  artistId Int
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Restrict)
 
-     kind      ArtistKind
-     sortOrder Int        @default(0)
+  kind      ArtistKind
+  sortOrder Int        @default(0)
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId])
-     @@index([artistId])
+  @@index([eventId])
+  @@index([artistId])
 }
 
 model EventRequirement {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-     requirementTypeId Int
-     requirementType   RequirementType @relation(fields: [requirementTypeId], references: [id], onDelete: Restrict)
+  requirementTypeId Int
+  requirementType   RequirementType @relation(fields: [requirementTypeId], references: [id], onDelete: Restrict)
 
-     /// I18nText { it, en? }
-     label Json
-     /// I18nText { it, en? }
-     text Json
+  /// I18nText { it, en? }
+  label Json
+  /// I18nText { it, en? }
+  text  Json
 
-     mandatory    Boolean                 @default(false)
-     blocking     RequirementBlocking     @default(NONE)
-     verification RequirementVerification @default(AUTOMATIC)
+  mandatory    Boolean                 @default(false)
+  blocking     RequirementBlocking     @default(NONE)
+  verification RequirementVerification @default(AUTOMATIC)
 
-     dueAt     DateTime?
-     config    Json      @default("{}")
-     sortOrder Int       @default(0)
+  dueAt     DateTime?
+  config    Json      @default("{}")
+  sortOrder Int       @default(0)
 
-     outcomes RequirementOutcome[]
+  outcomes RequirementOutcome[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId])
-     @@index([requirementTypeId])
+  @@index([eventId])
+  @@index([requirementTypeId])
 }
 
 model EventService {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-     serviceTypeId Int
-     serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  serviceTypeId Int
+  serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
 
-     /// I18nText { it, en? }
-     name Json
-     /// I18nText { it, en? }
-     description Json?
+  /// I18nText { it, en? }
+  name        Json
+  /// I18nText { it, en? }
+  description Json?
 
-     /// Centesimi interi (§3.1).
-     price Int @default(0)
+  /// Centesimi interi (§3.1).
+  price Int @default(0)
 
-     refundCutoffAt DateTime?
+  refundCutoffAt DateTime?
 
-     /// Dichiara quali attributi si raccolgono all'acquisto (taglia, dieta, slot).
-     /// Diete e allergie sono l'unico dato riconducibile alla salute che resta in
-     /// piattaforma: accesso ristretto, mai nelle esportazioni generiche (§4.6).
-     attributesConfig Json @default("{}")
+  /// Dichiara quali attributi si raccolgono all'acquisto (taglia, dieta, slot).
+  /// Diete e allergie sono l'unico dato riconducibile alla salute che resta in
+  /// piattaforma: accesso ristretto, mai nelle esportazioni generiche (§4.6).
+  attributesConfig Json @default("{}")
 
-     sortOrder Int @default(0)
+  sortOrder Int @default(0)
 
-     orderLines OrderLine[]
+  orderLines OrderLine[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId])
-     @@index([serviceTypeId])
+  @@index([eventId])
+  @@index([serviceTypeId])
 }
 
 // -----------------------------------------------------------------------------
@@ -983,51 +998,51 @@ model EventService {
 // -----------------------------------------------------------------------------
 
 model TicketType {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-     /// I18nText { it, en? }
-     name Json
-     /// I18nText { it, en? }
-     description Json?
+  /// I18nText { it, en? }
+  name        Json
+  /// I18nText { it, en? }
+  description Json?
 
-     /// Centesimi interi (§3.1).
-     basePrice Int @default(0)
+  /// Centesimi interi (§3.1).
+  basePrice Int @default(0)
 
-     saleUnit SaleUnit @default(PER_PERSON)
+  saleUnit SaleUnit @default(PER_PERSON)
 
-     /// Vincolo di ruolo del titolo. Incompatibile con `consumesRoleQuota = false` (§4.7).
-     roleConstraint    DanceRole?
-     consumesRoleQuota Boolean    @default(true)
+  /// Vincolo di ruolo del titolo. Incompatibile con `consumesRoleQuota = false` (§4.7).
+  roleConstraint    DanceRole?
+  consumesRoleQuota Boolean    @default(true)
 
-     saleOpensAt  DateTime?
-     saleClosesAt DateTime?
+  saleOpensAt  DateTime?
+  saleClosesAt DateTime?
 
-     visibility TicketTypeVisibility @default(PUBLIC)
-     accessCode String?
+  visibility TicketTypeVisibility @default(PUBLIC)
+  accessCode String?
 
-     minPerOrder Int @default(1)
-     maxPerOrder Int @default(10)
+  minPerOrder Int @default(1)
+  maxPerOrder Int @default(10)
 
-     indicatedLevel String?
-     highlighted    Boolean @default(false)
-     sortOrder      Int     @default(0)
+  indicatedLevel String?
+  highlighted    Boolean @default(false)
+  sortOrder      Int     @default(0)
 
-     sessions   TicketTypeSession[]
-     priceTiers PriceTier[]
+  sessions   TicketTypeSession[]
+  priceTiers PriceTier[]
 
-     orderLines    OrderLine[]
-     passIssuances PassIssuance[]
-     tickets       Ticket[]
+  orderLines    OrderLine[]
+  passIssuances PassIssuance[]
+  tickets       Ticket[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId])
-     @@index([accessCode])
+  @@index([eventId])
+  @@index([accessCode])
 }
 
 // -----------------------------------------------------------------------------
@@ -1037,44 +1052,44 @@ model TicketType {
 
 /// Elenco ESPLICITO delle sessioni incluse nel titolo.
 model TicketTypeSession {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     ticketTypeId Int
-     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  ticketTypeId Int
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
 
-     sessionId Int
-     session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId Int
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@unique([ticketTypeId, sessionId])
-     @@index([sessionId])
+  @@unique([ticketTypeId, sessionId])
+  @@index([sessionId])
 }
 
 /// Scaglioni di prezzo. `soldQuantity` è calcolato dal server (§4.7).
 model PriceTier {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     ticketTypeId Int
-     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+  ticketTypeId Int
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
 
-     kind PriceTierKind
+  kind PriceTierKind
 
-     /// Centesimi interi (§3.1).
-     price Int
+  /// Centesimi interi (§3.1).
+  price Int
 
-     validUntil   DateTime?
-     maxQuantity  Int?
-     soldQuantity Int       @default(0)
-     sortOrder    Int       @default(0)
+  validUntil   DateTime?
+  maxQuantity  Int?
+  soldQuantity Int       @default(0)
+  sortOrder    Int       @default(0)
 
-     orderLines OrderLine[]
+  orderLines OrderLine[]
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([ticketTypeId])
+  @@index([ticketTypeId])
 }
 
 // =============================================================================
@@ -1086,34 +1101,34 @@ model PriceTier {
 // =============================================================================
 
 enum QuotaScope {
-     EVENT
-     SESSION
-     TICKET_TYPE
-     SERVICE
+  EVENT
+  SESSION
+  TICKET_TYPE
+  SERVICE
 }
 
 enum QuotaReservedFor {
-     COMPLIMENTARY
-     EXTERNAL_CHANNEL
+  COMPLIMENTARY
+  EXTERNAL_CHANNEL
 }
 
 enum DeclaredDanceRole {
-     LEADER
-     FOLLOWER
-     FLEXIBLE
+  LEADER
+  FOLLOWER
+  FLEXIBLE
 }
 
 enum RegistrationStatus {
-     CONFIRMED
-     TO_CONFIRM
-     DECLINED
+  CONFIRMED
+  TO_CONFIRM
+  DECLINED
 }
 
 enum RegistrationChannel {
-     ONLINE_SALE
-     DOOR_SALE
-     COMPLIMENTARY
-     EXTERNAL_CHANNEL
+  ONLINE_SALE
+  DOOR_SALE
+  COMPLIMENTARY
+  EXTERNAL_CHANNEL
 }
 
 // -----------------------------------------------------------------------------
@@ -1129,74 +1144,74 @@ enum RegistrationChannel {
 /// `consumed` è un CAMPO CALCOLATO DAL SERVER (§5): nessun DTO di scrittura lo
 /// accetta, si muove solo attraverso `CapacityEngineService`.
 model CapacityQuota {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-     scope QuotaScope
+  scope QuotaScope
 
-     /// Riferimento POLIMORFO SENZA CHIAVE ESTERNA: punta a `Session`,
-     /// `TicketType` o `EventService` secondo `scope` (§4.8). La coerenza è
-     /// verificata dal servizio, non dal database.
-     scopeId Int?
+  /// Riferimento POLIMORFO SENZA CHIAVE ESTERNA: punta a `Session`,
+  /// `TicketType` o `EventService` secondo `scope` (§4.8). La coerenza è
+  /// verificata dal servizio, non dal database.
+  scopeId Int?
 
-     /// Nullo = quota totale, indifferente al ruolo. Valorizzabile SOLO su
-     /// `scope ∈ {EVENT, SESSION}`: le quote di titolo e di servizio sono per
-     /// persona, indipendentemente da come balla.
-     role DanceRole?
+  /// Nullo = quota totale, indifferente al ruolo. Valorizzabile SOLO su
+  /// `scope ∈ {EVENT, SESSION}`: le quote di titolo e di servizio sono per
+  /// persona, indipendentemente da come balla.
+  role DanceRole?
 
-     /// Tetto assoluto.
-     limit Int
+  /// Tetto assoluto.
+  limit Int
 
-     /// Contatore denormalizzato, mosso nella stessa transazione dei consumi con
-     /// l'AGGIORNAMENTO CONDIZIONATO del §4.8. Mai scritto dal client.
-     consumed Int @default(0)
+  /// Contatore denormalizzato, mosso nella stessa transazione dei consumi con
+  /// l'AGGIORNAMENTO CONDIZIONATO del §4.8. Mai scritto dal client.
+  consumed Int @default(0)
 
-     /// Se falso la quota CONTA i posti ma NON BLOCCA la vendita (`05` §3): è il
-     /// caso delle milonghe incluse in un pass, dove non esiste un posto
-     /// assegnato e la sala assorbe.
-     limiting Boolean @default(true)
+  /// Se falso la quota CONTA i posti ma NON BLOCCA la vendita (`05` §3): è il
+  /// caso delle milonghe incluse in un pass, dove non esiste un posto
+  /// assegnato e la sala assorbe.
+  limiting Boolean @default(true)
 
-     /// Quota sottratta alla vendita online e non esposta nella disponibilità
-     /// pubblica: omaggi (`COMPLIMENTARY`) e biglietteria dell'organizzatore
-     /// (`EXTERNAL_CHANNEL`).
-     reservedFor QuotaReservedFor?
+  /// Quota sottratta alla vendita online e non esposta nella disponibilità
+  /// pubblica: omaggi (`COMPLIMENTARY`) e biglietteria dell'organizzatore
+  /// (`EXTERNAL_CHANNEL`).
+  reservedFor QuotaReservedFor?
 
-     /// Valorizzato solo sulle quote di ruolo appaiate del medesimo ambito.
-     /// Nullo = nessun cancello. NON estende il limite: restringe dinamicamente
-     /// l'accesso al ruolo sovrarappresentato (`05` §6).
-     imbalanceTolerance Int?
+  /// Valorizzato solo sulle quote di ruolo appaiate del medesimo ambito.
+  /// Nullo = nessun cancello. NON estende il limite: restringe dinamicamente
+  /// l'accesso al ruolo sovrarappresentato (`05` §6).
+  imbalanceTolerance Int?
 
-     /// Posti accettabili oltre il limite senza rifiutare l'ordine.
-     /// FORZATO A 0 E NON MODIFICABILE sulla capienza della sala
-     /// (`scope=EVENT, role=null`) e sulle quote di ruolo di ambito `EVENT`:
-     /// non è un limite commerciale, è un vincolo di sicurezza (`05` §5.1).
-     overbookAllowance Int @default(0)
+  /// Posti accettabili oltre il limite senza rifiutare l'ordine.
+  /// FORZATO A 0 E NON MODIFICABILE sulla capienza della sala
+  /// (`scope=EVENT, role=null`) e sulle quote di ruolo di ambito `EVENT`:
+  /// non è un limite commerciale, è un vincolo di sicurezza (`05` §5.1).
+  overbookAllowance Int @default(0)
 
-     /// Se falso la disponibilità residua non compare in scheda evento.
-     publiclyVisible Boolean @default(true)
+  /// Se falso la disponibilità residua non compare in scheda evento.
+  publiclyVisible Boolean @default(true)
 
-     consumptions QuotaConsumption[]
+  consumptions QuotaConsumption[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     /// Non esistono due quote per la stessa cosa (`05` §2.1).
-     ///
-     /// SCOSTAMENTO DICHIARATO DAL §3.6 — la terna del brief è
-     /// `(eventId, scope, scopeId, role)`, ma il §4.8 indirizza il contingente
-     /// degli accrediti come `quota(EVENT, null, reservedFor: COMPLIMENTARY)`:
-     /// una quota di ambito EVENT con `scopeId` e `role` nulli, cioè **la stessa
-     /// terna della capienza della sala**. Con la terna letterale le due righe
-     /// non potrebbero coesistere e il ramo accrediti del §4.8 — con il caso di
-     /// test T19 — sarebbe irrealizzabile; lo stesso vale per il contingente
-     /// `EXTERNAL_CHANNEL` dell'assunzione AS-4. `reservedFor` entra quindi
-     /// nell'identità. Il vincolo resta un SOVRAINSIEME di quello del §3.6:
-     /// continua a vietare due quote ordinarie per la stessa cosa.
-     @@unique([eventId, scope, scopeId, role, reservedFor])
-     @@index([eventId, scope])
+  /// Non esistono due quote per la stessa cosa (`05` §2.1).
+  ///
+  /// SCOSTAMENTO DICHIARATO DAL §3.6 — la terna del brief è
+  /// `(eventId, scope, scopeId, role)`, ma il §4.8 indirizza il contingente
+  /// degli accrediti come `quota(EVENT, null, reservedFor: COMPLIMENTARY)`:
+  /// una quota di ambito EVENT con `scopeId` e `role` nulli, cioè **la stessa
+  /// terna della capienza della sala**. Con la terna letterale le due righe
+  /// non potrebbero coesistere e il ramo accrediti del §4.8 — con il caso di
+  /// test T19 — sarebbe irrealizzabile; lo stesso vale per il contingente
+  /// `EXTERNAL_CHANNEL` dell'assunzione AS-4. `reservedFor` entra quindi
+  /// nell'identità. Il vincolo resta un SOVRAINSIEME di quello del §3.6:
+  /// continua a vietare due quote ordinarie per la stessa cosa.
+  @@unique([eventId, scope, scopeId, role, reservedFor])
+  @@index([eventId, scope])
 }
 
 // -----------------------------------------------------------------------------
@@ -1209,20 +1224,20 @@ model CapacityQuota {
 /// complementari. `dissolve` NON muove alcun consumo — le persone restano,
 /// cambia solo il legame (`05` §8).
 model Couple {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-     dissolvedAt DateTime?
+  dissolvedAt DateTime?
 
-     registrations Registration[]
+  registrations Registration[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId])
+  @@index([eventId])
 }
 
 // -----------------------------------------------------------------------------
@@ -1234,53 +1249,53 @@ model Couple {
 /// la riassegnazione passa dal servizio che rilascia i consumi del vecchio ruolo
 /// e impegna quelli del nuovo con le stesse verifiche di un acquisto.
 model Registration {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-     personUserId Int?
-     personUser   User? @relation("RegistrationPerson", fields: [personUserId], references: [id], onDelete: SetNull)
+  personUserId Int?
+  personUser   User? @relation("RegistrationPerson", fields: [personUserId], references: [id], onDelete: SetNull)
 
-     holderName    String
-     holderSurname String
-     holderEmail   String
+  holderName    String
+  holderSurname String
+  holderEmail   String
 
-     /// Ciò che l'utente ha scelto.
-     declaredRole DeclaredDanceRole
-     /// Il ruolo effettivo, risolto alla conferma del pagamento. Mai nullo su
-     /// eventi con quote di ruolo (`05` §2.3, invariante I4).
-     assignedRole DanceRole?
+  /// Ciò che l'utente ha scelto.
+  declaredRole DeclaredDanceRole
+  /// Il ruolo effettivo, risolto alla conferma del pagamento. Mai nullo su
+  /// eventi con quote di ruolo (`05` §2.3, invariante I4).
+  assignedRole DanceRole?
 
-     channel RegistrationChannel @default(ONLINE_SALE)
-     status  RegistrationStatus  @default(TO_CONFIRM)
+  channel RegistrationChannel @default(ONLINE_SALE)
+  status  RegistrationStatus  @default(TO_CONFIRM)
 
-     confirmedAt DateTime?
-     declinedAt  DateTime?
+  confirmedAt DateTime?
+  declinedAt  DateTime?
 
-     coupleId Int?
-     couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: SetNull)
+  coupleId Int?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: SetNull)
 
-     isMinor        Boolean @default(false)
-     guardianUserId Int?
-     guardian       User?   @relation("RegistrationGuardian", fields: [guardianUserId], references: [id], onDelete: SetNull)
+  isMinor        Boolean @default(false)
+  guardianUserId Int?
+  guardian       User?   @relation("RegistrationGuardian", fields: [guardianUserId], references: [id], onDelete: SetNull)
 
-     quotaConsumptions   QuotaConsumption[]
-     requirementOutcomes RequirementOutcome[]
-     tickets             Ticket[]
-     checkIns            CheckIn[]
+  quotaConsumptions   QuotaConsumption[]
+  requirementOutcomes RequirementOutcome[]
+  tickets             Ticket[]
+  checkIns            CheckIn[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     /// Unico su `(eventId, personUserId)` QUANDO `personUserId` non è nullo:
-     /// in PostgreSQL un unique index tratta ogni NULL come distinto, quindi le
-     /// iscrizioni senza account non si ostacolano fra loro (§3.6).
-     @@unique([eventId, personUserId])
-     @@index([eventId, assignedRole])
-     @@index([eventId, status])
-     @@index([coupleId])
+  /// Unico su `(eventId, personUserId)` QUANDO `personUserId` non è nullo:
+  /// in PostgreSQL un unique index tratta ogni NULL come distinto, quindi le
+  /// iscrizioni senza account non si ostacolano fra loro (§3.6).
+  @@unique([eventId, personUserId])
+  @@index([eventId, assignedRole])
+  @@index([eventId, status])
+  @@index([coupleId])
 }
 
 // -----------------------------------------------------------------------------
@@ -1294,21 +1309,21 @@ model Registration {
 /// La chiave unica `(capacityQuotaId, registrationId)` è ciò che rende l'impegno
 /// IDEMPOTENTE sulla doppia notifica del prestatore di pagamento (§4.8 nota 3).
 model QuotaConsumption {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     capacityQuotaId Int
-     capacityQuota   CapacityQuota @relation(fields: [capacityQuotaId], references: [id], onDelete: Cascade)
+  capacityQuotaId Int
+  capacityQuota   CapacityQuota @relation(fields: [capacityQuotaId], references: [id], onDelete: Cascade)
 
-     registrationId Int
-     registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  registrationId Int
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
-     quantity Int @default(1)
+  quantity Int @default(1)
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@unique([capacityQuotaId, registrationId])
-     @@index([registrationId])
+  @@unique([capacityQuotaId, registrationId])
+  @@index([registrationId])
 }
 
 // =============================================================================
@@ -1324,31 +1339,31 @@ model QuotaConsumption {
 // =============================================================================
 
 enum RequirementOutcomeStatus {
-     TO_PROVIDE
-     UNDER_REVIEW
-     VALID
-     REJECTED
-     EXPIRED
+  TO_PROVIDE
+  UNDER_REVIEW
+  VALID
+  REJECTED
+  EXPIRED
 }
 
 enum TicketStatus {
-     VALID
-     TRANSFERRED
-     CANCELLED
-     REFUNDED
+  VALID
+  TRANSFERRED
+  CANCELLED
+  REFUNDED
 }
 
 enum PassIssuanceReason {
-     COMPLIMENTARY
-     EXTERNAL_SALE
-     GIFT
-     COURTESY
+  COMPLIMENTARY
+  EXTERNAL_SALE
+  GIFT
+  COURTESY
 }
 
 enum CheckInKind {
-     OPERATOR
-     MANUAL_SEARCH
-     EXTERNAL_ENTRY
+  OPERATOR
+  MANUAL_SEARCH
+  EXTERNAL_ENTRY
 }
 
 /// Esito della verifica di `POST /tickets/verify` (§3.5, `RF-CHK-4`).
@@ -1358,11 +1373,11 @@ enum CheckInKind {
 /// perché il §3.5 lo elenca fra le enumerazioni del contratto e perché così i
 /// DTO lo ricevono da `@prisma-gen/zod` come tutti gli altri, da un'unica fonte.
 enum CheckInResult {
-     VALID
-     ALREADY_USED
-     WRONG_EVENT
-     REFUNDED_OR_CANCELLED
-     REQUIREMENT_BLOCKED
+  VALID
+  ALREADY_USED
+  WRONG_EVENT
+  REFUNDED_OR_CANCELLED
+  REQUIREMENT_BLOCKED
 }
 
 // -----------------------------------------------------------------------------
@@ -1380,34 +1395,34 @@ enum CheckInResult {
 /// documenti, nessun dato sanitario, mai (`RF-REQ-2`, `RF-REQ-3`). Il contenuto
 /// di `value` **non compare mai** nella vista di check-in (`RB12`).
 model RequirementOutcome {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     registrationId Int
-     registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  registrationId Int
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
-     eventRequirementId Int
-     eventRequirement   EventRequirement @relation(fields: [eventRequirementId], references: [id], onDelete: Restrict)
+  eventRequirementId Int
+  eventRequirement   EventRequirement @relation(fields: [eventRequirementId], references: [id], onDelete: Restrict)
 
-     status RequirementOutcomeStatus @default(TO_PROVIDE)
-     value  Json                     @default("{}")
+  status RequirementOutcomeStatus @default(TO_PROVIDE)
+  value  Json                     @default("{}")
 
-     /// Calcolati dal server (`RF-REQ-4`).
-     acceptedAt      DateTime?
-     acceptedIp      String?
-     acceptedVersion String?
+  /// Calcolati dal server (`RF-REQ-4`).
+  acceptedAt      DateTime?
+  acceptedIp      String?
+  acceptedVersion String?
 
-     reviewedByUserId Int?
-     reviewedBy       User?     @relation("RequirementOutcomeReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-     reviewedAt       DateTime?
-     rejectionReason  String?
+  reviewedByUserId Int?
+  reviewedBy       User?     @relation("RequirementOutcomeReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  rejectionReason  String?
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@unique([registrationId, eventRequirementId])
-     @@index([eventRequirementId])
-     @@index([registrationId, status])
+  @@unique([registrationId, eventRequirementId])
+  @@index([eventRequirementId])
+  @@index([registrationId, status])
 }
 
 // -----------------------------------------------------------------------------
@@ -1425,191 +1440,191 @@ model RequirementOutcome {
 // -----------------------------------------------------------------------------
 
 enum OrderStatus {
-     PENDING_PAYMENT
-     PAID
-     FAILED
-     EXPIRED
-     CANCELLED
+  PENDING_PAYMENT
+  PAID
+  FAILED
+  EXPIRED
+  CANCELLED
 }
 
 /// §3.5. `NONE` = ordine a **importo zero** o **saldato fuori piattaforma**: è il
 /// percorso di `POST /orders/:id/confirm-free`, non una scorciatoia per saltare
 /// il pagamento. `STRIPE` arriva con la fase D2.
 enum PaymentProvider {
-     NONE
-     STRIPE
+  NONE
+  STRIPE
 }
 
 enum PaymentStatus {
-     PENDING
-     SUCCEEDED
-     FAILED
-     REFUNDED
-     PARTIALLY_REFUNDED
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
 }
 
 enum ReleaseReason {
-     EXPIRED
-     ABANDONED
-     PAYMENT_FAILED
-     COMPLETED
+  EXPIRED
+  ABANDONED
+  PAYMENT_FAILED
+  COMPLETED
 }
 
 /// Guscio della fase D2 (§4.11). Raggruppa N `Order`, uno per organizzatore.
 model Purchase {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     buyerUserId Int
-     buyer       User @relation("PurchaseBuyer", fields: [buyerUserId], references: [id], onDelete: Restrict)
+  buyerUserId Int
+  buyer       User @relation("PurchaseBuyer", fields: [buyerUserId], references: [id], onDelete: Restrict)
 
-     /// Centesimi interi (§3.1).
-     totalAmount        Int @default(0)
-     totalPresaleRights Int @default(0)
+  /// Centesimi interi (§3.1).
+  totalAmount        Int @default(0)
+  totalPresaleRights Int @default(0)
 
-     orders Order[]
+  orders Order[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([buyerUserId])
+  @@index([buyerUserId])
 }
 
 /// Guscio della fase D2 (§4.11). Un ordine per organizzatore (`RF-PAY-34`).
 model Order {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     purchaseId Int
-     purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  purchaseId Int
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
 
-     organizationId Int
-     organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-     status OrderStatus @default(PENDING_PAYMENT)
+  status OrderStatus @default(PENDING_PAYMENT)
 
-     /// Centesimi interi, tutti calcolati dal server (§4.11).
-     subtotal      Int @default(0)
-     presaleRights Int @default(0)
-     total         Int @default(0)
+  /// Centesimi interi, tutti calcolati dal server (§4.11).
+  subtotal      Int @default(0)
+  presaleRights Int @default(0)
+  total         Int @default(0)
 
-     priceLockedAt DateTime  @default(now())
-     expiresAt     DateTime?
-     paidAt        DateTime?
-     failedAt      DateTime?
-     cancelledAt   DateTime?
+  priceLockedAt DateTime  @default(now())
+  expiresAt     DateTime?
+  paidAt        DateTime?
+  failedAt      DateTime?
+  cancelledAt   DateTime?
 
-     lines        OrderLine[]
-     reservations Reservation[]
-     payments     Payment[]
+  lines        OrderLine[]
+  reservations Reservation[]
+  payments     Payment[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([purchaseId])
-     @@index([organizationId, status])
-     @@index([eventId, status])
+  @@index([purchaseId])
+  @@index([organizationId, status])
+  @@index([eventId, status])
 }
 
 /// Guscio della fase D2 (§4.11). Figlio posseduto: `Cascade` da `Order`, nessun
 /// controller proprio (`PATCH /orders/:id/lines`).
 model OrderLine {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     orderId Int
-     order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-     ticketTypeId Int?
-     ticketType   TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
+  ticketTypeId Int?
+  ticketType   TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
 
-     eventServiceId Int?
-     eventService   EventService? @relation(fields: [eventServiceId], references: [id], onDelete: SetNull)
+  eventServiceId Int?
+  eventService   EventService? @relation(fields: [eventServiceId], references: [id], onDelete: SetNull)
 
-     quantity Int @default(1)
+  quantity Int @default(1)
 
-     /// Centesimi interi, calcolati dal server: un prezzo che arriva dal client è
-     /// un difetto di sicurezza (§4.11).
-     unitPrice            Int @default(0)
-     presaleRightsPerUnit Int @default(0)
-     lineTotal            Int @default(0)
+  /// Centesimi interi, calcolati dal server: un prezzo che arriva dal client è
+  /// un difetto di sicurezza (§4.11).
+  unitPrice            Int @default(0)
+  presaleRightsPerUnit Int @default(0)
+  lineTotal            Int @default(0)
 
-     priceTierId Int?
-     priceTier   PriceTier? @relation(fields: [priceTierId], references: [id], onDelete: SetNull)
+  priceTierId Int?
+  priceTier   PriceTier? @relation(fields: [priceTierId], references: [id], onDelete: SetNull)
 
-     /// `[{ name, surname, email, declaredRole, serviceAttributes }]`.
-     /// `serviceAttributes` può contenere diete e allergie: accesso ristretto,
-     /// mai nelle esportazioni generiche né nella vista di check-in (`RB12`).
-     attendees Json @default("[]")
+  /// `[{ name, surname, email, declaredRole, serviceAttributes }]`.
+  /// `serviceAttributes` può contenere diete e allergie: accesso ristretto,
+  /// mai nelle esportazioni generiche né nella vista di check-in (`RB12`).
+  attendees Json @default("[]")
 
-     tickets Ticket[]
+  tickets Ticket[]
 
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([orderId])
-     @@index([ticketTypeId])
+  @@index([orderId])
+  @@index([ticketTypeId])
 }
 
 /// Guscio della fase D2 (§4.11). Una sola prenotazione attiva per
 /// `(userId, eventId)` — indice unico PARZIALE su `releasedAt IS NULL`, creato a
 /// mano nella migrazione (`RF-PAY-23`).
 model Reservation {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     orderId Int
-     order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-     userId Int
-     user   User @relation("ReservationUser", fields: [userId], references: [id], onDelete: Restrict)
+  userId Int
+  user   User @relation("ReservationUser", fields: [userId], references: [id], onDelete: Restrict)
 
-     expiresAt  DateTime
-     rearmedAt  DateTime?
-     releasedAt DateTime?
+  expiresAt  DateTime
+  rearmedAt  DateTime?
+  releasedAt DateTime?
 
-     releaseReason ReleaseReason?
+  releaseReason ReleaseReason?
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([orderId])
-     @@index([userId, eventId])
-     @@index([expiresAt])
+  @@index([orderId])
+  @@index([userId, eventId])
+  @@index([expiresAt])
 }
 
 /// Guscio della fase D2 (§4.11). `idempotencyKey` unico e `processedEventIds`
 /// sono la difesa contro la doppia notifica di Stripe (`RF-PAY-10`).
 model Payment {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     orderId Int
-     order   Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
-     provider          PaymentProvider @default(STRIPE)
-     providerPaymentId String
-     providerAccountId String
+  provider          PaymentProvider @default(STRIPE)
+  providerPaymentId String
+  providerAccountId String
 
-     status PaymentStatus @default(PENDING)
+  status PaymentStatus @default(PENDING)
 
-     /// Centesimi interi (§3.1).
-     amount              Int @default(0)
-     applicationFeeAmount Int @default(0)
+  /// Centesimi interi (§3.1).
+  amount               Int @default(0)
+  applicationFeeAmount Int @default(0)
 
-     idempotencyKey    String   @unique
-     processedEventIds String[] @default([])
+  idempotencyKey    String   @unique
+  processedEventIds String[] @default([])
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([orderId, status])
-     @@index([providerPaymentId])
+  @@index([orderId, status])
+  @@index([providerPaymentId])
 }
 
 // -----------------------------------------------------------------------------
@@ -1629,37 +1644,37 @@ model Payment {
 /// diventa falso proprio dove serve. Il vincolo è del servizio, non della
 /// tabella, perché dipende dalla configurazione dell'evento.
 model PassIssuance {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-     ticketTypeId Int
-     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  ticketTypeId Int
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
 
-     issuedByUserId Int
-     issuedBy       User @relation("PassIssuanceIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+  issuedByUserId Int
+  issuedBy       User @relation("PassIssuanceIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict)
 
-     quantity Int                @default(1)
-     reason   PassIssuanceReason
-     role     DanceRole?
+  quantity Int                @default(1)
+  reason   PassIssuanceReason
+  role     DanceRole?
 
-     /// Falso = pass **al portatore**, senza nominativo e **non trasferibili**.
-     nominal Boolean @default(true)
-     note    String?
+  /// Falso = pass **al portatore**, senza nominativo e **non trasferibili**.
+  nominal Boolean @default(true)
+  note    String?
 
-     issuedAt  DateTime  @default(now())
-     revokedAt DateTime?
+  issuedAt  DateTime  @default(now())
+  revokedAt DateTime?
 
-     tickets Ticket[]
+  tickets Ticket[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId, issuedAt])
-     @@index([ticketTypeId])
-     @@index([issuedByUserId])
+  @@index([eventId, issuedAt])
+  @@index([ticketTypeId])
+  @@index([issuedByUserId])
 }
 
 // -----------------------------------------------------------------------------
@@ -1691,64 +1706,64 @@ model PassIssuance {
 /// Non esiste uno stato `USED`, e non deve esistere: l'utilizzo è registrato su
 /// `CheckIn`, sulla coppia biglietto–sessione (`09` §7, §4.13).
 model Ticket {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     /// Provenienza: riga d'ordine (vendita online) **oppure** emissione manuale.
-     /// Entrambe nullable e `SetNull`: un biglietto non sparisce né perde validità
-     /// perché l'ordine da cui nasce viene riorganizzato.
-     orderLineId Int?
-     orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+  /// Provenienza: riga d'ordine (vendita online) **oppure** emissione manuale.
+  /// Entrambe nullable e `SetNull`: un biglietto non sparisce né perde validità
+  /// perché l'ordine da cui nasce viene riorganizzato.
+  orderLineId Int?
+  orderLine   OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
 
-     passIssuanceId Int?
-     passIssuance   PassIssuance? @relation(fields: [passIssuanceId], references: [id], onDelete: SetNull)
+  passIssuanceId Int?
+  passIssuance   PassIssuance? @relation(fields: [passIssuanceId], references: [id], onDelete: SetNull)
 
-     eventId Int
-     event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  eventId Int
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-     ticketTypeId Int
-     ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+  ticketTypeId Int
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
 
-     /// L'iscrizione a cui il biglietto dà corpo. Nulla sui pass al portatore, che
-     /// non hanno una persona finché qualcuno non si presenta.
-     registrationId Int?
-     registration   Registration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+  /// L'iscrizione a cui il biglietto dà corpo. Nulla sui pass al portatore, che
+  /// non hanno una persona finché qualcuno non si presenta.
+  registrationId Int?
+  registration   Registration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
 
-     /// Il contenuto del QR firmato. Unico e indicizzato: è la chiave di ricerca
-     /// di `POST /tickets/verify`.
-     code String @unique
+  /// Il contenuto del QR firmato. Unico e indicizzato: è la chiave di ricerca
+  /// di `POST /tickets/verify`.
+  code String @unique
 
-     status TicketStatus @default(VALID)
+  status TicketStatus @default(VALID)
 
-     holderName    String
-     holderSurname String
-     holderEmail   String?
+  holderName    String
+  holderSurname String
+  holderEmail   String?
 
-     /// Pass emesso in blocco senza nominativo: **al portatore, non trasferibile**.
-     bearer Boolean @default(false)
+  /// Pass emesso in blocco senza nominativo: **al portatore, non trasferibile**.
+  bearer Boolean @default(false)
 
-     qrIssuedAt  DateTime  @default(now())
-     /// Valorizzato quando il QR è invalidato definitivamente (rimborso,
-     /// annullamento). Il TRASFERIMENTO non lo valorizza: emette un `code` nuovo,
-     /// e il precedente muore perché non corrisponde più ad alcun biglietto —
-     /// resta su `TicketTransfer.previousCode` come traccia storica.
-     qrRevokedAt DateTime?
+  qrIssuedAt  DateTime  @default(now())
+  /// Valorizzato quando il QR è invalidato definitivamente (rimborso,
+  /// annullamento). Il TRASFERIMENTO non lo valorizza: emette un `code` nuovo,
+  /// e il precedente muore perché non corrisponde più ad alcun biglietto —
+  /// resta su `TicketTransfer.previousCode` come traccia storica.
+  qrRevokedAt DateTime?
 
-     pdfFileId Int?
-     pdfFile   File? @relation("TicketPdf", fields: [pdfFileId], references: [id], onDelete: SetNull)
+  pdfFileId Int?
+  pdfFile   File? @relation("TicketPdf", fields: [pdfFileId], references: [id], onDelete: SetNull)
 
-     transfers TicketTransfer[]
-     checkIns  CheckIn[]
+  transfers TicketTransfer[]
+  checkIns  CheckIn[]
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([eventId, status])
-     @@index([code])
-     @@index([registrationId])
-     @@index([ticketTypeId])
-     @@index([passIssuanceId])
-     @@index([orderLineId])
+  @@index([eventId, status])
+  @@index([code])
+  @@index([registrationId])
+  @@index([ticketTypeId])
+  @@index([passIssuanceId])
+  @@index([orderLineId])
 }
 
 // -----------------------------------------------------------------------------
@@ -1762,33 +1777,33 @@ model Ticket {
 /// passaggio: restano leggibili anche se l'utente collegato viene poi cancellato,
 /// ed è la ragione per cui non sono ricostruite dalle chiavi esterne.
 model TicketTransfer {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     ticketId Int
-     ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId Int
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
-     fromUserId Int?
-     fromUser   User? @relation("TicketTransferFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  fromUserId Int?
+  fromUser   User? @relation("TicketTransferFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
 
-     toUserId Int?
-     toUser   User? @relation("TicketTransferTo", fields: [toUserId], references: [id], onDelete: SetNull)
+  toUserId Int?
+  toUser   User? @relation("TicketTransferTo", fields: [toUserId], references: [id], onDelete: SetNull)
 
-     /// `{ name, surname, email? }`
-     fromHolder Json
-     toHolder   Json
+  /// `{ name, surname, email? }`
+  fromHolder Json
+  toHolder   Json
 
-     /// Il `code` invalidato dal passaggio: da qui in poi non apre più nulla.
-     previousCode String
+  /// Il `code` invalidato dal passaggio: da qui in poi non apre più nulla.
+  previousCode String
 
-     transferredAt DateTime @default(now())
+  transferredAt DateTime @default(now())
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     @@index([ticketId, transferredAt])
-     @@index([fromUserId])
-     @@index([toUserId])
+  @@index([ticketId, transferredAt])
+  @@index([fromUserId])
+  @@index([toUserId])
 }
 
 // -----------------------------------------------------------------------------
@@ -1815,48 +1830,48 @@ model TicketTransfer {
 /// lasciata allo staff**: i doppi ingressi sono conflitti da risolvere, mai
 /// risolti in silenzio.
 model CheckIn {
-     id Int @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-     ticketId Int
-     ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  ticketId Int
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
 
-     sessionId Int
-     session   Session @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  sessionId Int
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Restrict)
 
-     registrationId Int
-     registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  registrationId Int
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
 
-     operatorUserId Int
-     operator       User @relation("CheckInOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  operatorUserId Int
+  operator       User @relation("CheckInOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
 
-     kind CheckInKind @default(OPERATOR)
+  kind CheckInKind @default(OPERATOR)
 
-     /// Momento della scansione **sul dispositivo**: offline può precedere di ore
-     /// la sincronizzazione, ed è questo il momento che vale come ingresso.
-     scannedAt DateTime @default(now())
-     /// Momento in cui la riga è arrivata al server. Nullo sugli ingressi online.
-     syncedAt  DateTime?
+  /// Momento della scansione **sul dispositivo**: offline può precedere di ore
+  /// la sincronizzazione, ed è questo il momento che vale come ingresso.
+  scannedAt DateTime  @default(now())
+  /// Momento in cui la riga è arrivata al server. Nullo sugli ingressi online.
+  syncedAt  DateTime?
 
-     /// La «postazione» che `RF-CHK-4` chiede di nominare su `ALREADY_USED`.
-     deviceId String
-     offline  Boolean @default(false)
+  /// La «postazione» che `RF-CHK-4` chiede di nominare su `ALREADY_USED`.
+  deviceId String
+  offline  Boolean @default(false)
 
-     conflictWithId Int?
-     conflictWith   CheckIn?  @relation("CheckInConflict", fields: [conflictWithId], references: [id], onDelete: SetNull)
-     conflicts      CheckIn[] @relation("CheckInConflict")
+  conflictWithId Int?
+  conflictWith   CheckIn?  @relation("CheckInConflict", fields: [conflictWithId], references: [id], onDelete: SetNull)
+  conflicts      CheckIn[] @relation("CheckInConflict")
 
-     /// Annullamento di un check-in errato (`RF-CHK-9`). Una riga revocata esce
-     /// dall'indice parziale: il biglietto può rientrare in quella sessione.
-     revokedAt DateTime?
+  /// Annullamento di un check-in errato (`RF-CHK-9`). Una riga revocata esce
+  /// dall'indice parziale: il biglietto può rientrare in quella sessione.
+  revokedAt DateTime?
 
-     deleted   Boolean  @default(false)
-     createdAt DateTime @default(now())
-     updatedAt DateTime @updatedAt
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-     /// Ricreato a mano nella migrazione come indice PARZIALE — vedi sopra.
-     @@unique([ticketId, sessionId])
-     @@index([sessionId, scannedAt])
-     @@index([deviceId])
-     @@index([registrationId])
-     @@index([conflictWithId])
+  /// Ricreato a mano nella migrazione come indice PARZIALE — vedi sopra.
+  @@unique([ticketId, sessionId])
+  @@index([sessionId, scannedAt])
+  @@index([deviceId])
+  @@index([registrationId])
+  @@index([conflictWithId])
 }
