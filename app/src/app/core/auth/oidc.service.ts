@@ -145,6 +145,17 @@ export class OidcService {
       throw new Error('Accesso tramite fornitore di identità non disponibile.');
     }
 
+    // ⚠️ La sessione precedente si chiude PRIMA di partire, e non è pulizia
+    // formale: se in `localStorage` resta un token scaduto, al ritorno dal
+    // fornitore l'avvio dell'applicazione lo usa per `GET /auth/profile`,
+    // incassa un 401, e l'interceptor porta l'utente su `/login` — **annullando
+    // la richiesta in volo** della pagina di callback. Il backend risponde
+    // correttamente nel vuoto, e a schermo compare «Server non raggiungibile».
+    //
+    // Chi sta iniziando un accesso nuovo non ha comunque nulla da conservare
+    // della sessione vecchia.
+    this.auth.logout();
+
     const codeVerifier = casuale(64);
     const transito: Transito = {
       codeVerifier,

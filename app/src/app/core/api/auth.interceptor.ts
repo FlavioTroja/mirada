@@ -32,6 +32,14 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const tentativoDiAccesso =
     req.url.startsWith('/api/auth/login') || req.url.startsWith('/api/auth/sso');
 
+  // ⚠️ Le due pagine in cui una sessione si sta FORMANDO. Portare via da qui
+  // per un 401 arrivato da tutt'altra richiesta — tipicamente il
+  // `GET /auth/profile` dell'avvio, con un token vecchio in localStorage —
+  // annulla la chiamata in volo della pagina e fa comparire «Server non
+  // raggiungibile» mentre il backend sta rispondendo benissimo.
+  const inAutenticazione =
+    router.url.startsWith('/auth/callback') || router.url.startsWith('/registrazione');
+
   const token = auth.token();
   const authorized =
     token && req.url.startsWith('/api')
@@ -48,9 +56,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
           // sessione c'era: vedi `tentativoDiAccesso` sopra.
           if (!tentativoDiAccesso) {
             auth.logout();
-            void router.navigate(['/login'], {
-              queryParams: { redirect: router.url !== '/login' ? router.url : null },
-            });
+            if (!inAutenticazione) {
+              void router.navigate(['/login'], {
+                queryParams: { redirect: router.url !== '/login' ? router.url : null },
+              });
+            }
           }
           break;
 
