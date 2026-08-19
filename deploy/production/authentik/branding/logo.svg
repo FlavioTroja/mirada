@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="96" viewBox="0 0 420 96" role="img" aria-label="Mirada Tango">
+  <!--
+    Il marchio, come nella testata del sito: il rombo d'oro, "Mirada" avorio,
+    "Tango" oro. Sta sulla schermata d'accesso di Authentik, dove il fondo e'
+    scuro: i colori sono quelli del tema, non una loro reinterpretazione.
+  -->
+  <defs>
+    <linearGradient id="oro" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#C9982F"/>
+      <stop offset="50%"  stop-color="#E0B84F"/>
+      <stop offset="100%" stop-color="#F0D68A"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="35" width="26" height="26" fill="#E0B84F" transform="rotate(45 23 48)"/>
+  <text x="58" y="62" font-family="Poppins, system-ui, sans-serif" font-weight="700" font-size="40" fill="#F3E9DC">Mirada</text>
+  <text x="212" y="62" font-family="Poppins, system-ui, sans-serif" font-weight="700" font-size="40" fill="url(#oro)">Tango</text>
+</svg>

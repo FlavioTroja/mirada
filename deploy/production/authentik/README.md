@@ -152,6 +152,55 @@ copia che divergerà.
 Sulla 465 il TLS è implicito: `USE_SSL=true`, `USE_TLS=false`. Accenderli
 entrambi è l'errore classico e produce un handshake che non termina.
 
+## La marchiatura
+
+`branding/` in questa cartella: logo, sfondo, foglio di stile e lo script che li
+applica. Serve a togliere lo stacco fra `mirada.dance` e la pagina in cui si
+entra — stessa tavolozza, stesso carattere, stesso marchio.
+
+| dove vive | cosa |
+|---|---|
+| `branding/logo.svg` | il rombo d'oro con «Mirada Tango», come la testata del sito |
+| `branding/sfondo.svg` | gli aloni bordeaux e oro su nero: rifà con gradienti statici ciò che nel back-office è un componente animato |
+| `branding/authentik.css` | tavolozza e tipografia, applicate al brand |
+| `branding/applica.sh` | riapplica tutto; idempotente |
+
+**Gli asset non stanno dentro Authentik**: sono serviti da
+`https://mirada.dance/images/branding/`, cioè dallo stesso posto da cui viene
+tutto il resto. Si caricano nel volume `public`, che è scrivibile **dal
+backend** (`files` lo monta in sola lettura):
+
+```bash
+cd ~/orch/mirada/production
+docker compose exec -T backend sh -c 'mkdir -p /app/public/images/branding/fonts'
+docker compose exec -T backend sh -c 'cat > /app/public/images/branding/logo.svg' < logo.svg
+# … idem per sfondo.svg e i tre .woff2 di Poppins
+```
+
+⚠️ **I font hanno bisogno di CORS, le immagini no.** `auth.mirada.dance` è
+un'origine diversa da `mirada.dance`, e i font — a differenza delle immagini —
+sono soggetti a CORS: senza `Access-Control-Allow-Origin` il browser li scarta
+**in silenzio** e ricade sul carattere di sistema. Il sintomo è una pagina che
+«non usa il font giusto» senza alcun errore visibile. L'intestazione è in
+`deploy/production/files/nginx.conf`, su una `location ^~ /images/branding/`
+dedicata.
+
+⚠️ **Il CSS agisce quasi tutto per VARIABILI, non per selettori.** L'interfaccia
+di Authentik è fatta di web component e buona parte del suo markup vive dentro
+shadow DOM, dove un selettore scritto da fuori non arriva. Le proprietà
+personalizzate CSS invece si ereditano e attraversano il confine: ridefinire le
+variabili di PatternFly è l'unico modo che funziona ovunque.
+
+⚠️ **I titoli sono un campo del FLUSSO, non della marchiatura.** Restavano
+«Welcome to authentik!» — cioè il nome dello strumento al posto di quello del
+prodotto — e non c'è marchiatura che li cambi: si scrivono uno per uno sui
+flussi. E i flussi si indirizzano **per slug**: con il `pk` l'API risponde `404`
+«No Flow matches the given query», che sembra un flusso inesistente e invece è
+la chiave sbagliata.
+
+L'attribuzione «Powered by authentik» in fondo alla pagina è stata **lasciata**,
+solo resa discreta: è software di qualcun altro e va detto.
+
 ## Operazioni
 
 ```bash

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <!--
+    Lo sfondo della schermata d'accesso.
+
+    Rifa' con gradienti statici cio' che nel back-office e' un componente
+    animato (`keijo-background-orbs`): gli stessi aloni bordeaux e oro su nero.
+    Statico e in SVG perche' pesa due kilobyte invece di trecento, e perche' una
+    pagina d'accesso non deve aspettare un'immagine per essere leggibile.
+  -->
+  <defs>
+    <radialGradient id="a" cx="18%" cy="22%" r="58%">
+      <stop offset="0%"   stop-color="#6A1A2D" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#6A1A2D" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="b" cx="82%" cy="72%" r="60%">
+      <stop offset="0%"   stop-color="#8E1F2E" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#8E1F2E" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="c" cx="68%" cy="18%" r="40%">
+      <stop offset="0%"   stop-color="#E0B84F" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#E0B84F" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="d" cx="30%" cy="88%" r="45%">
+      <stop offset="0%"   stop-color="#201015" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#201015" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="#0F0A0C"/>
+  <rect width="1920" height="1080" fill="url(#a)"/>
+  <rect width="1920" height="1080" fill="url(#b)"/>
+  <rect width="1920" height="1080" fill="url(#c)"/>
+  <rect width="1920" height="1080" fill="url(#d)"/>
+</svg>

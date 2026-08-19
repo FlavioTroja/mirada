@@ -1,0 +1,206 @@
+/* ===========================================================================
+   Mirada Tango — la schermata d'accesso di Authentik.
+
+   Serve a togliere lo stacco fra mirada.dance e la pagina in cui si entra: la
+   stessa tavolozza, lo stesso carattere, lo stesso marchio. Chi arriva qui non
+   deve avere l'impressione di essere finito su un altro prodotto.
+
+   ── Perché quasi tutto passa dalle VARIABILI e non dai selettori ────────────
+   L'interfaccia di Authentik è fatta di web component, e buona parte del suo
+   markup vive dentro shadow DOM: un selettore scritto qui non lo raggiunge.
+   Le proprietà personalizzate CSS invece si EREDITANO, e attraversano il
+   confine dello shadow root. Ridefinire le variabili di PatternFly è quindi
+   l'unico modo che funziona ovunque — i pochi selettori diretti qui sotto
+   valgono per le parti che stanno nel DOM chiaro.
+
+   Palette: shared/mirada-theme.scss. I valori NON sono reinterpretati.
+   =========================================================================== */
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://mirada.dance/images/branding/fonts/poppins-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://mirada.dance/images/branding/fonts/poppins-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://mirada.dance/images/branding/fonts/poppins-latin-700-normal.woff2') format('woff2');
+}
+
+:root {
+  /* La schermata d'accesso di Mirada è scura in ogni caso, come il sito.
+     Dichiararlo serve ai controlli NATIVI del browser — caselle, menu a tendina,
+     barre di scorrimento — che altrimenti seguono il tema del sistema e
+     comparirebbero bianchi in mezzo a una scheda bordeaux. */
+  color-scheme: dark;
+
+  --mirada-black: #0f0a0c;
+  --mirada-surface: #201015;
+  --mirada-bordeaux: #6a1a2d;
+  --mirada-gold: #e0b84f;
+  --mirada-ivory: #f3e9dc;
+  --mirada-radius: 14px;
+
+  /* ── Tipografia ─────────────────────────────────────────────────────── */
+  --pf-global--FontFamily--sans-serif: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --pf-global--FontFamily--redhat-font--sans-serif: var(--pf-global--FontFamily--sans-serif);
+  --pf-global--FontFamily--redhatVF--sans-serif: var(--pf-global--FontFamily--sans-serif);
+  --pf-global--FontFamily--heading--sans-serif: var(--pf-global--FontFamily--sans-serif);
+
+  /* ── Superfici ──────────────────────────────────────────────────────── */
+  --pf-global--BackgroundColor--100: var(--mirada-surface);
+  --pf-global--BackgroundColor--150: var(--mirada-surface);
+  --pf-global--BackgroundColor--200: var(--mirada-black);
+  --pf-global--BackgroundColor--300: var(--mirada-black);
+  --pf-global--BackgroundColor--dark-100: var(--mirada-surface);
+  --pf-global--BackgroundColor--dark-200: var(--mirada-black);
+  --pf-global--BackgroundColor--dark-300: var(--mirada-black);
+  --pf-global--BackgroundColor--dark-400: var(--mirada-black);
+
+  /* ── Testo ──────────────────────────────────────────────────────────── */
+  --pf-global--Color--100: var(--mirada-ivory);
+  --pf-global--Color--200: rgba(243, 233, 220, 0.72);
+  --pf-global--Color--300: rgba(243, 233, 220, 0.72);
+  --pf-global--Color--dark-100: var(--mirada-ivory);
+  --pf-global--Color--dark-200: rgba(243, 233, 220, 0.72);
+  --pf-global--Color--light-100: var(--mirada-ivory);
+  --pf-global--Color--light-200: rgba(243, 233, 220, 0.72);
+
+  /* ── Accento: l'oro al posto del blu ────────────────────────────────── */
+  --pf-global--primary-color--100: var(--mirada-gold);
+  --pf-global--primary-color--200: #c9982f;
+  --pf-global--active-color--100: var(--mirada-gold);
+  --pf-global--link--Color: var(--mirada-gold);
+  --pf-global--link--Color--hover: #f0d68a;
+  --pf-global--link--Color--light: var(--mirada-gold);
+  --pf-global--link--Color--light--hover: #f0d68a;
+
+  /* ── Bordi ──────────────────────────────────────────────────────────── */
+  --pf-global--BorderColor--100: rgba(243, 233, 220, 0.18);
+  --pf-global--BorderColor--200: rgba(243, 233, 220, 0.12);
+  --pf-global--BorderColor--300: rgba(243, 233, 220, 0.12);
+  --pf-global--BorderRadius--sm: 9px;
+  --pf-global--BorderRadius--lg: var(--mirada-radius);
+
+  /* ── Stati ──────────────────────────────────────────────────────────── */
+  --pf-global--danger-color--100: #ff8a80;
+  --pf-global--success-color--100: #7bd6a0;
+  --pf-global--warning-color--100: #f0b860;
+  --pf-global--info-color--100: var(--mirada-gold);
+}
+
+/* La scheda dell'accesso: stesso raggio, stesso bordo tenue e stessa ombra
+   della card di app.mirada.dance. */
+.pf-c-login__main,
+.pf-c-login__main-header,
+.pf-c-login__main-body,
+.pf-c-login__main-footer {
+  background-color: var(--mirada-surface);
+  color: var(--mirada-ivory);
+}
+.pf-c-login__main {
+  border: 1px solid rgba(243, 233, 220, 0.14);
+  border-radius: var(--mirada-radius);
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+/* Il tasto principale: oro pieno con testo scuro, come «Accedi» sul sito.
+   Il testo NON è avorio — oro su avorio darebbe 1,6:1. */
+.pf-c-button.pf-m-primary {
+  background-color: var(--mirada-gold);
+  color: var(--mirada-black);
+  border-radius: 9px;
+  font-weight: 600;
+}
+.pf-c-button.pf-m-primary:hover,
+.pf-c-button.pf-m-primary:focus {
+  background-color: #f0d68a;
+  color: var(--mirada-black);
+}
+.pf-c-button.pf-m-secondary,
+.pf-c-button.pf-m-tertiary {
+  color: var(--mirada-gold);
+  border-color: rgba(224, 184, 79, 0.5);
+  border-radius: 9px;
+}
+
+/* I campi: fondo scuro, e l'oro solo sul focus — è l'unico posto in cui
+   l'accento serve a dire «sei qui». */
+.pf-c-form-control {
+  background-color: rgba(15, 10, 12, 0.6);
+  color: var(--mirada-ivory);
+  border-color: rgba(243, 233, 220, 0.22);
+  border-radius: 9px;
+}
+.pf-c-form-control:focus,
+.pf-c-form-control:hover {
+  border-color: var(--mirada-gold);
+  outline-color: var(--mirada-gold);
+}
+.pf-c-form__label-text {
+  color: rgba(243, 233, 220, 0.82);
+}
+
+.pf-c-title,
+.pf-c-login__main-header h1,
+h1, h2, h3 {
+  color: var(--mirada-ivory);
+  font-family: var(--pf-global--FontFamily--sans-serif);
+}
+
+/* I tasti delle sorgenti esterne (Google) sotto al form. */
+.pf-c-login__main-footer-links-item a,
+.pf-c-login__main-footer-links-item button {
+  border-radius: 9px;
+}
+
+/* L'attribuzione resta — è software di qualcun altro e va detto — ma non
+   compete con il contenuto. */
+.pf-c-login__footer {
+  opacity: 0.45;
+  font-size: 0.78rem;
+}
+
+/* Il selettore di lingua in alto a sinistra, che sul fondo scuro spariva. */
+.pf-c-login__header,
+.pf-c-login__container {
+  color: var(--mirada-ivory);
+}
+
+/* ── I link ─────────────────────────────────────────────────────────────────
+   `--pf-global--link--Color` da solo non basta: PatternFly disegna i link-come-
+   pulsante («Non sei tu?», «Torna indietro») con una variabile PROPRIA, che
+   quella globale non alimenta. Restavano blu su un fondo bordeaux — l'unico
+   residuo visibile della tavolozza di serie. */
+a,
+.pf-c-button.pf-m-link,
+.pf-c-login__main-footer-links-item a {
+  color: var(--mirada-gold);
+  --pf-c-button--m-link--Color: var(--mirada-gold);
+  --pf-c-button--m-link--hover--Color: #f0d68a;
+  --pf-c-button--m-link--m-inline--Color: var(--mirada-gold);
+}
+a:hover,
+.pf-c-button.pf-m-link:hover {
+  color: #f0d68a;
+}
+
+/* L'iniziale dell'utente, che PatternFly disegna con l'accento: ora è oro, e
+   il testo sopra dev'essere scuro per restare leggibile. */
+.pf-c-avatar,
+.pf-c-login__main-body .pf-c-avatar {
+  background-color: var(--mirada-gold);
+  color: var(--mirada-black);
+}
