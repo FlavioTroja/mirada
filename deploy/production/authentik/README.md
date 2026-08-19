@@ -73,15 +73,56 @@ Il vincolo non è cosmetico: senza, qualsiasi utenza di Authentik potrebbe
 ottenere un token per il backoffice — e il giorno in cui entrano i ballerini
 sarebbero migliaia.
 
+⚠️ Da quando gli organizzatori si registrano da soli, il gruppo significa **«chi
+può raggiungere il backoffice»**, non «lo staff assunto»: chi si iscrive ci entra
+automaticamente (`create_users_group` sugli stadi di scrittura). Senza quel
+passaggio l'autoregistrazione sarebbe stata inutilizzabile — il vincolo avrebbe
+respinto ogni nuovo iscritto **prima** che potesse raggiungere il modulo di
+mirada, e il sintomo sarebbe stato «non sei autorizzato» a chi non ha ancora
+nulla da essere autorizzato a fare.
+
 **Sorgente OAuth `google`**, con `user_matching_mode: email_link`: un accesso
 Google si aggancia all'utenza Authentik con la **stessa email**. Google verifica
 gli indirizzi, quindi l'agganciamento è sicuro; con un fornitore che non li
 verifica sarebbe una via d'ingresso.
 
-**Flusso di recupero password** `default-recovery-flow`, dal blueprint di esempio
-`example/flows-recovery-email-verification.yaml`, collegato al brand
-predefinito. Senza il collegamento al brand il flusso esiste ma la pagina di
-accesso non mostra «password dimenticata».
+**Iscrizione autonoma** `default-enrollment-flow` (blueprint
+`example/flows-enrollment-email-verification.yaml`) e **recupero password**
+`default-recovery-flow` (`example/flows-recovery-email-verification.yaml`).
+
+⚠️ **Creare i flussi non basta: vanno agganciati allo STADIO DI IDENTIFICAZIONE**
+(`default-authentication-identification`), che è ciò che disegna la schermata
+d'accesso. Sono tre campi su quello stadio, e finché restano vuoti la pagina non
+mostra né «Iscriviti», né «Password dimenticata», né il tasto Google — mentre
+tutti e tre gli oggetti esistono e sembrano configurati.
+
+| campo dello stadio | cosa accende |
+|---|---|
+| `enrollment_flow` | il link «Iscriviti» |
+| `recovery_flow` | il link «Password dimenticata» |
+| `sources` | i tasti dei fornitori esterni |
+
+Collegare il flusso di recupero al **brand** non basta: è lo stadio a disegnare
+il link. Verificato interrogando il flusso come lo interroga il browser —
+`GET /api/v3/flows/executor/default-authentication-flow/`, che è il modo onesto
+di sapere cosa vede davvero chi arriva:
+
+```
+iscrizione: /if/flow/default-enrollment-flow/
+recupero:   /if/flow/default-recovery-flow/
+sorgenti:   ['Google']
+```
+
+⚠️ In `sources` va tenuta **anche la sorgente interna** (`authentik-built-in`):
+è quella che permette di entrare con utente e password. Lasciandoci la sola
+Google si spegnerebbe l'accesso con password per tutti, in silenzio.
+
+⚠️ **`create_users_group` sui DUE stadi di scrittura**, non su uno solo. Si entra
+in Authentik per due strade — il modulo d'iscrizione
+(`default-enrollment-user-write`) e il primo accesso con Google
+(`default-source-enrollment-write`) — e chi arriva dalla strada dimenticata
+resterebbe fuori dal gruppo, quindi respinto dal vincolo sull'applicazione con
+un messaggio che non nomina la causa.
 
 **Secondo fattore: disponibile e facoltativo.** Il flusso di accesso predefinito
 contiene già lo stadio `default-authentication-mfa-validation`, quindi chi
