@@ -203,6 +203,53 @@ identità che non risponde non deve poter rendere inaccessibile il backoffice.
 slash mancante fa fallire ogni verifica con un messaggio che non dice quale dei
 due issuer sia quello sbagliato.
 
+## Chiudere la porta dell'accesso con password
+
+Oggi si entra in **due** modi: da Authentik e con utente e password. È voluto —
+Authentik è un punto di rottura unico davanti al backoffice, e senza la seconda
+porta un suo guasto chiude fuori anche chi dovrebbe entrare per ripararlo.
+
+Non è però un assetto definitivo: finché la porta è aperta, le politiche
+configurate qui (secondo fattore, Google, scadenze) valgono solo per chi sceglie
+di passare di qui.
+
+Si chiude con **una riga nel `.env` del backend**, senza deploy:
+
+```bash
+cd ~/orch/mirada/production
+sed -i 's/^PASSWORD_LOGIN=.*/PASSWORD_LOGIN=god-only/' backend/.env
+docker compose up -d --force-recreate backend
+```
+
+| valore | chi entra con la password |
+|---|---|
+| `on` | tutti — **predefinito** |
+| `god-only` | solo chi ha il ruolo `GOD`: la chiave d'emergenza |
+| `off` | nessuno |
+
+La pagina di accesso si adegua da sola: legge il valore da
+`GET /api/auth/sso/config` e con `off` smette di mostrare il form invece di
+lasciarne uno che risponderà `403` a chi ci ha già battuto dentro le credenziali.
+
+⚠️ **Un valore non riconosciuto vale `on`, non `off`.** Deliberato: un
+`PASSWORD_LOGIN=of` battuto male non deve poter chiudere fuori lo staff. Si perde
+la chiusura, non l'accesso — e l'errore viene urlato nel log all'avvio.
+
+⚠️ **`off` con Authentik irraggiungibile non lascia alcuna porta.** La pagina lo
+dice apertamente invece di fingere un guasto, ma il rientro passa dal server:
+si rimette `PASSWORD_LOGIN=on` e si ricrea il container. Chi conduce la macchina
+deve saperlo **prima** di chiudere, non mentre cerca di rientrare.
+
+### Prima di chiudere, quattro condizioni
+
+1. le email dello staff sono indirizzi veri e verificati — oggi sono segnaposto,
+   quindi il recupero password di Authentik scrive nel nulla;
+2. ciascuno ha registrato un secondo fattore, altrimenti la chiusura non porta
+   il guadagno per cui la si fa;
+3. l'accesso via Authentik ha settimane di uso reale alle spalle;
+4. la via di rientro qui sopra è scritta dove la si ritrova **senza** poter
+   entrare nel backoffice.
+
 ## Quel che resta da fare
 
 - **Il backup su S3 non copre questo database.** Lo stack `backup` di mirada

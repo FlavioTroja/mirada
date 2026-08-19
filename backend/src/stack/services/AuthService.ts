@@ -13,6 +13,24 @@ import { DomainErrorCode } from "@enums/DomainErrorCode";
 /** Riga utente arricchita dei soli ruoli, come la restituisce `findOneForAuthentication`. */
 export type AuthenticatedUser = User & { roles?: { roleName: string; isActive: boolean }[] };
 
+/**
+ * Quanto è aperta la porta dell'accesso con utente e password, ora che esiste
+ * anche quella del fornitore di identità.
+ *
+ *  - `on`        tutti possono usarla. **È il valore predefinito**, ed è la
+ *                configurazione giusta finché l'SSO non ha mesi di uso reale
+ *                alle spalle: Authentik è un punto di rottura unico davanti al
+ *                backoffice, e senza questa porta un suo guasto chiude fuori
+ *                anche chi dovrebbe entrare per ripararlo.
+ *  - `god-only`  la chiave d'emergenza. Solo chi ha il ruolo `GOD` entra con la
+ *                password; per tutti gli altri l'unica strada è Authentik, con
+ *                il secondo fattore e le politiche che ci sono configurate.
+ *  - `off`       nessuno. Da usare solo quando esiste un'altra via di rientro
+ *                documentata, perché qui un guasto di Authentik non lascia
+ *                alcuna porta di servizio.
+ */
+export type PasswordLoginMode = "on" | "god-only" | "off";
+
 @Service()
 export class AuthService {
     constructor(
@@ -20,7 +38,43 @@ export class AuthService {
         private readonly logService: LogService
     ) {}
 
+    /**
+     * Come sta la porta dell'accesso con password — `PASSWORD_LOGIN` nel `.env`.
+     *
+     * ⚠️ **Un valore non riconosciuto vale `on`, non `off`**, e la scelta è
+     * deliberata. Questo interruttore esiste per garantire una via di rientro:
+     * far valere `off` a un `PASSWORD_LOGIN=of` battuto male significherebbe
+     * che un refuso chiude fuori tutto lo staff — e se nel frattempo Authentik
+     * non risponde, non resta nessuno che possa correggerlo. Si perde la
+     * chiusura, non l'accesso. L'errore però si urla nel log, perché chi
+     * credeva di aver chiuso deve poterlo scoprire leggendo l'avvio e non un
+     * incidente.
+     */
+    public passwordLoginMode(): PasswordLoginMode {
+        const grezzo = (process.env.PASSWORD_LOGIN ?? "on").trim().toLowerCase();
+        if (grezzo === "on" || grezzo === "god-only" || grezzo === "off") {
+            return grezzo;
+        }
+        Log.error(
+            `[Auth Service]: PASSWORD_LOGIN has an unrecognised value '${process.env.PASSWORD_LOGIN}' — `
+            + "falling back to 'on'. Accepted values are 'on', 'god-only', 'off'.",
+        );
+        return "on";
+    }
+
     async login(loginRequestDTO: LoginRequestDTO): Promise<AuthenticatedUser> {
+        const mode = this.passwordLoginMode();
+
+        // `off` si rifiuta PRIMA di toccare la banca dati: non c'è nulla da
+        // verificare, e non interrogare nessuno è anche l'unico modo di non
+        // dire, con il tempo di risposta, se quel nome utente esista.
+        if (mode === "off") {
+            Log.warn(`[Auth Service]: password login refused for '${loginRequestDTO.usernameOrEmail}' — PASSWORD_LOGIN is 'off'`);
+            throw new httpErrors.Forbidden(
+                "L'accesso con nome utente e password è disattivato: entra dal fornitore di identità.",
+            );
+        }
+
         // L'hash della password vive **solo** su questo percorso: il client Prisma
         // lo omette globalmente (§3.1), questo finder lo riaccende in modo
         // esplicito perché il confronto bcrypt non può farne a meno.
@@ -42,6 +96,22 @@ export class AuthService {
 
         if(!await this.comparePasswords(user.password, loginRequestDTO.password)) {
             throw new httpErrors.Unauthorized("Username o password non validi!");
+        }
+
+        // `god-only` si valuta DOPO la verifica della password, e non prima:
+        // per sapere se questa persona è `GOD` bisogna prima sapere che è
+        // davvero questa persona. Chi arriva fin qui ha comunque dimostrato di
+        // conoscere le credenziali, quindi scoprire che la porta è ristretta
+        // non gli dice nulla che non potesse già dedurre.
+        if (mode === "god-only" && !isGod(user)) {
+            Log.warn(
+                `[Auth Service]: password login refused for '${user.username}' (id ${user.id}) — `
+                + "PASSWORD_LOGIN is 'god-only' and the account is not GOD",
+            );
+            throw new httpErrors.Forbidden(
+                "L'accesso con nome utente e password è riservato all'amministratore di piattaforma: "
+                + "entra dal fornitore di identità.",
+            );
         }
 
         this.assertAccountCanLogin(user);
@@ -157,4 +227,13 @@ export class AuthService {
             password: undefined,
         };
     }
+}
+
+/**
+ * Il ruolo `GOD`, **attivo**. Il flag `isActive` non è un dettaglio: un ruolo
+ * disattivato è un ruolo revocato, e leggerlo come concesso trasformerebbe la
+ * chiave d'emergenza in una porta lasciata socchiusa.
+ */
+function isGod(user: AuthenticatedUser): boolean {
+    return (user.roles ?? []).some(role => role.roleName === "GOD" && role.isActive);
 }

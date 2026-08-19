@@ -39,11 +39,20 @@ interface Transito {
   redirect: string | null;
 }
 
+export type PasswordLoginMode = 'on' | 'god-only' | 'off';
+
 export interface SsoConfig {
   enabled: boolean;
   authorizationEndpoint: string | null;
   clientId: string | null;
   scope: string | null;
+  /**
+   * Quanto è aperta l'altra porta. Arriva dalla stessa risposta perché la
+   * pagina di accesso possa decidere in un colpo solo cosa disegnare, invece
+   * di mostrare un form che risponderà 403 a chi ci ha già battuto dentro le
+   * proprie credenziali.
+   */
+  passwordLogin: PasswordLoginMode;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -71,11 +80,15 @@ export class OidcService {
       this._config.set(config);
       return config;
     } catch {
+      // Se la chiamata stessa non riesce, si assume la configurazione più
+      // permissiva: form visibile, nessun tasto. È la pagina di accesso di
+      // ieri, cioè qualcosa che di sicuro funziona.
       const spento: SsoConfig = {
         enabled: false,
         authorizationEndpoint: null,
         clientId: null,
         scope: null,
+        passwordLogin: 'on',
       };
       this._config.set(spento);
       return spento;

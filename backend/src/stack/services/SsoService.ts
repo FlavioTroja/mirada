@@ -43,9 +43,10 @@ export class SsoService {
 
     /** Quel poco che serve alla SPA per comporre la richiesta di autorizzazione. */
     public async config(): Promise<SsoConfigDTO> {
+        const passwordLogin = this.authService.passwordLoginMode();
         const config = oidcConfig();
         if (!config) {
-            return { enabled: false, authorizationEndpoint: null, clientId: null, scope: null };
+            return { enabled: false, authorizationEndpoint: null, clientId: null, scope: null, passwordLogin };
         }
 
         try {
@@ -54,6 +55,7 @@ export class SsoService {
                 authorizationEndpoint: await authorizationEndpoint(config),
                 clientId: config.clientId,
                 scope: config.scope,
+                passwordLogin,
             };
         } catch (err) {
             // Il fornitore irraggiungibile NON è un errore della pagina di
@@ -62,7 +64,7 @@ export class SsoService {
             // renderebbe inaccessibile il backoffice per un guasto di un
             // servizio che è, di proposito, soltanto una seconda strada.
             Log.warn(`[Sso Service]: identity provider unreachable, SSO announced as disabled: ${(err as Error).message}`);
-            return { enabled: false, authorizationEndpoint: null, clientId: null, scope: null };
+            return { enabled: false, authorizationEndpoint: null, clientId: null, scope: null, passwordLogin };
         }
     }
 

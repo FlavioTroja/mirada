@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -72,9 +72,31 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
                   (action)="accediConIdp()"
                 />
               </div>
-              <p class="sso-separatore"><span>oppure</span></p>
+              @if (mostraForm()) {
+                <p class="sso-separatore"><span>oppure</span></p>
+              }
             }
 
+            @if (!mostraForm() && !oidc.config()?.enabled) {
+              <!--
+                Porta chiusa E fornitore irraggiungibile: non resta nulla da
+                mostrare, e la cosa peggiore sarebbe tacerlo. Il rientro esiste
+                ma passa dal server — è scritto nel manuale di Authentik — e chi
+                è davanti a questa pagina deve almeno sapere che non è colpa sua.
+              -->
+              <keijo-info-box
+                [icon]="warningIcon"
+                title="Nessun accesso disponibile"
+                variant="error"
+              >
+                <span>
+                  L’accesso con nome utente e password è disattivato e il fornitore di identità
+                  non risponde. Serve un intervento sul server: contatta chi lo conduce.
+                </span>
+              </keijo-info-box>
+            }
+
+            @if (mostraForm()) {
             <keijo-form-wrapper [formGroup]="form">
               <keijo-form-row [cols]="1">
                 <keijo-input
@@ -113,6 +135,14 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
                 />
               </div>
             </keijo-form-wrapper>
+
+            @if (oidc.config()?.passwordLogin === 'god-only') {
+              <p class="mirada-hint">
+                L’accesso con nome utente e password è riservato all’amministratore di
+                piattaforma: per tutti gli altri la strada è il tasto qui sopra.
+              </p>
+            }
+            }
           </keijo-page-section-wrapper>
         </keijo-page-wrapper>
       </div>
@@ -176,6 +206,16 @@ export class LoginComponent implements OnInit {
   readonly ssoIcon = shield;
   readonly failure = signal<string | null>(null);
   readonly ssoStarting = signal(false);
+
+  /**
+   * Il form si mostra finché la porta non è chiusa del tutto.
+   *
+   * Finché la configurazione non è arrivata (`null`) si mostra: è la pagina di
+   * sempre, e farla comparire a scatti dopo una chiamata di rete sarebbe
+   * peggio. `god-only` lo lascia visibile perché quella porta, per qualcuno,
+   * è ancora aperta — e chi non è quel qualcuno legge la nota sotto.
+   */
+  readonly mostraForm = computed(() => this.oidc.config()?.passwordLogin !== 'off');
 
   readonly form = new FormGroup({
     usernameOrEmail: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
