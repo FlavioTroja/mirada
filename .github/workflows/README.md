@@ -117,6 +117,50 @@ da zero senza che si capisca perché.
 
 ---
 
+## Dalla riga di comando, con `gh`
+
+I due workflow si lanciano dalla scheda **Actions**, oppure dal terminale con la
+CLI di GitHub. La seconda strada serve soprattutto a **leggere** cosa è successo:
+il 19/08/2026 una build del backend è stata annullata a metà e la cosa si è
+scoperta soltanto dal deploy sbagliato che ne è seguito, mentre
+`gh run list --workflow=build.yml` l'avrebbe detto in un colpo d'occhio.
+
+```bash
+# distribuire
+gh workflow run deploy.yml -f componente=tutti -f tag=production -f migrazioni=true
+
+# tornare indietro a una build precedente
+gh workflow run deploy.yml -f componente=backend -f tag=a1b2c3d -f migrazioni=true
+
+# costruire a mano, senza spingere nulla
+gh workflow run build.yml -f componente=tutti
+
+# guardare
+gh run list --workflow=deploy.yml --limit 5
+gh run watch                       # segue la corsa in diretta
+gh run view <id> --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+gh run view <id> --log-failed      # solo i passi falliti
+```
+
+⚠️ `gh run list` mostra `success` anche per una corsa in cui **un lavoro della
+matrice** è stato annullato o è fallito, perché `fail-fast: false` la lascia
+proseguire. Quando la domanda è «la mia immagine è stata pubblicata?», la
+risposta sta nei lavori, non nella corsa:
+
+```bash
+gh run view <id> --json jobs -q '.jobs[] | "\(.name): \(.conclusion)"'
+```
+
+Il controllo definitivo resta però l'immagine stessa, che porta scritto dentro
+il commit da cui è nata:
+
+```bash
+docker image inspect ghcr.io/flaviotroja/mirada/backend:production \
+  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+---
+
 ## Deploy
 
 **Input**
