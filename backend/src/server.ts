@@ -34,6 +34,7 @@ import { EventTypeController } from "@controllers/EventTypeController";
 import { OrganizationController } from "@controllers/OrganizationController";
 import { PlatformController } from "@controllers/PlatformController";
 import { OrganizationMemberController } from "@controllers/OrganizationMemberController";
+import { OrganizationInvitationController } from "@controllers/OrganizationInvitationController";
 import { RefundPolicyController } from "@controllers/RefundPolicyController";
 import { RequirementTypeController } from "@controllers/RequirementTypeController";
 import { ServiceTypeController } from "@controllers/ServiceTypeController";
@@ -311,6 +312,7 @@ export class APIServer {
                 OrganizationController,
                 PlatformController,
                 OrganizationMemberController,
+                OrganizationInvitationController,
                 RefundPolicyController,
                 RequirementTypeController,
                 ServiceTypeController,
