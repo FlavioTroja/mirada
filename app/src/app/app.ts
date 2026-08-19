@@ -210,8 +210,23 @@ export class App {
   private readonly backOverride = signal<boolean | undefined>(undefined);
   private readonly foundSidebarRoute = signal(false);
 
-  /** Il login vive fuori dalla shell: niente sidebar, niente header. */
-  readonly chromeless = computed(() => this.activeRoute().startsWith('/login'));
+  /**
+   * Le pagine che vivono **fuori dalla shell**: niente sidebar, niente header.
+   *
+   * Non solo `/login`. Il ritorno dal fornitore di identità e la registrazione
+   * sono i momenti in cui una sessione si sta formando e ancora non c'è: sotto
+   * la shell mostrerebbero una barra laterale vuota e, in basso, un «Utente»
+   * con il tasto «Esci» — l'invito a uscire da una sessione che non esiste,
+   * proprio a chi sta cercando di entrare.
+   */
+  readonly chromeless = computed(() => {
+    const rotta = this.activeRoute();
+    return (
+      rotta.startsWith('/login') ||
+      rotta.startsWith('/auth/callback') ||
+      rotta.startsWith('/registrazione')
+    );
+  });
 
   readonly homeIcon = home;
 
