@@ -260,17 +260,32 @@ export class SsoService {
             );
         }
 
-        if (claims.email_verified === false) {
-            Log.warn(`[Sso Service]: sub '${claims.sub}' has an unverified email — link refused`);
-            throw new httpErrors.Forbidden(
-                "L'indirizzo email del tuo profilo non risulta verificato: non è possibile collegarlo.",
-            );
-        }
-
         const user = await this.userService.findOneForAuthentication(
             { person: { contact: { email } } },
             { populate: "roles" },
         );
+
+        // ── L'indirizzo dimostrato serve per AGGANCIARE, non per iscriversi ──
+        //
+        // Il controllo sta **dopo** la ricerca, e l'ordine è la sostanza. Ciò
+        // che va impedito è che qualcuno rivendichi l'indirizzo di un'utenza
+        // che esiste già e se ne impossessi: lì un indirizzo non dimostrato è
+        // un'appropriazione di account. Chi invece non corrisponde a nessuno
+        // sta solo iscrivendosi, e nel farlo non porta via niente a nessuno.
+        //
+        // Messo prima, questo `if` rifiutava anche chi si stava registrando —
+        // e siccome Authentik restituiva `email_verified: false` per costante
+        // (vedi la nota nella mappatura dello scope `email`), rifiutava tutti.
+        if (user && claims.email_verified === false) {
+            Log.warn(
+                `[Sso Service]: sub '${claims.sub}' claims '${email}', which belongs to user (id ${user.id}), `
+                + "but the provider does not vouch for the address — link refused",
+            );
+            throw new httpErrors.Forbidden(
+                "L'indirizzo email del tuo profilo non risulta verificato dal fornitore di identità: "
+                + "non è possibile collegarlo a un'utenza esistente.",
+            );
+        }
 
         // Nessuna utenza: NON è un errore. Da quando gli organizzatori possono
         // iscriversi da soli, questo è il caso normale del primo accesso — e chi

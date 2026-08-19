@@ -244,6 +244,50 @@ identità che non risponde non deve poter rendere inaccessibile il backoffice.
 slash mancante fa fallire ogni verifica con un messaggio che non dice quale dei
 due issuer sia quello sbagliato.
 
+## ⚠️ `email_verified`, e perché la mappatura è stata riscritta
+
+La mappatura di serie dello scope `email` restituisce **`False` fisso**:
+
+```python
+return {"email": request.user.email, "email_verified": False}
+```
+
+Non è un dato dell'utente, è una costante — vale per chiunque, sempre, anche per
+chi è appena arrivato da Google. Un consumatore che la prenda sul serio rifiuta
+tutti, e infatti è successo: il backend di mirada rispondeva
+`unverified email — link refused` a ogni accesso, e l'autoregistrazione era
+inutilizzabile mentre tutto il resto sembrava a posto.
+
+Ora la mappatura restituisce `True`, e lo fa **legittimamente**: in questo
+Authentik un'utenza non può nascere con un indirizzo non dimostrato.
+
+| come nasce l'utenza | cosa dimostra l'indirizzo |
+|---|---|
+| flusso di iscrizione | lo stadio di verifica email: se il link non viene aperto, **l'utente non esiste** |
+| accesso con Google | lo verifica Google |
+| creata da un amministratore | l'ha scelta una persona |
+
+⚠️ **Aggiungendo una sorgente o un flusso che non verifica l'indirizzo, quella
+riga diventa una bugia.** E non è una bugia innocua: mirada usa `email_verified`
+per decidere se agganciare un'identità a un'utenza **già esistente**, cioè come
+controllo contro l'appropriazione di account. Va cambiata insieme a quella
+modifica.
+
+## ⚠️ Gli utenti creati dai flussi nascono `external`
+
+Gli stadi di scrittura di serie assegnano `user_type: external`, e un utente
+esterno **non può aprire la propria pagina** su Authentik: niente secondo
+fattore da registrare, niente password da cambiare. Peggio, il sintomo non lo
+dice — al termine dell'iscrizione il flusso manda la persona proprio su quella
+pagina, l'interfaccia riceve HTML invece di JSON e mostra:
+
+> The request failed and the interceptors did not return an alternative response.
+
+Un messaggio che parla di intercettori mentre il problema è un permesso, dopo
+un'iscrizione **riuscita**. I due stadi che creano utenze —
+`default-enrollment-user-write` e `default-source-enrollment-write` — sono stati
+messi su `internal`.
+
 ## Chiudere la porta dell'accesso con password
 
 Oggi si entra in **due** modi: da Authentik e con utente e password. È voluto —
