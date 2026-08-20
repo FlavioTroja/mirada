@@ -388,12 +388,24 @@ deve saperlo **prima** di chiudere, non mentre cerca di rientrare.
 
 - **Il backup su S3 non copre questo database.** Lo stack `backup` di mirada
   salva il suo Postgres; `authentik-db` è un altro container e un altro volume.
-- **Le email dello staff sono segnaposto** (`ragno@mirada.dance` e simili): il
-  recupero password e l'agganciamento a Google non possono funzionare finché non
-  diventano indirizzi veri, e vanno corretti **in due posti** — qui e in mirada.
+- **Le email dello staff sono segnaposto** (`ragno@mirada.dance` e simili), e da
+  quando `PASSWORD_LOGIN=off` la cosa è diventata seria: l'accesso con password
+  di mirada non c'è più, quindi il recupero via Authentik è **l'unica** via di
+  rientro di quelle persone — e scrive a caselle che non esistono. Vanno
+  corretti in **due posti**, qui e in mirada.
 - **Il secondo fattore è disponibile ma nessuno l'ha registrato.** Finché non lo
   fa, l'accesso via Authentik è una password come le altre — con in più il
   recupero autonomo e l'accesso con Google.
+- **L'invio di email non è mai stato provato.** SMTP è configurato e il server è
+  raggiungibile, ma nessun messaggio è mai partito: l'autenticazione della
+  casella resta non verificata. Ci passano **tre** cose ormai — la verifica
+  dell'indirizzo all'iscrizione, il recupero password e gli inviti a entrare in
+  un'organizzazione. La prova definitiva è un «password dimenticata» su
+  `akadmin`, che scrive a `info@overzoom.it`.
+- **Il separatore «oppure» e l'etichetta «Accedi con Google» non sono stati
+  visti.** Sono configurati (`show_source_labels` sullo stadio di
+  identificazione, più il CSS della marchiatura) e verificati via API, ma la
+  schermata con il modulo si vede solo da una sessione **non autenticata**.
 - **Sulla 443 non esiste un `default_server`.** Un nome sconosciuto che risolva a
   questa macchina viene servito dal primo blocco della 443 invece di essere
   chiuso: sulla 80 il blocco che risponde `444` c'è, sulla 443 no.
