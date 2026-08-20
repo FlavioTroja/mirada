@@ -252,7 +252,11 @@ import { landingFor } from '../../shell/sidebar-routes';
       }
       .passi ol {
         margin: 0;
-        padding-left: 1.2rem;
+        /* Il reset di Tailwind toglie i marcatori a ogni lista: senza questa
+           riga i tre passi perdono i numeri e diventano tre frasi sciolte —
+           che è proprio ciò che una sequenza non deve sembrare. */
+        list-style: decimal;
+        padding-left: 1.4rem;
         display: grid;
         gap: 0.85rem;
         line-height: 1.7;

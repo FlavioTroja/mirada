@@ -115,7 +115,14 @@ import { AuthService } from './core/auth/auth.service';
       }
       .bare-shell {
         position: relative;
-        width: 100vw;
+        /* ⚠️ 100% e non 100vw: l'unità vw COMPRENDE la barra di scorrimento
+           verticale, quindi su una pagina abbastanza alta da averla il contenuto
+           risulta più largo dello spazio disponibile e compare una barra
+           ORIZZONTALE. Non si era mai visto perché le uniche rotte senza
+           cornice — accesso, callback, registrazione — non scorrono mai; la
+           pagina di presentazione sì. L'overflow-x qui sotto non basta: lo
+           sfondamento è sul documento, non su questo elemento. */
+        width: 100%;
         min-height: 100vh;
         overflow-x: hidden;
         background: rgb(var(--background-color));
