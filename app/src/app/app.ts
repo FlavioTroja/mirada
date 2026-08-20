@@ -222,6 +222,9 @@ export class App {
   readonly chromeless = computed(() => {
     const rotta = this.activeRoute();
     return (
+      // ⚠️ Confronto ESATTO sulla radice: `startsWith('/')` sarebbe vero per
+      // ogni rotta dell'applicazione, e la shell non comparirebbe mai più.
+      rotta === '/' ||
       rotta.startsWith('/login') ||
       rotta.startsWith('/auth/callback') ||
       rotta.startsWith('/registrazione')

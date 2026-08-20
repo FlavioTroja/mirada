@@ -137,7 +137,7 @@ import { controlError } from '../../shared/form-errors';
                 <keijo-info-box [icon]="warningIcon" title="Non ha funzionato" variant="error">
                   <span>{{ msg }}</span>
                 </keijo-info-box>
-                <p class="mirada-hint"><a routerLink="/login">Torna alla pagina di accesso</a></p>
+                <p class="mirada-hint"><a routerLink="/login" [queryParams]="{ manuale: 1 }">Torna alla pagina di accesso</a></p>
               } @else {
                 <p class="mirada-hint">Un istante…</p>
               }

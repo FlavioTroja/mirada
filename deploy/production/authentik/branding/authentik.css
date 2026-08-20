@@ -204,3 +204,74 @@ a:hover,
   background-color: var(--mirada-gold);
   color: var(--mirada-black);
 }
+
+/* ── Le sorgenti esterne, sotto al tasto «Accedi» ───────────────────────────
+   Authentik le mette in fondo alla scheda, in fila e senza stacco dal form. Qui
+   diventano quello che sono: la SECONDA strada, annunciata da un separatore che
+   dice «oppure», come sul sito.
+
+   Il separatore è un `::before` sulla lista perché nel markup non esiste alcun
+   elemento a cui appenderlo — e aggiungerne uno vorrebbe dire mettere le mani
+   nei template di Authentik, cioè rifarlo a ogni aggiornamento. */
+.pf-c-login__main-footer-links {
+  display: block;
+  padding: 0;
+  margin: 0;
+}
+.pf-c-login__main-footer-links::before {
+  content: 'oppure';
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 1rem;
+  font-size: 0.82rem;
+  color: rgba(243, 233, 220, 0.55);
+}
+.pf-c-login__main-footer-links::after {
+  content: none;
+}
+
+/* Le due righe del separatore: pseudo-elementi non se ne possono usare altri,
+   quindi le linee sono un gradiente sullo sfondo dello stesso `::before`. */
+.pf-c-login__main-footer-links::before {
+  background-image: linear-gradient(rgba(243, 233, 220, 0.22), rgba(243, 233, 220, 0.22));
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  background-position: center;
+  justify-content: center;
+}
+.pf-c-login__main-footer-links::before {
+  text-shadow: 0 0 0.6rem #201015, 0 0 0.6rem #201015, 0 0 0.6rem #201015;
+}
+
+/* Il tasto della sorgente: largo quanto il form, con l'etichetta per esteso
+   (`show_source_labels` sullo stadio di identificazione — senza quello resta
+   la sola «G», e nessun CSS può inventarsi il testo). */
+.pf-c-login__main-footer-links-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+}
+.pf-c-login__main-footer-links-item a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: 1px solid rgba(224, 184, 79, 0.45);
+  border-radius: 9px;
+  color: var(--mirada-ivory);
+  text-decoration: none;
+  font-weight: 600;
+}
+.pf-c-login__main-footer-links-item a:hover {
+  border-color: var(--mirada-gold);
+  background: rgba(224, 184, 79, 0.08);
+  color: var(--mirada-ivory);
+}
+.pf-c-login__main-footer-links-item img,
+.pf-c-login__main-footer-links-item svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}

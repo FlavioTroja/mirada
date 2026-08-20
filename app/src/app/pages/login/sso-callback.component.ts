@@ -41,7 +41,7 @@ import { OidcService } from '../../core/auth/oidc.service';
                 <span>{{ msg }}</span>
               </keijo-info-box>
               <p class="mirada-hint">
-                <a routerLink="/login">Torna alla pagina di accesso</a>
+                <a routerLink="/login" [queryParams]="{ manuale: 1 }">Torna alla pagina di accesso</a>
               </p>
             } @else {
               <p class="mirada-hint">Un istante: stiamo verificando la tua identità.</p>

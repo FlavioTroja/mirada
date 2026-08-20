@@ -47,15 +47,6 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
       <div class="login-card">
         <keijo-page-wrapper>
           <keijo-page-section-wrapper title="Mirada Tango">
-            <p class="mirada-hint">
-              Accedi con le credenziali della tua organizzazione. Se sei un ballerino, la tua
-              area è il sito pubblico: questa applicazione è riservata a chi organizza.
-            </p>
-            @if (oidc.config()?.enabled) {
-              <p class="mirada-hint">
-                Non hai ancora un’organizzazione? Accedi lo stesso: te la apri in un minuto.
-              </p>
-            }
 
             @if (failure()) {
               <keijo-info-box
@@ -67,7 +58,11 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
               </keijo-info-box>
             }
 
-            @if (oidc.config()?.enabled) {
+            @if (avvio()) {
+              <p class="mirada-hint">Un istante: ti stiamo portando alla pagina d’accesso.</p>
+            }
+
+            @if (!avvio() && oidc.config()?.enabled) {
               <div class="sso-row">
                 <keijo-button
                   [icon]="ssoIcon"
@@ -82,7 +77,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
               }
             }
 
-            @if (!mostraForm() && !oidc.config()?.enabled) {
+            @if (!avvio() && !mostraForm() && !oidc.config()?.enabled) {
               <!--
                 Porta chiusa E fornitore irraggiungibile: non resta nulla da
                 mostrare, e la cosa peggiore sarebbe tacerlo. Il rientro esiste
@@ -101,7 +96,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
               </keijo-info-box>
             }
 
-            @if (mostraForm()) {
+            @if (!avvio() && mostraForm()) {
             <keijo-form-wrapper [formGroup]="form">
               <keijo-form-row [cols]="1">
                 <keijo-input
@@ -213,6 +208,15 @@ export class LoginComponent implements OnInit {
   readonly ssoStarting = signal(false);
 
   /**
+   * True mentre si sta partendo per il fornitore di identità.
+   *
+   * Con l'accesso a password spento non c'è nulla da mostrare su questa pagina:
+   * l'unica strada è Authentik, e farla scegliere da un tasto sarebbe un
+   * passaggio in più che non decide niente.
+   */
+  readonly avvio = signal(false);
+
+  /**
    * Il form si mostra finché la porta non è chiusa del tutto.
    *
    * Finché la configurazione non è arrivata (`null`) si mostra: è la pagina di
@@ -227,16 +231,34 @@ export class LoginComponent implements OnInit {
     password: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     if (this.auth.isAuthenticated()) {
-      void this.router.navigateByUrl(this.redirectTarget());
+      await this.router.navigateByUrl(this.redirectTarget());
       return;
     }
-    // Non si attende: il form con utente e password è già utilizzabile, e il
-    // tasto del fornitore compare quando la risposta arriva. `loadConfig` non
-    // solleva mai — un fornitore spento o irraggiungibile lascia questa pagina
-    // esattamente com'era prima dell'SSO.
-    void this.oidc.loadConfig();
+
+    // Qui si ATTENDE, al contrario di prima: la configurazione decide se questa
+    // pagina esiste ancora o è solo un rimbalzo verso il fornitore. Mostrare il
+    // form per un istante e poi portarlo via sarebbe peggio di aspettare.
+    // `loadConfig` non solleva mai — un fornitore irraggiungibile lascia questa
+    // pagina esattamente com'era prima dell'SSO.
+    const config = await this.oidc.loadConfig();
+
+    // ⚠️ `?manuale=1` è la via di fuga dal CICLO. Senza, una pagina che rimbalza
+    // sempre al fornitore non sarebbe più raggiungibile: chi torna qui dopo un
+    // accesso rifiutato ripartirebbe all'infinito, e nessuno potrebbe leggere il
+    // motivo. Il link «torna alla pagina di accesso» della callback lo porta.
+    const manuale = this.route.snapshot.queryParamMap.get('manuale') === '1';
+
+    if (config.enabled && config.passwordLogin === 'off' && !manuale) {
+      this.avvio.set(true);
+      try {
+        await this.oidc.start(this.route.snapshot.queryParamMap.get('redirect'));
+      } catch (err) {
+        this.avvio.set(false);
+        this.failure.set((err as Error).message);
+      }
+    }
   }
 
   async accediConIdp(): Promise<void> {

@@ -15,9 +15,17 @@ import { authGuard, landingRedirect, requireCapability } from './core/auth/auth.
  * la seconda vive nel menu utente (`KEIJO-SIDEBAR-NO-SETTINGS`).
  */
 export const routes: Routes = [
-  // La radice non può avere un `redirectTo` fisso: `/dashboard` è il cruscotto
-  // di un evento e chi gestisce la piattaforma non ce l'ha, quindi rimbalzerebbe.
-  { path: '', pathMatch: 'full', canActivate: [landingRedirect], children: [] },
+  // La radice è la PRESENTAZIONE del prodotto, e non ha guardia: ci arriva chi
+  // non sa ancora cosa sia Mirada. Chi ha già una sessione non la vede — il
+  // componente lo porta dove il suo ruolo atterra, che non è lo stesso posto per
+  // tutti (`landingFor`): un organizzatore al cruscotto del suo evento, chi
+  // gestisce la piattaforma al riepilogo dei clienti.
+  {
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./pages/home/home.component').then((m) => m.HomeComponent),
+    data: { showBackButton: false },
+  },
 
   {
     path: 'login',
