@@ -17,6 +17,7 @@ Rules for working in this repo are split into focused files under `.claude/rules
 @.claude/rules/repositories.md
 
 ## Cross-cutting
+@.claude/rules/authentication.md
 @.claude/rules/errors.md
 @.claude/rules/responses.md
 @.claude/rules/logs.md

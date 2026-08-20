@@ -10,6 +10,13 @@
 8. Handler body: call the service, then `reply.status(200).send(result)`. No business logic, no Prisma, no transformer calls.
 9. Pre-service short-circuits: throw `httpErrors.NotFound()` / `httpErrors.BadRequest()` from `http-errors`.
 10. Controller talks only to services.
+10b. **A new controller MUST be added to `src/server.ts`** — both the `import` and
+    the list passed to `bootstrap`. Registration is an **explicit list**, not a glob.
+    ⚠️ Forgetting it fails **silently**: the class compiles, the types are right,
+    `tsc` is clean, and every route answers `404`. Verified the hard way on
+    `OrganizationInvitationController`, which reached production written, correct
+    and unreachable. After adding a controller, curl one of its routes: a `401` on
+    a protected route means it is wired, a `404` means it is not.
 11. **Updates touch ONE entity at a time. NO EXCEPTIONS.**
     - **Creation MAY cascade** — a `Create` DTO can embed nested related entities (e.g. `UserCreate` includes `person`, `contact`, `addresses`).
     - **Updates MAY NOT cascade — ever.** An `Update` DTO must contain ONLY the entity's own scalar fields. Do not include:
