@@ -25,6 +25,7 @@ const config: Config = {
         "^@DTOs/(.*)$": "<rootDir>/src/stack/DTOs/$1",
         "^@transformers/(.*)$": "<rootDir>/src/stack/transformers/$1",
         "^@enums/(.*)$": "<rootDir>/src/stack/enums/$1",
+        "^@interfaces/(.*)$": "<rootDir>/src/stack/interfaces/$1",
         "^@websocket/(.*)$": "<rootDir>/src/websocket/$1",
         "^@mail/(.*)$": "<rootDir>/src/mail/$1",
         "^@prisma-gen/(.*)$": "<rootDir>/prisma/generated/$1",

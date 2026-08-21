@@ -431,6 +431,43 @@ const MATRIX: ResourceMatrix[] = [
             own(RoleName.DANCER, READ_ONLY),
         ],
     },
+
+    // ─── Fase E — i canali di vendita esterni ────────────────────────────────
+    {
+        // | SALES_CHANNEL | ∀ | ∀#OWN | READ#OWN | – | – |
+        //
+        // Collegare un negozio è un atto **dell'intestatario**: si incolla un
+        // token che legge ordini e anagrafiche di tutto il negozio, e si decide
+        // quali titoli quel negozio può vendere. L'`EVENT_MANAGER` legge la
+        // configurazione — gli serve per capire da dove arrivano gli iscritti che
+        // vede — e non la cambia.
+        //
+        // Il `DANCER` non compare: un canale di vendita non è un dato del
+        // partecipante, nemmeno in lettura.
+        resource: PermissionResource.SALES_CHANNEL,
+        grants: [
+            own(RoleName.OWNER, ALL_ACTIONS),
+            own(RoleName.EVENT_MANAGER, READ_ONLY),
+        ],
+    },
+    {
+        // | EXTERNAL_SALE | ∀ | READ/UPDATE#OWN | READ/UPDATE#OWN | – | – |
+        //
+        // SOLA LETTURA come entità (§3.4): le righe nascono dall'ingestione, mai
+        // da una `POST`. Una vendita esterna scrivibile da fuori sarebbe un modo
+        // per emettere biglietti senza che nessuno abbia pagato nulla.
+        //
+        // L'`UPDATE` è la terna di `POST /external-sales/:id/reingest`, e
+        // l'`EVENT_MANAGER` ce l'ha: sbloccare una quarantena è lavoro d'evento —
+        // qualcuno ha pagato e aspetta il biglietto — e farlo dipendere dalla
+        // presenza dell'intestatario significherebbe farlo aspettare fino a
+        // quando quello legge le notifiche.
+        resource: PermissionResource.EXTERNAL_SALE,
+        grants: [
+            own(RoleName.OWNER, [PermissionAction.READ, PermissionAction.UPDATE]),
+            own(RoleName.EVENT_MANAGER, [PermissionAction.READ, PermissionAction.UPDATE]),
+        ],
+    },
 ];
 
 /** Terne di rotta prodotte da una singola azione della matrice. */

@@ -30,6 +30,7 @@
 			"@DTOs/*": [ "stack/DTOs/*" ],
 			"@transformers/*": [ "stack/transformers*" ],
 			"@enums/*": [ "stack/enums/*" ],
+			"@interfaces/*": [ "stack/interfaces/*" ],
 			"@websocket/*": [ "websocket/*" ],
 			"@mail/*": [ "mail/*" ],
 			"@prisma-gen/*": [ "../prisma/generated/*" ]

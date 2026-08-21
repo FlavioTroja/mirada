@@ -510,6 +510,7 @@ model Organization {
   refundPolicies     RefundPolicy[]
   events             Event[]
   fiscalDeclarations FiscalDeclaration[]
+  salesChannels      SalesChannel[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -880,6 +881,7 @@ model Event {
   reservations       Reservation[]
   passIssuances      PassIssuance[]
   tickets            Ticket[]
+  externalSales      ExternalSale[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1105,9 +1107,10 @@ model TicketType {
   sessions   TicketTypeSession[]
   priceTiers PriceTier[]
 
-  orderLines    OrderLine[]
-  passIssuances PassIssuance[]
-  tickets       Ticket[]
+  orderLines      OrderLine[]
+  passIssuances   PassIssuance[]
+  tickets         Ticket[]
+  channelMappings SalesChannelMapping[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1352,6 +1355,11 @@ model Registration {
   guardianUserId Int?
   guardian       User?   @relation("RegistrationGuardian", fields: [guardianUserId], references: [id], onDelete: SetNull)
 
+  /// La vendita su canale esterno da cui l'iscrizione proviene. Nulla su tutte
+  /// le altre — vendita online, porta, accredito.
+  externalSaleId Int?
+  externalSale   ExternalSale? @relation(fields: [externalSaleId], references: [id], onDelete: SetNull)
+
   quotaConsumptions   QuotaConsumption[]
   requirementOutcomes RequirementOutcome[]
   tickets             Ticket[]
@@ -1365,6 +1373,7 @@ model Registration {
   /// in PostgreSQL un unique index tratta ogni NULL come distinto, quindi le
   /// iscrizioni senza account non si ostacolano fra loro (§3.6).
   @@unique([eventId, personUserId])
+  @@index([externalSaleId])
   @@index([eventId, assignedRole])
   @@index([eventId, status])
   @@index([coupleId])
@@ -1789,6 +1798,10 @@ model Ticket {
   passIssuanceId Int?
   passIssuance   PassIssuance? @relation(fields: [passIssuanceId], references: [id], onDelete: SetNull)
 
+  /// La terza provenienza: la vendita dichiarata da un negozio esterno.
+  externalSaleId Int?
+  externalSale   ExternalSale? @relation(fields: [externalSaleId], references: [id], onDelete: SetNull)
+
   eventId Int
   event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
@@ -1836,6 +1849,7 @@ model Ticket {
   @@index([ticketTypeId])
   @@index([passIssuanceId])
   @@index([orderLineId])
+  @@index([externalSaleId])
 }
 
 // -----------------------------------------------------------------------------
@@ -1946,4 +1960,295 @@ model CheckIn {
   @@index([deviceId])
   @@index([registrationId])
   @@index([conflictWithId])
+}
+
+// =============================================================================
+// FASE E — I canali di vendita esterni
+//
+// L'organizzatore che arriva su Mirada ha spesso già un negozio suo — Shopify,
+// WooCommerce, altro — e non lo smonta il giorno in cui si iscrive. Questa
+// sezione è ciò che permette a quel negozio di **dichiarare le proprie vendite**
+// invece di lasciarle digitare a mano.
+//
+// ── Non è un concetto nuovo: è l'automazione di una riga già scritta ─────────
+// `05-modello-capienza.md` §5 dichiara da sempre il canale esterno: non
+// bloccante, gestione facoltativa per evento, «registrazione manuale delle
+// quantità». `RegistrationChannel.EXTERNAL_CHANNEL` e
+// `QuotaReservedFor.EXTERNAL_CHANNEL` esistono già. Qui cambia **soltanto** chi
+// preme il tasto: il webhook del negozio al posto dell'organizzatore.
+//
+// ── Chi possiede la capienza ────────────────────────────────────────────────
+// Il negozio esterno. L'organizzatore gli riserva un contingente con una quota
+// `reservedFor = EXTERNAL_CHANNEL` — che `CapacityEngineService.availability()`
+// già sottrae alla vendita online e alla disponibilità pubblica — e il negozio
+// vende contro quel contingente col proprio inventario. **Un contatore per
+// canale**: nessuna sincronizzazione bidirezionale, nessun doppio impegno.
+//
+// ── La regola che governa tutta l'ingestione ────────────────────────────────
+// **Una vendita già incassata non può essere rifiutata.** Il denaro si è mosso
+// altrove e Mirada non può disfarlo: l'impegno passa da `commitWithoutBlocking`
+// (`RB20`, la stessa strada dell'emissione manuale di pass), che registra il
+// consumo, avvisa se sfora e procede. L'invariante `I1` del `05` lo dice già:
+// il consumo che viene dai canali esterni **può** eccedere il limite, ed è
+// informativo e sotto la responsabilità dell'organizzatore.
+//
+// ── Nessun `Order`, nessun `Payment` ────────────────────────────────────────
+// Il denaro non è mai passato da Mirada: scrivere una riga `Payment` per una
+// vendita Shopify sarebbe una bugia nel registro degli incassi, e romperebbe il
+// significato di `Payment.idempotencyKey`. La vendita esterna ha una propria
+// idempotenza — `@@unique([salesChannelId, externalOrderId])` — e un proprio
+// registro. `Ticket` porta già due provenienze nullable («riga d'ordine oppure
+// emissione manuale»): questa è la terza.
+// =============================================================================
+
+enum SalesChannelProvider {
+  SHOPIFY
+}
+
+enum SalesChannelStatus {
+  /// Riceve notifiche e ingerisce.
+  ACTIVE
+  /// Riceve e **registra** le notifiche, ma non ingerisce. Serve a fermare
+  /// l'ingestione senza perdere le vendite che arrivano nel frattempo: se il
+  /// canale rifiutasse le notifiche, il prestatore le riproverebbe per qualche
+  /// ora e poi le butterebbe.
+  PAUSED
+  /// Disconnesso. Le notifiche sono rifiutate.
+  DISABLED
+}
+
+/// Il negozio esterno collegato a un'organizzazione.
+///
+/// ── Le credenziali sono un JSON cifrato, non tre colonne Shopify ────────────
+/// Oggi Trani usa un'app *custom* del proprio negozio: un token statico. Il
+/// secondo organizzatore su Shopify richiederà un'app pubblica con OAuth, e il
+/// terzo sarà su WooCommerce. Se le credenziali fossero colonne dedicate, ogni
+/// prestatore nuovo sarebbe una migrazione; essendo una busta cifrata, è una
+/// riga di configurazione. Il contenuto lo interpreta l'adapter del prestatore,
+/// che è l'unico che sa cosa significa.
+model SalesChannel {
+  id Int @id @default(autoincrement())
+
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  provider SalesChannelProvider
+
+  /// Nome dato dall'organizzatore — è ciò che legge nel back-office.
+  label String
+
+  /// Il segmento in URL del webhook (`/api/sales-channels/webhook/:publicId`).
+  /// Opaco e generato dal server: l'id numerico in un URL pubblico direbbe a
+  /// chiunque quanti canali esistono e permetterebbe di provarli a uno a uno.
+  publicId String @unique
+
+  /// Identificativo del negozio presso il prestatore — per Shopify il dominio
+  /// `qualcosa.myshopify.com`. Unico per prestatore: lo stesso negozio non può
+  /// essere collegato a due organizzazioni, che sarebbe il modo di far comparire
+  /// le vendite di uno nel cruscotto dell'altro.
+  externalShopId String
+
+  /// Busta cifrata (AES-256-GCM, `@utils/adapters/secretBox`). Mai in chiaro:
+  /// un token di amministrazione Shopify legge ordini e anagrafiche di TUTTO il
+  /// negozio, non solo dei biglietti.
+  credentials String?
+
+  /// Segreto con cui il prestatore firma le notifiche. Cifrato come sopra.
+  webhookSecret String
+
+  status SalesChannelStatus @default(ACTIVE)
+
+  /// Fin dove è arrivata l'ultima passata di riconciliazione. È il `updated_at_min`
+  /// della chiamata successiva: senza, la riconciliazione rileggerebbe ogni volta
+  /// tutto lo storico del negozio.
+  lastReconciledAt DateTime?
+
+  mappings SalesChannelMapping[]
+  sales    ExternalSale[]
+  events   ExternalSaleEvent[]
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, externalShopId])
+  @@index([organizationId])
+}
+
+/// La traduzione: prodotto del negozio → titolo d'ingresso di Mirada.
+///
+/// ── `externalVariantId` è `""`, non `NULL` ──────────────────────────────────
+/// In PostgreSQL un indice univoco tratta ogni `NULL` come distinto: con la
+/// variante nullable si potrebbero creare **due** mappature «qualunque variante»
+/// per lo stesso prodotto, e la risoluzione diventerebbe casuale. La stringa
+/// vuota significa «qualunque variante» ed è un valore come gli altri, quindi il
+/// vincolo di unicità funziona davvero.
+///
+/// La risoluzione prova prima la variante esatta, poi il ripiego su `""`.
+model SalesChannelMapping {
+  id Int @id @default(autoincrement())
+
+  salesChannelId Int
+  salesChannel   SalesChannel @relation(fields: [salesChannelId], references: [id], onDelete: Cascade)
+
+  externalProductId String
+  /// `""` = qualunque variante del prodotto. Vedi la nota sopra.
+  externalVariantId String @default("")
+
+  /// **Nullo di proposito**: una mappatura senza titolo significa «questo
+  /// articolo non è un biglietto, ignoralo». Serve al caso normale del negozio
+  /// che vende anche magliette e libri: senza, un ordine misto finirebbe in
+  /// quarantena a ogni acquisto, e la quarantena smetterebbe di voler dire
+  /// «qualcosa non va».
+  ///
+  /// La distinzione che conta è fra **nessuna mappatura** — non so cosa sia,
+  /// quarantena — e **mappatura senza titolo** — so cos'è, non è un biglietto.
+  ticketTypeId Int?
+  ticketType   TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: Restrict)
+
+  /// Quanti posti vale una unità di questo prodotto. Un «pacchetto coppia»
+  /// venduto come un articolo solo ne vale due, e senza questo campo entrerebbe
+  /// in sala una persona sola con due biglietti in tasca.
+  seatsPerUnit Int @default(1)
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([salesChannelId, externalProductId, externalVariantId])
+  @@index([ticketTypeId])
+}
+
+enum ExternalSaleStatus {
+  /// Notifica ricevuta e firmata, non ancora elaborata.
+  RECEIVED
+  /// Iscrizioni create, capienza impegnata, biglietti emessi.
+  INGESTED
+  /// Non si sa tradurla: prodotto non mappato, evento non pubblicato, titolo
+  /// cancellato. **Attende una mano umana e non si perde.**
+  QUARANTINED
+  /// Rimborsata o annullata presso il prestatore: capienza rilasciata, biglietti
+  /// invalidati.
+  REFUNDED
+  /// L'elaborazione è fallita per una ragione tecnica. Il cron ritenta.
+  FAILED
+}
+
+/// La vendita, nella forma che Mirada capisce.
+///
+/// È il **modello canonico**: qui non c'è nulla di Shopify. L'adapter del
+/// prestatore riempie questa riga, e tutto ciò che sta a valle — iscrizioni,
+/// capienza, biglietti, WebSocket — non sa da quale negozio sia arrivata. È la
+/// stessa forma di `SettlementFact` in `OrderFulfilmentService`, e per la stessa
+/// ragione: il giorno di WooCommerce si scrive un adapter, non un percorso.
+model ExternalSale {
+  id Int @id @default(autoincrement())
+
+  salesChannelId Int
+  salesChannel   SalesChannel @relation(fields: [salesChannelId], references: [id], onDelete: Restrict)
+
+  /// Risolto dalla mappatura delle righe. **Nullo in quarantena**: se non si sa
+  /// tradurre il prodotto non si sa nemmeno di quale evento si parli.
+  eventId Int?
+  event   Event? @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  /// L'ordine presso il prestatore. Unico per canale: **è l'idempotenza**. La
+  /// stessa notifica consegnata due volte — cosa che i webhook fanno per
+  /// progetto — trova un conflitto di chiave invece di emettere altri biglietti.
+  externalOrderId     String
+  /// Il numero che l'organizzatore legge sul suo negozio (`#1042`). Serve a lui,
+  /// non al codice: è come si ritrova un ordine quando qualcuno telefona.
+  externalOrderNumber String?
+
+  status ExternalSaleStatus @default(RECEIVED)
+
+  buyerName    String
+  buyerSurname String
+  buyerEmail   String
+
+  /// Centesimi interi, come ovunque nel dominio (§3.1). È l'importo incassato
+  /// **dal negozio**, non da Mirada: serve a riconciliare, non a contabilizzare.
+  totalAmount Int    @default(0)
+  currency    String @default("EUR")
+
+  /// La vendita nella forma **canonica** — l'esito della traduzione, non il corpo
+  /// che è arrivato. Il corpo grezzo esiste e sta su `ExternalSaleEvent.payload`:
+  /// qui serve altro, cioè ciò che `ingest` sa già consumare.
+  ///
+  /// È ciò che rende possibile rielaborare una quarantena dopo aver corretto la
+  /// mappatura **senza chiedere di nuovo l'ordine al negozio** — e quindi senza
+  /// dipendere dal fatto che il negozio risponda, che è precisamente ciò su cui
+  /// non si può contare nel momento in cui serve.
+  canonicalPayload Json
+
+  /// Perché è in quarantena, in italiano e leggibile: è il testo che
+  /// l'organizzatore vede accanto al pulsante per rimediare.
+  quarantineReason String?
+
+  receivedAt DateTime  @default(now())
+  ingestedAt DateTime?
+  refundedAt DateTime?
+
+  registrations Registration[]
+  tickets       Ticket[]
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([salesChannelId, externalOrderId])
+  @@index([salesChannelId, status])
+  @@index([eventId])
+  @@index([buyerEmail])
+}
+
+enum ExternalSaleEventStatus {
+  RECEIVED
+  PROCESSED
+  /// Notifica valida ma senza conseguenze — un argomento che non ci interessa.
+  IGNORED
+  FAILED
+}
+
+/// Il registro grezzo delle notifiche ricevute.
+///
+/// Sembra un doppione di `ExternalSale` e non lo è: questa tabella registra
+/// **ciò che è arrivato**, quella registra **ciò che ne abbiamo capito**. Serve a
+/// tre cose che senza di essa non si possono fare: rispondere `200` al prestatore
+/// prima di aver elaborato (Shopify stacca a 5 secondi), ritentare ciò che è
+/// fallito, e ricostruire cosa è successo quando l'organizzatore dice «io
+/// quell'ordine l'ho visto».
+model ExternalSaleEvent {
+  id Int @id @default(autoincrement())
+
+  salesChannelId Int
+  salesChannel   SalesChannel @relation(fields: [salesChannelId], references: [id], onDelete: Cascade)
+
+  /// L'identificativo della **consegna** presso il prestatore
+  /// (`X-Shopify-Webhook-Id`). Unico per canale: la stessa consegna ripetuta non
+  /// viene rielaborata. Distinto da `externalOrderId`, perché lo stesso ordine
+  /// genera più notifiche legittime (pagato, poi rimborsato).
+  externalEventId String
+
+  /// L'argomento presso il prestatore — `orders/paid`, `refunds/create`, …
+  topic String
+
+  externalOrderId String?
+
+  payload Json
+
+  status ExternalSaleEventStatus @default(RECEIVED)
+  /// Il messaggio dell'errore, quando `FAILED`. È ciò che si legge prima di
+  /// decidere se ritentare o correggere.
+  error  String?
+
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([salesChannelId, externalEventId])
+  @@index([salesChannelId, status])
+  @@index([externalOrderId])
 }

@@ -33,12 +33,8 @@ import { OrderService } from "@services/OrderService";
 import { OrderReservationService } from "@services/OrderReservationService";
 import { CapacityEngineService } from "@services/CapacityEngineService";
 import { TicketService } from "@services/TicketService";
-import { TicketQrService } from "@services/TicketQrService";
+import { TicketDeliveryService } from "@services/TicketDeliveryService";
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
-import { MailService } from "@mail/MailService";
-import { QrImageService } from "@mail/QrImageService";
-import { formatEventDates } from "@mail/templates/format";
-import { readI18nText } from "@utils/helpers/i18nText";
 import { Events } from "@websocket/events/Events";
 import { PaymentSucceededPayloadDTO } from "@websocket/dtos/PaymentSucceededPayloadDTO";
 
@@ -113,9 +109,7 @@ export class OrderFulfilmentService {
         private readonly capacityEngineService: CapacityEngineService,
         private readonly ticketService: TicketService,
         private readonly wsPublisher: WsPublisherService,
-        private readonly mailService: MailService,
-        private readonly qrImageService: QrImageService,
-        private readonly ticketQrService: TicketQrService,
+        private readonly ticketDeliveryService: TicketDeliveryService,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -318,76 +312,31 @@ export class OrderFulfilmentService {
         order: OrderWithContext,
         outcome: FulfilmentOutcome,
     ): Promise<void> {
-        try {
-            const buyer = await this.userRepository.findById(order.purchase.buyerUserId, {
-                populate: "person person.contact",
-            }) as (User & { person?: { name?: string; contact?: { email?: string } } }) | null;
+        const buyer = await this.userRepository.findById(order.purchase.buyerUserId, {
+            populate: "person person.contact",
+        }) as (User & { person?: { name?: string; contact?: { email?: string } } }) | null;
 
-            const email = buyer?.person?.contact?.email;
-            if (!email) {
-                Log.warn(
-                    `[OrderFulfilment Service]: no email for buyer (id ${order.purchase.buyerUserId}) — `
-                    + `confirmation for order (id ${order.id}) not sent`,
-                );
-                return;
-            }
-
-            // I nomi degli intestatari, per distinguere i codici quando l'ordine
-            // porta più persone. Una lettura sola, non una per biglietto.
-            const registrationIds = outcome.tickets
-                .map(t => t.registrationId)
-                .filter((id): id is number => id !== null);
-            const registrations = registrationIds.length
-                ? await this.registrationRepository.findByIds(registrationIds)
-                : [];
-            const holderById = new Map(
-                registrations.map(r => [r.id, `${r.holderName} ${r.holderSurname}`.trim()]),
+        const email = buyer?.person?.contact?.email;
+        if (!email) {
+            Log.warn(
+                `[OrderFulfilment Service]: no email for buyer (id ${order.purchase.buyerUserId}) — `
+                + `confirmation for order (id ${order.id}) not sent`,
             );
-
-            // ── I QR, uno per biglietto ──────────────────────────────────────
-            // Il contenuto è il **token firmato**, non il codice: l'app di
-            // check-in lo verifica offline con la sola chiave pubblica, e
-            // l'operatore alla porta non deve interrogare il server per ogni
-            // persona in fila. Se il disegno fallisce si va avanti senza — il
-            // codice in chiaro resta, e l'email parte comunque.
-            const qrByTicket = new Map<number, string>();
-            const inlineImages = [];
-            for (const ticket of outcome.tickets) {
-                const image = await this.qrImageService.ticketQr(
-                    ticket.id,
-                    this.ticketQrService.issueToken(ticket),
-                );
-                if (image) {
-                    inlineImages.push(image);
-                    qrByTicket.set(ticket.id, image.cid);
-                }
-            }
-
-            await this.mailService.sendRegistrationConfirmed(
-                email,
-                {
-                    firstName: buyer?.person?.name ?? "",
-                    eventTitle: readI18nText(order.event.title) ?? order.event.slug,
-                    eventSlug: order.event.slug,
-                    eventDates: formatEventDates(order.event.startAt, order.event.endAt),
-                    // La location richiederebbe una lettura in più su un percorso
-                    // caldo: la scheda dell'evento, linkata nell'email, la porta.
-                    venue: null,
-                    tickets: outcome.tickets.map(t => ({
-                        code: t.code,
-                        holder: (t.registrationId !== null ? holderById.get(t.registrationId) : "") ?? "",
-                        qrCid: qrByTicket.get(t.id),
-                    })),
-                    total: order.total,
-                },
-                inlineImages,
-            );
-        } catch (err) {
-            Log.error(
-                `[OrderFulfilment Service]: failed to send confirmation for order (id ${order.id}): `
-                + `${(err as Error).message}`,
-            );
+            return;
         }
+
+        // La composizione e l'invio stanno in `TicketDeliveryService`: dei
+        // biglietti nascono anche dai canali di vendita esterni, e quell'email
+        // appartiene al fatto, non al percorso. Qui resta ciò che è davvero
+        // dell'ordine — chi è il compratore e a che indirizzo scrivergli.
+        await this.ticketDeliveryService.deliver({
+            to: email,
+            firstName: buyer?.person?.name ?? "",
+            event: order.event,
+            tickets: outcome.tickets,
+            total: order.total,
+            source: `order (id ${order.id})`,
+        });
     }
 
     // ═════════════════════════════════════════════════════════════════════════

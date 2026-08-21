@@ -43,3 +43,7 @@ export * from './PassIssuanceSchema';
 export * from './TicketSchema';
 export * from './TicketTransferSchema';
 export * from './CheckInSchema';
+export * from './SalesChannelSchema';
+export * from './SalesChannelMappingSchema';
+export * from './ExternalSaleSchema';
+export * from './ExternalSaleEventSchema';

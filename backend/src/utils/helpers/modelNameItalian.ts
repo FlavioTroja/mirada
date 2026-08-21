@@ -56,6 +56,12 @@ export const ModelNameItalian: Record<Prisma.ModelName, string> = {
     OrderLine: "riga d'ordine",
     Reservation: "prenotazione",
     Payment: "pagamento",
+
+    // Fase E — i canali di vendita esterni
+    SalesChannel: "canale di vendita",
+    SalesChannelMapping: "associazione di prodotto",
+    ExternalSale: "vendita esterna",
+    ExternalSaleEvent: "notifica del canale di vendita",
 };
 
 export const italianModelName = (name: Prisma.ModelName): string => ModelNameItalian[name];

@@ -1,0 +1,13 @@
+-- `ExternalSale.rawPayload` → `canonicalPayload`.
+--
+-- Il nome mentiva. In quella colonna finisce la vendita **canonica** — l'esito
+-- della traduzione fatta dall'adapter — e non il corpo che è arrivato dal
+-- negozio. Il corpo grezzo esiste davvero, e sta su `ExternalSaleEvent.payload`:
+-- due cose diverse con due mestieri diversi, e un nome che le confonde porta
+-- prima o poi qualcuno a cercare l'una dove sta l'altra.
+--
+-- ⚠️ RENAME, non DROP + ADD. Prisma genera la seconda forma, che qui sarebbe
+-- innocua — la tabella è nata un quarto d'ora fa e non ha righe — ma che su una
+-- tabella piena butterebbe via il contenuto senza dirlo. La forma giusta della
+-- migrazione non dipende dal fatto che oggi il danno non si veda.
+ALTER TABLE "ExternalSale" RENAME COLUMN "rawPayload" TO "canonicalPayload";

@@ -53,6 +53,8 @@ export type TicketIssueInput = {
     registrationId?: number | null;
     orderLineId?: number | null;
     passIssuanceId?: number | null;
+    /** La terza provenienza: la vendita dichiarata da un negozio esterno (fase E). */
+    externalSaleId?: number | null;
     holderName: string;
     holderSurname: string;
     holderEmail?: string | null;
@@ -137,6 +139,7 @@ export class TicketService {
                 registrationId: input.registrationId ?? null,
                 orderLineId: input.orderLineId ?? null,
                 passIssuanceId: input.passIssuanceId ?? null,
+                externalSaleId: input.externalSaleId ?? null,
                 code: this.ticketQrService.generateCode(),
                 status: TicketStatus.VALID,
                 holderName: input.holderName,

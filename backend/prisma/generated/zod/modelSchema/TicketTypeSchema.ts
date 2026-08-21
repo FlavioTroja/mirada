@@ -16,6 +16,8 @@ import { PassIssuanceWithRelationsSchema, PassIssuancePartialWithRelationsSchema
 import type { PassIssuanceWithRelations, PassIssuancePartialWithRelations, PassIssuanceOptionalDefaultsWithRelations } from './PassIssuanceSchema'
 import { TicketWithRelationsSchema, TicketPartialWithRelationsSchema, TicketOptionalDefaultsWithRelationsSchema } from './TicketSchema'
 import type { TicketWithRelations, TicketPartialWithRelations, TicketOptionalDefaultsWithRelations } from './TicketSchema'
+import { SalesChannelMappingWithRelationsSchema, SalesChannelMappingPartialWithRelationsSchema, SalesChannelMappingOptionalDefaultsWithRelationsSchema } from './SalesChannelMappingSchema'
+import type { SalesChannelMappingWithRelations, SalesChannelMappingPartialWithRelations, SalesChannelMappingOptionalDefaultsWithRelations } from './SalesChannelMappingSchema'
 
 /////////////////////////////////////////
 // TICKET TYPE SCHEMA
@@ -101,6 +103,7 @@ export type TicketTypeRelations = {
   orderLines: OrderLineWithRelations[];
   passIssuances: PassIssuanceWithRelations[];
   tickets: TicketWithRelations[];
+  channelMappings: SalesChannelMappingWithRelations[];
 };
 
 export type TicketTypeWithRelations = Omit<z.infer<typeof TicketTypeSchema>, "description"> & {
@@ -114,6 +117,7 @@ export const TicketTypeWithRelationsSchema: z.ZodType<TicketTypeWithRelations> =
   orderLines: z.lazy(() => OrderLineWithRelationsSchema).array(),
   passIssuances: z.lazy(() => PassIssuanceWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketWithRelationsSchema).array(),
+  channelMappings: z.lazy(() => SalesChannelMappingWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -127,6 +131,7 @@ export type TicketTypeOptionalDefaultsRelations = {
   orderLines: OrderLineOptionalDefaultsWithRelations[];
   passIssuances: PassIssuanceOptionalDefaultsWithRelations[];
   tickets: TicketOptionalDefaultsWithRelations[];
+  channelMappings: SalesChannelMappingOptionalDefaultsWithRelations[];
 };
 
 export type TicketTypeOptionalDefaultsWithRelations = Omit<z.infer<typeof TicketTypeOptionalDefaultsSchema>, "description"> & {
@@ -140,6 +145,7 @@ export const TicketTypeOptionalDefaultsWithRelationsSchema: z.ZodType<TicketType
   orderLines: z.lazy(() => OrderLineOptionalDefaultsWithRelationsSchema).array(),
   passIssuances: z.lazy(() => PassIssuanceOptionalDefaultsWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
+  channelMappings: z.lazy(() => SalesChannelMappingOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -153,6 +159,7 @@ export type TicketTypePartialRelations = {
   orderLines?: OrderLinePartialWithRelations[];
   passIssuances?: PassIssuancePartialWithRelations[];
   tickets?: TicketPartialWithRelations[];
+  channelMappings?: SalesChannelMappingPartialWithRelations[];
 };
 
 export type TicketTypePartialWithRelations = Omit<z.infer<typeof TicketTypePartialSchema>, "description"> & {
@@ -166,6 +173,7 @@ export const TicketTypePartialWithRelationsSchema: z.ZodType<TicketTypePartialWi
   orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
   passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
+  channelMappings: z.lazy(() => SalesChannelMappingPartialWithRelationsSchema).array(),
 })).partial()
 
 export type TicketTypeOptionalDefaultsWithPartialRelations = Omit<z.infer<typeof TicketTypeOptionalDefaultsSchema>, "description"> & {
@@ -179,6 +187,7 @@ export const TicketTypeOptionalDefaultsWithPartialRelationsSchema: z.ZodType<Tic
   orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
   passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
+  channelMappings: z.lazy(() => SalesChannelMappingPartialWithRelationsSchema).array(),
 }).partial())
 
 export type TicketTypeWithPartialRelations = Omit<z.infer<typeof TicketTypeSchema>, "description"> & {
@@ -192,6 +201,7 @@ export const TicketTypeWithPartialRelationsSchema: z.ZodType<TicketTypeWithParti
   orderLines: z.lazy(() => OrderLinePartialWithRelationsSchema).array(),
   passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
+  channelMappings: z.lazy(() => SalesChannelMappingPartialWithRelationsSchema).array(),
 }).partial())
 
 export default TicketTypeSchema;

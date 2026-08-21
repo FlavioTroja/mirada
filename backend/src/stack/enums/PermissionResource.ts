@@ -54,6 +54,8 @@ export enum PermissionResource {
     REQUIREMENT_OUTCOME = "REQUIREMENT_OUTCOME",
     CHECK_IN = "CHECK_IN",
     REFUND = "REFUND",
+    SALES_CHANNEL = "SALES_CHANNEL",
+    EXTERNAL_SALE = "EXTERNAL_SALE",
 
     // People
     CONTACT = "CONTACT",

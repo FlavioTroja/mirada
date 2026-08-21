@@ -9,6 +9,8 @@ import { UserWithRelationsSchema, UserPartialWithRelationsSchema, UserOptionalDe
 import type { UserWithRelations, UserPartialWithRelations, UserOptionalDefaultsWithRelations } from './UserSchema'
 import { CoupleWithRelationsSchema, CouplePartialWithRelationsSchema, CoupleOptionalDefaultsWithRelationsSchema } from './CoupleSchema'
 import type { CoupleWithRelations, CouplePartialWithRelations, CoupleOptionalDefaultsWithRelations } from './CoupleSchema'
+import { ExternalSaleWithRelationsSchema, ExternalSalePartialWithRelationsSchema, ExternalSaleOptionalDefaultsWithRelationsSchema } from './ExternalSaleSchema'
+import type { ExternalSaleWithRelations, ExternalSalePartialWithRelations, ExternalSaleOptionalDefaultsWithRelations } from './ExternalSaleSchema'
 import { QuotaConsumptionWithRelationsSchema, QuotaConsumptionPartialWithRelationsSchema, QuotaConsumptionOptionalDefaultsWithRelationsSchema } from './QuotaConsumptionSchema'
 import type { QuotaConsumptionWithRelations, QuotaConsumptionPartialWithRelations, QuotaConsumptionOptionalDefaultsWithRelations } from './QuotaConsumptionSchema'
 import { RequirementOutcomeWithRelationsSchema, RequirementOutcomePartialWithRelationsSchema, RequirementOutcomeOptionalDefaultsWithRelationsSchema } from './RequirementOutcomeSchema'
@@ -51,6 +53,11 @@ export const RegistrationSchema = z.object({
   coupleId: z.number().int().nullish(),
   isMinor: z.boolean(),
   guardianUserId: z.number().int().nullish(),
+  /**
+   * La vendita su canale esterno da cui l'iscrizione proviene. Nulla su tutte
+   * le altre — vendita online, porta, accredito.
+   */
+  externalSaleId: z.number().int().nullish(),
   deleted: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -91,6 +98,7 @@ export type RegistrationRelations = {
   personUser?: UserWithRelations | null;
   couple?: CoupleWithRelations | null;
   guardian?: UserWithRelations | null;
+  externalSale?: ExternalSaleWithRelations | null;
   quotaConsumptions: QuotaConsumptionWithRelations[];
   requirementOutcomes: RequirementOutcomeWithRelations[];
   tickets: TicketWithRelations[];
@@ -104,6 +112,7 @@ export const RegistrationWithRelationsSchema: z.ZodType<RegistrationWithRelation
   personUser: z.lazy(() => UserWithRelationsSchema).nullish(),
   couple: z.lazy(() => CoupleWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSaleWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionWithRelationsSchema).array(),
   requirementOutcomes: z.lazy(() => RequirementOutcomeWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketWithRelationsSchema).array(),
@@ -119,6 +128,7 @@ export type RegistrationOptionalDefaultsRelations = {
   personUser?: UserOptionalDefaultsWithRelations | null;
   couple?: CoupleOptionalDefaultsWithRelations | null;
   guardian?: UserOptionalDefaultsWithRelations | null;
+  externalSale?: ExternalSaleOptionalDefaultsWithRelations | null;
   quotaConsumptions: QuotaConsumptionOptionalDefaultsWithRelations[];
   requirementOutcomes: RequirementOutcomeOptionalDefaultsWithRelations[];
   tickets: TicketOptionalDefaultsWithRelations[];
@@ -132,6 +142,7 @@ export const RegistrationOptionalDefaultsWithRelationsSchema: z.ZodType<Registra
   personUser: z.lazy(() => UserOptionalDefaultsWithRelationsSchema).nullish(),
   couple: z.lazy(() => CoupleOptionalDefaultsWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserOptionalDefaultsWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSaleOptionalDefaultsWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionOptionalDefaultsWithRelationsSchema).array(),
   requirementOutcomes: z.lazy(() => RequirementOutcomeOptionalDefaultsWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
@@ -147,6 +158,7 @@ export type RegistrationPartialRelations = {
   personUser?: UserPartialWithRelations | null;
   couple?: CouplePartialWithRelations | null;
   guardian?: UserPartialWithRelations | null;
+  externalSale?: ExternalSalePartialWithRelations | null;
   quotaConsumptions?: QuotaConsumptionPartialWithRelations[];
   requirementOutcomes?: RequirementOutcomePartialWithRelations[];
   tickets?: TicketPartialWithRelations[];
@@ -160,6 +172,7 @@ export const RegistrationPartialWithRelationsSchema: z.ZodType<RegistrationParti
   personUser: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionPartialWithRelationsSchema).array(),
   requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
@@ -173,6 +186,7 @@ export const RegistrationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<R
   personUser: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionPartialWithRelationsSchema).array(),
   requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
@@ -186,6 +200,7 @@ export const RegistrationWithPartialRelationsSchema: z.ZodType<RegistrationWithP
   personUser: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
   quotaConsumptions: z.lazy(() => QuotaConsumptionPartialWithRelationsSchema).array(),
   requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),

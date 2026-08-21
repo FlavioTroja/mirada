@@ -98,6 +98,7 @@
     "@DTOs": "dist/src/stack/DTOs",
     "@transformers": "dist/src/stack/transformers",
     "@enums": "dist/src/stack/enums",
+    "@interfaces": "dist/src/stack/interfaces",
     "@websocket": "dist/src/websocket",
     "@mail": "dist/src/mail",
     "@prisma-gen": "dist/prisma/generated"

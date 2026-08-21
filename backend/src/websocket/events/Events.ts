@@ -17,6 +17,18 @@ export const Events = {
     /** A registration entered the event — the organizer's dashboard must refetch (§4.10). */
     REGISTRATION_CREATED: "registration/created",
     /**
+     * Un'iscrizione gia esistente e cambiata: confermata, rifiutata, cancellata,
+     * o le e stato riassegnato il ruolo. Ai membri dell'organizzazione.
+     *
+     * Distinto da `registration/created` e non fuso con esso: chi ascolta vuole
+     * quasi sempre cose diverse dai due. Il flusso «iscrizioni in arrivo»
+     * aggiunge una riga solo sul primo; l'elenco iscritti e la scheda della
+     * singola persona devono rileggere su entrambi. Un evento unico costringerebbe
+     * ognuno dei due a distinguere il caso dal payload, che e il modo in cui una
+     * distinzione si perde.
+     */
+    REGISTRATION_UPDATED: "registration/updated",
+    /**
      * A ticket changed holder (§4.12). Sent to BOTH parties and to the organization
      * members: the old holder's QR stops opening the door, the new holder's starts.
      */
@@ -39,6 +51,28 @@ export const Events = {
      * very same code path minus the adapter.
      */
     PAYMENT_SUCCEEDED: "payment/succeeded",
+    /**
+     * Una vendita dichiarata da un negozio esterno è entrata nel sistema (fase E).
+     * Inviato ai MEMBRI dell'organizzazione, mai in diffusione: è una vendita di
+     * quell'organizzatore e di nessun altro.
+     *
+     * Perché non basta `event/availability-changed`, che parte comunque: quello
+     * dice che i contatori si sono mossi, questo dice **da dove**. In apertura
+     * vendite l'organizzatore deve poter distinguere il proprio negozio dal
+     * proprio sito, altrimenti vede un numero salire senza sapere cosa sta
+     * funzionando.
+     */
+    EXTERNAL_SALE_INGESTED: "external-sale/ingested",
+    /**
+     * Una vendita esterna è **ferma** e aspetta una mano umana — prodotto non
+     * mappato, evento che non gestisce i canali esterni, titolo cancellato.
+     *
+     * È il solo evento della fase E che chiede un'azione invece di aggiornare uno
+     * schermo, ed è **immediato, mai aggregato**: qualcuno ha pagato e non ha il
+     * biglietto, e ogni minuto di ritardo è un minuto in cui quella persona
+     * scrive all'organizzatore.
+     */
+    EXTERNAL_SALE_QUARANTINED: "external-sale/quarantined",
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

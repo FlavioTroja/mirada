@@ -33,6 +33,16 @@ export async function seed(prisma: PrismaClient) {
     await prisma.order.deleteMany();
     await prisma.purchase.deleteMany();
 
+    // Fase E — i canali di vendita esterni. ExternalSale è Restrict da
+    // SalesChannel e da Event, e SetNull da Registration e Ticket: va prima
+    // dell'evento e dopo i biglietti. SalesChannelMapping è Restrict da
+    // TicketType, quindi precede i titoli; SalesChannel è Restrict da
+    // Organization e chiude il blocco.
+    await prisma.externalSaleEvent.deleteMany();
+    await prisma.externalSale.deleteMany();
+    await prisma.salesChannelMapping.deleteMany();
+    await prisma.salesChannel.deleteMany();
+
     // Fase C — il motore di capienza. QuotaConsumption discende da CapacityQuota e
     // Registration; Registration è Restrict da Event, quindi va PRIMA dell'evento.
     await prisma.quotaConsumption.deleteMany();

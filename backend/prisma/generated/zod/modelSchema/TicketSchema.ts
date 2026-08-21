@@ -4,6 +4,8 @@ import { OrderLineWithRelationsSchema, OrderLinePartialWithRelationsSchema, Orde
 import type { OrderLineWithRelations, OrderLinePartialWithRelations, OrderLineOptionalDefaultsWithRelations } from './OrderLineSchema'
 import { PassIssuanceWithRelationsSchema, PassIssuancePartialWithRelationsSchema, PassIssuanceOptionalDefaultsWithRelationsSchema } from './PassIssuanceSchema'
 import type { PassIssuanceWithRelations, PassIssuancePartialWithRelations, PassIssuanceOptionalDefaultsWithRelations } from './PassIssuanceSchema'
+import { ExternalSaleWithRelationsSchema, ExternalSalePartialWithRelationsSchema, ExternalSaleOptionalDefaultsWithRelationsSchema } from './ExternalSaleSchema'
+import type { ExternalSaleWithRelations, ExternalSalePartialWithRelations, ExternalSaleOptionalDefaultsWithRelations } from './ExternalSaleSchema'
 import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptionalDefaultsWithRelationsSchema } from './EventSchema'
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
 import { TicketTypeWithRelationsSchema, TicketTypePartialWithRelationsSchema, TicketTypeOptionalDefaultsWithRelationsSchema } from './TicketTypeSchema'
@@ -57,6 +59,10 @@ export const TicketSchema = z.object({
    */
   orderLineId: z.number().int().nullish(),
   passIssuanceId: z.number().int().nullish(),
+  /**
+   * La terza provenienza: la vendita dichiarata da un negozio esterno.
+   */
+  externalSaleId: z.number().int().nullish(),
   eventId: z.number().int(),
   ticketTypeId: z.number().int(),
   /**
@@ -126,6 +132,7 @@ export type TicketOptionalDefaults = z.infer<typeof TicketOptionalDefaultsSchema
 export type TicketRelations = {
   orderLine?: OrderLineWithRelations | null;
   passIssuance?: PassIssuanceWithRelations | null;
+  externalSale?: ExternalSaleWithRelations | null;
   event: EventWithRelations;
   ticketType: TicketTypeWithRelations;
   registration?: RegistrationWithRelations | null;
@@ -139,6 +146,7 @@ export type TicketWithRelations = z.infer<typeof TicketSchema> & TicketRelations
 export const TicketWithRelationsSchema: z.ZodType<TicketWithRelations> = TicketSchema.merge(z.object({
   orderLine: z.lazy(() => OrderLineWithRelationsSchema).nullish(),
   passIssuance: z.lazy(() => PassIssuanceWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSaleWithRelationsSchema).nullish(),
   event: z.lazy(() => EventWithRelationsSchema),
   ticketType: z.lazy(() => TicketTypeWithRelationsSchema),
   registration: z.lazy(() => RegistrationWithRelationsSchema).nullish(),
@@ -154,6 +162,7 @@ export const TicketWithRelationsSchema: z.ZodType<TicketWithRelations> = TicketS
 export type TicketOptionalDefaultsRelations = {
   orderLine?: OrderLineOptionalDefaultsWithRelations | null;
   passIssuance?: PassIssuanceOptionalDefaultsWithRelations | null;
+  externalSale?: ExternalSaleOptionalDefaultsWithRelations | null;
   event: EventOptionalDefaultsWithRelations;
   ticketType: TicketTypeOptionalDefaultsWithRelations;
   registration?: RegistrationOptionalDefaultsWithRelations | null;
@@ -167,6 +176,7 @@ export type TicketOptionalDefaultsWithRelations = z.infer<typeof TicketOptionalD
 export const TicketOptionalDefaultsWithRelationsSchema: z.ZodType<TicketOptionalDefaultsWithRelations> = TicketOptionalDefaultsSchema.merge(z.object({
   orderLine: z.lazy(() => OrderLineOptionalDefaultsWithRelationsSchema).nullish(),
   passIssuance: z.lazy(() => PassIssuanceOptionalDefaultsWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSaleOptionalDefaultsWithRelationsSchema).nullish(),
   event: z.lazy(() => EventOptionalDefaultsWithRelationsSchema),
   ticketType: z.lazy(() => TicketTypeOptionalDefaultsWithRelationsSchema),
   registration: z.lazy(() => RegistrationOptionalDefaultsWithRelationsSchema).nullish(),
@@ -182,6 +192,7 @@ export const TicketOptionalDefaultsWithRelationsSchema: z.ZodType<TicketOptional
 export type TicketPartialRelations = {
   orderLine?: OrderLinePartialWithRelations | null;
   passIssuance?: PassIssuancePartialWithRelations | null;
+  externalSale?: ExternalSalePartialWithRelations | null;
   event?: EventPartialWithRelations;
   ticketType?: TicketTypePartialWithRelations;
   registration?: RegistrationPartialWithRelations | null;
@@ -195,6 +206,7 @@ export type TicketPartialWithRelations = z.infer<typeof TicketPartialSchema> & T
 export const TicketPartialWithRelationsSchema: z.ZodType<TicketPartialWithRelations> = TicketPartialSchema.merge(z.object({
   orderLine: z.lazy(() => OrderLinePartialWithRelationsSchema).nullish(),
   passIssuance: z.lazy(() => PassIssuancePartialWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
   event: z.lazy(() => EventPartialWithRelationsSchema),
   ticketType: z.lazy(() => TicketTypePartialWithRelationsSchema),
   registration: z.lazy(() => RegistrationPartialWithRelationsSchema).nullish(),
@@ -208,6 +220,7 @@ export type TicketOptionalDefaultsWithPartialRelations = z.infer<typeof TicketOp
 export const TicketOptionalDefaultsWithPartialRelationsSchema: z.ZodType<TicketOptionalDefaultsWithPartialRelations> = TicketOptionalDefaultsSchema.merge(z.object({
   orderLine: z.lazy(() => OrderLinePartialWithRelationsSchema).nullish(),
   passIssuance: z.lazy(() => PassIssuancePartialWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
   event: z.lazy(() => EventPartialWithRelationsSchema),
   ticketType: z.lazy(() => TicketTypePartialWithRelationsSchema),
   registration: z.lazy(() => RegistrationPartialWithRelationsSchema).nullish(),
@@ -221,6 +234,7 @@ export type TicketWithPartialRelations = z.infer<typeof TicketSchema> & TicketPa
 export const TicketWithPartialRelationsSchema: z.ZodType<TicketWithPartialRelations> = TicketSchema.merge(z.object({
   orderLine: z.lazy(() => OrderLinePartialWithRelationsSchema).nullish(),
   passIssuance: z.lazy(() => PassIssuancePartialWithRelationsSchema).nullish(),
+  externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
   event: z.lazy(() => EventPartialWithRelationsSchema),
   ticketType: z.lazy(() => TicketTypePartialWithRelationsSchema),
   registration: z.lazy(() => RegistrationPartialWithRelationsSchema).nullish(),

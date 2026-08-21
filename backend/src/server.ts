@@ -61,6 +61,10 @@ import { PurchaseController } from "@controllers/PurchaseController";
 import { ReservationController } from "@controllers/ReservationController";
 import { PaymentController } from "@controllers/PaymentController";
 import { ReservationExpiryJob } from "@utils/adapters/cron/ReservationExpiryJob";
+import { SalesChannelController } from "@controllers/SalesChannelController";
+import { ExternalSaleController } from "@controllers/ExternalSaleController";
+import { ExternalSalesReconciliationJob } from "@utils/adapters/cron/ExternalSalesReconciliationJob";
+import { registerRawBodyCapture } from "@utils/adapters/rawBody";
 
 export class APIServer {
     private readonly server: FastifyApplication;
@@ -77,6 +81,9 @@ export class APIServer {
         })
         this.server = app.withTypeProvider<ZodTypeProvider>();
         this.setupMultipart();
+        // ⚠️ PRIMA dei controller: sostituisce l'analizzatore JSON, e un
+        // analizzatore registrato dopo non varrebbe per le rotte già montate.
+        registerRawBodyCapture(this.server);
         this.serveStaticInDev();
 
         this.configureAuthentication();
@@ -341,6 +348,9 @@ export class APIServer {
                 PurchaseController,
                 ReservationController,
                 PaymentController,
+                // --- Mirada Tango, fase E — i canali di vendita esterni ---
+                SalesChannelController,
+                ExternalSaleController,
             ].sort((curr, next) => curr.name < next.name ? -1 : 1 ),
             prefix: "/api"
         });
@@ -362,6 +372,11 @@ export class APIServer {
         // §4.11, `RF-PAY-24`, rischio `R1b`: senza questa passata, in apertura
         // vendite i posti restano bloccati da ordini abbandonati.
         ReservationExpiryJob.runJob(this.server);
+
+        // Fase E: i webhook si perdono e non lo dicono. Senza questa passata, una
+        // vendita mancata si scopre all'ingresso, dalla persona che non ha il
+        // biglietto.
+        ExternalSalesReconciliationJob.runJob(this.server);
     }
 
     private setupWebSocketServer() {
