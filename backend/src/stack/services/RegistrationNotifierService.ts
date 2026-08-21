@@ -4,6 +4,10 @@ import { OrganizationAudienceService } from "@services/OrganizationAudienceServi
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
 import { Events } from "@websocket/events/Events";
 import { RegistrationCreatedPayloadDTO } from "@websocket/dtos/RegistrationCreatedPayloadDTO";
+import {
+    RegistrationChange,
+    RegistrationUpdatedPayloadDTO,
+} from "@websocket/dtos/RegistrationUpdatedPayloadDTO";
 
 /**
  * **Il segnale `registration/created`, in un posto solo.**
@@ -79,4 +83,48 @@ export class RegistrationNotifierService {
             );
         }
     }
+
+    /**
+     * Annuncia che un'iscrizione **gia esistente** e cambiata: confermata,
+     * rifiutata, cancellata, o con il ruolo riassegnato.
+     *
+     * Sta qui accanto a `registrationsCreated` per la stessa ragione per cui
+     * quello ci sta: il segnale appartiene al fatto, non al percorso. Le
+     * conferme arrivano da `RegistrationService`, le riassegnazioni di ruolo
+     * anche dal trasferimento di biglietto, e nessuna delle due strade puo
+     * dimenticarsene senza che si veda.
+     *
+     * **Non lancia mai**, come il gemello: la modifica e gia scritta.
+     */
+    public async registrationUpdated(
+        event: { id: number; organizationId: number },
+        registrationId: number,
+        change: RegistrationChange,
+    ): Promise<void> {
+        try {
+            const wsCodes = await this.organizationAudienceService.resolveMemberWsCodes(event.organizationId);
+            if (!wsCodes.length) {
+                return;
+            }
+
+            const payload: RegistrationUpdatedPayloadDTO = {
+                eventId: event.id,
+                organizationId: event.organizationId,
+                registrationId,
+                change,
+            };
+            await this.wsPublisher.sendToUsers(wsCodes, Events.REGISTRATION_UPDATED, payload);
+
+            Log.info(
+                `[RegistrationNotifier Service]: published 'registration/updated' (${change}) for registration `
+                + `(id ${registrationId}) on event (id ${event.id}) to ${wsCodes.length} member(s)`,
+            );
+        } catch (err) {
+            Log.error(
+                `[RegistrationNotifier Service]: publish of 'registration/updated' failed for registration `
+                + `(id ${registrationId}): ${(err as Error).message}`,
+            );
+        }
+    }
+
 }

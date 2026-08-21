@@ -63,6 +63,8 @@ import { AvatarComponent } from '../../shared/avatar.component';
 import { DomainErrorComponent } from '../../shared/domain-error.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
+import { liveRefresh } from '../../core/realtime/live';
+import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
 
 /**
  * `/registrations` — gli **iscritti** (§4.3).
@@ -461,6 +463,14 @@ export class RegistrationsListComponent implements OnInit {
   });
 
   constructor() {
+    // Senza filtro sull'evento: l'elenco e per organizzazione, e chi lo tiene
+    // aperto vuole vedere arrivare le iscrizioni di tutti i propri eventi.
+    liveRefresh(
+      [REALTIME_EVENTS.registrationCreated, REALTIME_EVENTS.registrationUpdated],
+      () => this.store.load(),
+      { when: () => !this.form.dirty },
+    );
+
     this.search.valueChanges
       .pipe(debounceTime(300), takeUntilDestroyed())
       .subscribe((value) => void this.store.setQuery({ value: value || undefined }));

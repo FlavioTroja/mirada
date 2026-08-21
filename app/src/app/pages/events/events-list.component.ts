@@ -52,6 +52,8 @@ import { AvatarComponent } from '../../shared/avatar.component';
 import { DomainErrorComponent } from '../../shared/domain-error.component';
 import { I18nTextComponent } from '../../shared/i18n-text.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
+import { liveRefresh } from '../../core/realtime/live';
+import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
 
 /** Sintesi di capienza calcolata dalle quote dell'evento. */
 interface EventCapacity {
@@ -333,6 +335,10 @@ export class EventsListComponent implements OnInit {
   ]);
 
   constructor() {
+    // Le capienze mostrate in elenco sono lette una per evento: si rileggono
+    // tutte, perche il frame dice che una si e mossa e non quale colonna.
+    liveRefresh([REALTIME_EVENTS.availabilityChanged], () => this.loadCapacities());
+
     this.search.valueChanges
       .pipe(debounceTime(300), takeUntilDestroyed())
       .subscribe((value) => void this.applyQuery({ value: value || undefined }));

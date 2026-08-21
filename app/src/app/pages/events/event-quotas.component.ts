@@ -59,6 +59,8 @@ import { DomainErrorComponent } from '../../shared/domain-error.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
 import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
+import { liveRefresh } from '../../core/realtime/live';
+import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
 
 /**
  * `/events/:id/quotas` — le **quote di capienza** dell'evento (§4.2).
@@ -406,6 +408,17 @@ export class EventQuotasComponent implements OnInit {
 
   readonly leaderLimit = computed(() => this.store.leaderQuota()?.limit ?? 0);
   readonly followerLimit = computed(() => this.store.followerQuota()?.limit ?? 0);
+
+  constructor() {
+    // I contatori `consumed` di questa pagina sono gli stessi che si muovono a
+    // ogni vendita e a ogni ingresso: guardarli fermi mentre l'evento vende e
+    // il caso in cui una pagina mente. La guardia sul modulo evita di
+    // cancellare sotto le dita di chi sta modificando un limite.
+    liveRefresh([REALTIME_EVENTS.availabilityChanged], () => this.store.load(), {
+      eventId: () => this.eventId(),
+      when: () => !this.form.dirty,
+    });
+  }
 
   async ngOnInit(): Promise<void> {
     this.headerTitle.set('Quota di capienza');

@@ -200,10 +200,13 @@ export class RegistrationService {
 
     public async updateById(principalId: number, id: number, dto: RegistrationUpdateDTO): Promise<Registration> {
         const registration = await this.findByIdOrThrow(principalId, id);
-        await this.assertWritableEvent(principalId, registration.eventId);
+        const event = await this.assertWritableEvent(principalId, registration.eventId);
 
         Log.info(`[Registration Service]: updating registration (id ${id})`);
-        return this.registrationRepository.update({ id }, dto as any);
+        const updated = await this.registrationRepository.update({ id }, dto as any);
+
+        await this.registrationNotifierService.registrationUpdated(event, id, "UPDATED");
+        return updated;
     }
 
     /**
@@ -213,7 +216,7 @@ export class RegistrationService {
      */
     public async safeDeleteById(principalId: number, id: number): Promise<Registration> {
         const registration = await this.findByIdOrThrow(principalId, id);
-        await this.assertWritableEvent(principalId, registration.eventId);
+        const event = await this.assertWritableEvent(principalId, registration.eventId);
 
         Log.info(`[Registration Service]: soft deleting registration (id ${id}) and releasing its quota consumptions`);
 
@@ -222,6 +225,10 @@ export class RegistrationService {
             return this.registrationRepository.safeDeleteById(id, prisma);
         });
 
+        // Dopo il commit, come impone il §3.9: un frame emesso da una
+        // transazione che poi rotola indietro annuncia un fatto che non e
+        // avvenuto, e il client lo va a rileggere trovando il contrario.
+        await this.registrationNotifierService.registrationUpdated(event, id, "DELETED");
         return deleted;
     }
 
@@ -231,7 +238,7 @@ export class RegistrationService {
 
     public async confirm(principalId: number, id: number): Promise<Registration> {
         const registration = await this.findByIdOrThrow(principalId, id);
-        await this.assertWritableEvent(principalId, registration.eventId);
+        const event = await this.assertWritableEvent(principalId, registration.eventId);
 
         if (registration.status === RegistrationStatus.DECLINED) {
             Log.warn(`[Registration Service]: confirm refused for registration (id ${id}) — already declined`);
@@ -239,10 +246,13 @@ export class RegistrationService {
         }
 
         Log.info(`[Registration Service]: confirming registration (id ${id})`);
-        return this.registrationRepository.update(
+        const confirmed = await this.registrationRepository.update(
             { id },
             { status: RegistrationStatus.CONFIRMED, confirmedAt: new Date() },
         );
+
+        await this.registrationNotifierService.registrationUpdated(event, id, "CONFIRMED");
+        return confirmed;
     }
 
     /**
@@ -253,7 +263,7 @@ export class RegistrationService {
      */
     public async decline(principalId: number, id: number): Promise<Registration> {
         const registration = await this.findByIdOrThrow(principalId, id);
-        await this.assertWritableEvent(principalId, registration.eventId);
+        const event = await this.assertWritableEvent(principalId, registration.eventId);
 
         if (registration.status === RegistrationStatus.DECLINED) {
             Log.warn(`[Registration Service]: decline refused for registration (id ${id}) — already declined`);
@@ -262,7 +272,7 @@ export class RegistrationService {
 
         Log.info(`[Registration Service]: declining registration (id ${id}) and releasing its quota consumptions`);
 
-        return getPrismaClient().$transaction(async prisma => {
+        const declined = await getPrismaClient().$transaction(async prisma => {
             await this.capacityEngineService.releaseRegistrations([id], prisma);
             return this.registrationRepository.update(
                 { id },
@@ -272,6 +282,9 @@ export class RegistrationService {
                 prisma,
             );
         });
+
+        await this.registrationNotifierService.registrationUpdated(event, id, "DECLINED");
+        return declined;
     }
 
     /**
@@ -285,12 +298,15 @@ export class RegistrationService {
         dto: RegistrationRoleReassignDTO,
     ): Promise<CommitOutcome> {
         const registration = await this.findByIdOrThrow(principalId, id);
-        await this.assertWritableEvent(principalId, registration.eventId);
+        const event = await this.assertWritableEvent(principalId, registration.eventId);
 
-        return this.capacityEngineService.reassignRole(id, dto.role, {
+        const outcome = await this.capacityEngineService.reassignRole(id, dto.role, {
             ticketTypeId: dto.ticketTypeId ?? null,
             serviceIds: dto.serviceIds ?? [],
         });
+
+        await this.registrationNotifierService.registrationUpdated(event, id, "ROLE_REASSIGNED");
+        return outcome;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -65,6 +65,8 @@ import { EventStore } from '../../stores/event.store';
 import { OrganizationStore } from '../../stores/organization.store';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { LiveRegistrationsComponent } from '../../shared/live-registrations.component';
+import { LiveCheckInsComponent } from '../../shared/live-check-ins.component';
+import { liveRefresh } from '../../core/realtime/live';
 import { UnavailableSectionComponent } from '../../shared/unavailable-section.component';
 
 /**
@@ -102,6 +104,7 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
     LabeledProgressComponent,
     StatusPillComponent,
     LiveRegistrationsComponent,
+    LiveCheckInsComponent,
     UnavailableSectionComponent,
   ],
   template: `
@@ -245,6 +248,9 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
 
         <!-- ------------------------------------------------- capienza ----->
         <app-live-registrations [eventId]="selectedEvent()?.id ?? null" />
+
+        <!-- I due capi della serata: chi si iscrive prima, chi entra la sera. -->
+        <app-live-check-ins [eventId]="selectedEvent()?.id ?? null" />
 
         <keijo-page-section-wrapper title="Capienza">
           @if (capacity(); as section) {
@@ -763,13 +769,13 @@ export class DashboardComponent implements OnInit {
     this.eventControl.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
       if (id != null) void this.select(id);
     });
+    this.subscribeRealtime();
   }
 
   async ngOnInit(): Promise<void> {
     this.headerTitle.set('Cruscotto');
     this.registerActions();
     await this.loadSelectable();
-    this.subscribeRealtime();
   }
 
   /**
@@ -817,25 +823,25 @@ export class DashboardComponent implements OnInit {
   }
 
   /**
-   * Sottoscrive i tre segnali del §3.9 e **rifà la GET** alla ricezione. Il
-   * payload non entra mai nello store: serve solo a decidere se ricaricare.
+   * Sottoscrive i segnali del §3.9 e **rifà la GET** alla ricezione. Il payload
+   * non entra mai nello store: serve solo a decidere se ricaricare.
+   *
+   * ⚠️ **Dal costruttore, non da `ngOnInit`.** Due ragioni, e la seconda vale
+   * anche senza la prima: `liveRefresh` raccoglie `DestroyRef` dal contesto
+   * d'iniezione, e soprattutto qui l'aggancio avveniva **dopo un `await`** —
+   * ogni frame arrivato mentre l'elenco degli eventi si caricava andava perso,
+   * cioè proprio i frame dei primi secondi dopo l'apertura della pagina.
    */
   private subscribeRealtime(): void {
-    const shouldRefresh = (eventId?: number) =>
-      eventId === undefined || eventId === this.store.eventId();
-
-    const offs = [
-      this.realtime.on(REALTIME_EVENTS.availabilityChanged, (frame) => {
-        if (shouldRefresh(frame.payload?.eventId)) void this.store.refresh();
-      }),
-      this.realtime.on(REALTIME_EVENTS.registrationCreated, (frame) => {
-        if (shouldRefresh(frame.payload?.eventId)) void this.store.refresh();
-      }),
-      this.realtime.on(REALTIME_EVENTS.checkinRegistered, (frame) => {
-        if (shouldRefresh(frame.payload?.eventId)) void this.store.refresh();
-      }),
-    ];
-    this.destroyRef.onDestroy(() => offs.forEach((off) => off()));
+    liveRefresh(
+      [
+        REALTIME_EVENTS.availabilityChanged,
+        REALTIME_EVENTS.registrationCreated,
+        REALTIME_EVENTS.checkinRegistered,
+      ],
+      () => this.store.refresh(),
+      { eventId: () => this.store.eventId() },
+    );
   }
 
   private registerActions(): void {

@@ -22,7 +22,7 @@ import { TicketQrService } from "@services/TicketQrService";
 import { OrganizationAudienceService } from "@services/OrganizationAudienceService";
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
 import { Events } from "@websocket/events/Events";
-import { CheckInRegisteredPayloadDTO } from "@websocket/dtos/CheckInRegisteredPayloadDTO";
+import { CheckInReason, CheckInRegisteredPayloadDTO } from "@websocket/dtos/CheckInRegisteredPayloadDTO";
 import { CheckInCreateDTO, CheckInSyncDTO, CheckInSyncEntryDTO } from "@DTOs/check_in/CheckInCreateDTO";
 import { CheckInUpdateDTO } from "@DTOs/check_in/CheckInUpdateDTO";
 import { CheckInQueryDTO } from "@DTOs/check_in/CheckInQueryDTO";
@@ -162,7 +162,10 @@ export class CheckInService {
             + `(id ${dto.sessionId}) by operator (id ${principalId}) at '${dto.deviceId}'`,
         );
 
-        await this.publishRegistered(ticket.eventId, dto.sessionId);
+        await this.publishRegistered(ticket.eventId, dto.sessionId, {
+            reason: "SCANNED",
+            checkInId: checkIn.id,
+        });
         return checkIn;
     }
 
@@ -216,8 +219,13 @@ export class CheckInService {
             + `left to the staff, ${rejected.length} rejected`,
         );
 
+        // Un frame per sessione toccata, con **quanti** ingressi ha portato: sono
+        // gia avvenuti, anche mezz'ora fa, e chi ascolta deve poterlo dire.
+        // Nominarne uno solo — o mostrarli come appena accaduti — renderebbe
+        // falso il numero di persone in sala.
         for (const [sessionId, eventId] of touchedSessions) {
-            await this.publishRegistered(eventId, sessionId);
+            const landed = accepted.filter(row => row.checkIn.sessionId === sessionId).length;
+            await this.publishRegistered(eventId, sessionId, { reason: "SYNCED", count: landed });
         }
 
         return { accepted, conflicts, rejected };
@@ -365,7 +373,12 @@ export class CheckInService {
 
         const session = await this.sessionRepository.findOne({ id: checkIn.sessionId });
         if (session) {
-            await this.publishRegistered(session.eventId, session.id);
+            // Il contatore SCENDE. Un flusso che sapesse solo aggiungere
+            // mostrerebbe in sala una persona che non c'e.
+            await this.publishRegistered(session.eventId, session.id, {
+                reason: "REVOKED",
+                checkInId: checkIn.id,
+            });
         }
         return revoked;
     }
@@ -574,7 +587,11 @@ export class CheckInService {
      * di sicurezza in ritardo è una cifra sbagliata. Il publish avviene comunque
      * **dopo** la scrittura, mai dentro una transazione.
      */
-    private async publishRegistered(eventId: number, sessionId: number): Promise<void> {
+    private async publishRegistered(
+        eventId: number,
+        sessionId: number,
+        detail: { reason: CheckInReason; checkInId?: number; count?: number },
+    ): Promise<void> {
         try {
             const event = await this.eventRepository.findOne({ id: eventId });
             if (!event) {
@@ -588,6 +605,7 @@ export class CheckInService {
                 eventId,
                 organizationId: event.organizationId,
                 sessionId,
+                ...detail,
             };
             await this.wsPublisher.sendToUsers(wsCodes, Events.CHECKIN_REGISTERED, payload);
         } catch (err) {

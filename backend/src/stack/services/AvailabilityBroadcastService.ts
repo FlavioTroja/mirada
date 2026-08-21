@@ -20,6 +20,19 @@ type PendingWindow = { organizationId: number; timer: NodeJS.Timeout; hits: numb
 const pending = new Map<number, PendingWindow>();
 
 /**
+ * Quanti eventi hanno una finestra aperta, **a livello di processo**.
+ *
+ * Gemello di modulo di `pendingCount()`, e non un doppione: il metodo
+ * d'istanza serve a chi ha gia il servizio iniettato, questa funzione a chi
+ * osserva il processo senza averlo — la suite del motore di capienza, che
+ * verifica che il segnale parta anche quando la transazione e del chiamante e
+ * non ha alcun motivo di costruirsi un `AvailabilityBroadcastService`.
+ */
+export function pendingAvailabilityWindows(): number {
+    return pending.size;
+}
+
+/**
  * Annulla ogni finestra aperta **senza inviare nulla**. Spegnimento ordinato e
  * isolamento fra file di test: un timer che scade dopo la chiusura del client
  * Prisma non deve nemmeno provare a leggere i destinatari.

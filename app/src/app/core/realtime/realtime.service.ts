@@ -28,6 +28,7 @@ export interface EventEnvelope<T = unknown> {
 export const REALTIME_EVENTS = {
   availabilityChanged: 'event/availability-changed',
   registrationCreated: 'registration/created',
+  registrationUpdated: 'registration/updated',
   checkinRegistered: 'checkin/registered',
 } as const;
 
@@ -36,6 +37,25 @@ export interface OrganizationScopedPayload {
   organizationId?: number;
   registrationId?: number;
   sessionId?: number;
+  /** `checkin/registered`: l'ingresso singolo, quando il frame ne nomina uno. */
+  checkInId?: number;
+  /**
+   * `checkin/registered`: che cosa ha mosso il contatore.
+   *
+   * `SCANNED` una scansione adesso · `SYNCED` un lotto arrivato dalla coda
+   * offline, gia avvenuto · `REVOKED` un ingresso annullato, il contatore
+   * scende. Chi presenta un flusso di ingressi deve distinguerli: mostrare un
+   * ingresso sincronizzato come appena accaduto rende falso il numero di
+   * persone in sala.
+   */
+  reason?: 'SCANNED' | 'SYNCED' | 'REVOKED';
+  /** `checkin/registered` con `reason: 'SYNCED'`: quanti ingressi ha portato. */
+  count?: number;
+  /**
+   * `registration/updated`: che cosa e cambiato. Discriminante, non dato: chi
+   * ascolta decide se il frame lo riguarda senza dover rileggere.
+   */
+  change?: 'CONFIRMED' | 'DECLINED' | 'ROLE_REASSIGNED' | 'UPDATED' | 'DELETED';
 }
 
 type Listener = (envelope: EventEnvelope<OrganizationScopedPayload>) => void;

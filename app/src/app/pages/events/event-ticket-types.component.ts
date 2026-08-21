@@ -59,6 +59,8 @@ import { I18nTextComponent } from '../../shared/i18n-text.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 import { applyZodIssues, clearServerErrors, controlError } from '../../shared/form-errors';
 import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
+import { liveRefresh } from '../../core/realtime/live';
+import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
 
 /**
  * `/events/:id/ticket-types` — i **titoli d'ingresso** dell'evento (§4.2).
@@ -431,6 +433,13 @@ export class EventTicketTypesComponent implements OnInit {
   roleConflict(): boolean {
     const value = this.form.getRawValue();
     return !!value.roleConstraint && !value.consumesRoleQuota;
+  }
+
+  constructor() {
+    liveRefresh([REALTIME_EVENTS.availabilityChanged], () => this.store.load(), {
+      eventId: () => this.eventId(),
+      when: () => !this.form.dirty,
+    });
   }
 
   async ngOnInit(): Promise<void> {

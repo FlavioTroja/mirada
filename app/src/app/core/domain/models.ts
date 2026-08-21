@@ -439,3 +439,37 @@ export interface OrphanSessionResolution {
     canAddSession: boolean;
   }[];
 }
+
+/**
+ * Un ingresso registrato alla porta — `CheckIn` del backend (`RF-CHK-*`).
+ *
+ * ── Due momenti, e non sono lo stesso ───────────────────────────────────────
+ * `scannedAt` e il momento della scansione **sul dispositivo**, e vale come ora
+ * d'ingresso. `syncedAt` e il momento in cui la riga e arrivata al server, ed e
+ * valorizzato **solo** sugli ingressi passati dalla coda offline: la porta deve
+ * funzionare senza rete, e quando la rete torna gli ingressi arrivano tutti
+ * insieme, anche mezz'ora dopo.
+ *
+ * Chi presenta un flusso deve mostrare `scannedAt`, mai l'ora di arrivo del
+ * frame: e il numero di persone in sala a dipenderne.
+ */
+export interface CheckIn extends Entity {
+  ticketId: number;
+  sessionId: number;
+  session?: Session | null;
+  registrationId: number;
+  /** Popolabile con `populate=registration`: e da qui che si prende il nome. */
+  registration?: Registration | null;
+  operatorUserId: number;
+  kind: 'OPERATOR' | 'MANUAL_SEARCH' | 'EXTERNAL_ENTRY';
+  scannedAt: string;
+  /** Nullo sugli ingressi registrati online. */
+  syncedAt?: string | null;
+  /** La postazione che ha scansionato. */
+  deviceId: string;
+  offline: boolean;
+  /** Punta all'ingresso gia registrato quando la coda rileva un doppio ingresso. */
+  conflictWithId?: number | null;
+  /** Valorizzato quando l'ingresso e stato annullato (`RF-CHK-9`). */
+  revokedAt?: string | null;
+}

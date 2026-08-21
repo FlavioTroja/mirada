@@ -5,6 +5,10 @@ import { isDomainError } from "@utils/helpers/domainError";
 import { DomainErrorCode } from "@enums/DomainErrorCode";
 import { CapacityEngineService } from "@services/CapacityEngineService";
 import {
+    cancelAllAvailabilityWindows,
+    pendingAvailabilityWindows,
+} from "@services/AvailabilityBroadcastService";
+import {
     countConsumptions,
     createEventScenario,
     createQuota,
@@ -826,6 +830,104 @@ describe("CapacityEngineService — casistica di 05-modello-capienza §13", () =
     // ═════════════════════════════════════════════════════════════════════════
     // Le invarianti del `05` §12
     // ═════════════════════════════════════════════════════════════════════════
+
+
+    describe("il segnale di disponibilita parte anche dentro la transazione del chiamante", () => {
+        /**
+         * ── Il difetto che questo blocco tiene chiuso ────────────────────────
+         * `event/availability-changed` partiva **solo** dai percorsi in cui il
+         * motore apriva la transazione da se. Ma quattordici punti gliela
+         * passano — la vendita vera, l'abbandono, la passata delle prenotazioni
+         * scadute, l'emissione dei pass, il rifiuto di un'iscrizione,
+         * l'annullamento di una sessione, le vendite dei canali esterni — e
+         * nessuno di quelli emetteva alcunche.
+         *
+         * L'evento di punta del tempo reale risultava quindi **quasi mai
+         * pubblicato in esercizio**, e non falliva niente: i contatori del
+         * cruscotto si muovevano soltanto ricaricando la pagina. La suite
+         * passava sia prima sia dopo la correzione, che e esattamente il motivo
+         * per cui questo caso deve esistere.
+         *
+         * Si asserisce sulla **finestra di aggregazione aperta**, non su un
+         * frame sul filo: `notify()` non fa I/O, registra un timer, e la
+         * finestra e osservabile — `pendingCount()`. Collaudare qui il socket
+         * significherebbe collaudare `WsPublisherService`, che ha la sua suite.
+         */
+        beforeEach(() => {
+            cancelAllAvailabilityWindows();
+        });
+
+        afterAll(() => {
+            cancelAllAvailabilityWindows();
+        });
+
+        it("`commit` con una transazione esterna apre comunque la finestra", async () => {
+            const scenario = await createEventScenario();
+            await createQuota({ eventId: scenario.event.id, scope: QuotaScope.EVENT, limit: 100 });
+            const registration = await createRegistration({
+                eventId: scenario.event.id,
+                declaredRole: DeclaredDanceRole.LEADER,
+            });
+
+            expect(pendingAvailabilityWindows()).toBe(0);
+
+            await getPrismaClient().$transaction(async prisma => {
+                await engine.commit(
+                    scenario.event.id,
+                    [{ registrationId: registration.id, ticketTypeId: scenario.ticketTypeId }],
+                    prisma,
+                );
+            });
+
+            expect(pendingAvailabilityWindows()).toBe(1);
+        });
+
+        it("`commitWithoutBlocking` con una transazione esterna apre comunque la finestra", async () => {
+            const scenario = await createEventScenario();
+            await createQuota({ eventId: scenario.event.id, scope: QuotaScope.EVENT, limit: 100 });
+            const registration = await createRegistration({
+                eventId: scenario.event.id,
+                declaredRole: DeclaredDanceRole.FOLLOWER,
+                channel: RegistrationChannel.EXTERNAL_CHANNEL,
+            });
+
+            expect(pendingAvailabilityWindows()).toBe(0);
+
+            await getPrismaClient().$transaction(async prisma => {
+                await engine.commitWithoutBlocking(
+                    scenario.event.id,
+                    [{ registrationId: registration.id, ticketTypeId: scenario.ticketTypeId }],
+                    prisma,
+                );
+            });
+
+            expect(pendingAvailabilityWindows()).toBe(1);
+        });
+
+        it("il RILASCIO con una transazione esterna apre comunque la finestra", async () => {
+            const scenario = await createEventScenario();
+            await createQuota({ eventId: scenario.event.id, scope: QuotaScope.EVENT, limit: 100 });
+            const registration = await createRegistration({
+                eventId: scenario.event.id,
+                declaredRole: DeclaredDanceRole.LEADER,
+            });
+            await engine.commit(scenario.event.id, [
+                { registrationId: registration.id, ticketTypeId: scenario.ticketTypeId },
+            ]);
+
+            cancelAllAvailabilityWindows();
+            expect(pendingAvailabilityWindows()).toBe(0);
+
+            await getPrismaClient().$transaction(async prisma => {
+                await engine.releaseRegistrations([registration.id], prisma);
+            });
+
+            // Un posto che torna libero e un cambiamento di disponibilita quanto
+            // uno che si occupa: se il rilascio tacesse, la sala risulterebbe
+            // piena fino al ricaricamento della pagina.
+            expect(pendingAvailabilityWindows()).toBe(1);
+        });
+    });
 
     describe("`05` §12 — invarianti verificate come asserzioni", () => {
         it("I1 — la vendita online non supera mai limit + overbookAllowance, e mai limit sulla capienza della sala", async () => {

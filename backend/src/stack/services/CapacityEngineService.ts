@@ -445,7 +445,9 @@ export class CapacityEngineService {
      */
     public async commit(eventId: number, items: CommitItem[], tx?: Prisma.TransactionClient): Promise<CommitOutcome> {
         if (tx) {
-            return this.commitInTransaction(eventId, items, tx);
+            const inTx = await this.commitInTransaction(eventId, items, tx);
+            await this.signalAvailabilityChange(eventId, tx);
+            return inTx;
         }
 
         const outcome = await getPrismaClient().$transaction(
@@ -631,7 +633,9 @@ export class CapacityEngineService {
         };
 
         if (tx) {
-            return run(tx);
+            const inTx = await run(tx);
+            await this.signalAvailabilityChangeForRegistrations(registrationIds, tx);
+            return inTx;
         }
 
         const outcome = await getPrismaClient().$transaction(run, CapacityEngineService.TRANSACTION_OPTIONS);
@@ -653,7 +657,9 @@ export class CapacityEngineService {
         };
 
         if (tx) {
-            return run(tx);
+            const inTx = await run(tx);
+            await this.signalAvailabilityChange(eventId, tx);
+            return inTx;
         }
 
         const outcome = await getPrismaClient().$transaction(run, CapacityEngineService.TRANSACTION_OPTIONS);
@@ -683,7 +689,9 @@ export class CapacityEngineService {
         };
 
         if (tx) {
-            return run(tx);
+            const inTx = await run(tx);
+            await this.signalAvailabilityChange(eventId, tx);
+            return inTx;
         }
 
         const outcome = await getPrismaClient().$transaction(run, CapacityEngineService.TRANSACTION_OPTIONS);
@@ -774,7 +782,9 @@ export class CapacityEngineService {
         tx?: Prisma.TransactionClient,
     ): Promise<UnblockedCommitOutcome> {
         if (tx) {
-            return this.commitWithoutBlockingInTransaction(eventId, items, tx);
+            const inTx = await this.commitWithoutBlockingInTransaction(eventId, items, tx);
+            await this.signalAvailabilityChange(eventId, tx);
+            return inTx;
         }
 
         const outcome = await getPrismaClient().$transaction(
@@ -1368,17 +1378,46 @@ export class CapacityEngineService {
      * Registra il segnale `event/availability-changed`. Non fa I/O: apre soltanto
      * la finestra di aggregazione di ~1,5 s (§3.9).
      */
-    private async signalAvailabilityChange(eventId: number): Promise<void> {
-        const event = await this.eventRepository.findOne({ id: eventId });
+    /**
+     * ⚠️ **Si chiama anche quando la transazione e del chiamante**, ed e il
+     * motivo per cui accetta `tx`.
+     *
+     * Per molto tempo non e stato cosi: il segnale partiva solo dai percorsi in
+     * cui il motore apriva la transazione da se. Ma **quattordici** punti gliela
+     * passano — la vendita vera (`OrderService.reserve`), l'abbandono, la
+     * passata delle prenotazioni scadute, l'emissione dei pass, la cancellazione
+     * di un'iscrizione, l'annullamento di una sessione o di un evento intero, le
+     * vendite dei canali esterni — e nessuno di quelli emetteva alcunche.
+     * `event/availability-changed` risultava quindi **quasi mai pubblicato in
+     * esercizio**, senza che nulla fallisse: i contatori del cruscotto si
+     * muovevano solo ricaricando la pagina.
+     *
+     * ── Perche si puo chiamare da DENTRO la transazione ─────────────────────
+     * Perche `notify()` **non fa I/O**: registra un timer e torna. La
+     * risoluzione dei destinatari e l'invio avvengono ~1,5 s dopo, fuori da
+     * qualunque transazione — e restano fuori.
+     *
+     * ── Il prezzo, dichiarato ───────────────────────────────────────────────
+     * Se la transazione rotola indietro, un frame parte per un cambiamento che
+     * non e avvenuto. E accettabile, e non per pigrizia: quel frame **non porta
+     * dati**, e un invito a rileggere. Chi lo riceve rifa la GET e vede lo stato
+     * vero. Un refetch di troppo costa una query; un segnale mancante costa un
+     * cruscotto fermo mentre la sala si riempie.
+     */
+    private async signalAvailabilityChange(eventId: number, tx?: Prisma.TransactionClient): Promise<void> {
+        const event = await this.eventRepository.findOne({ id: eventId }, undefined, tx);
         if (event) {
             this.availabilityBroadcastService.notify(eventId, event.organizationId);
         }
     }
 
-    private async signalAvailabilityChangeForRegistrations(registrationIds: number[]): Promise<void> {
-        const registrations = await this.registrationRepository.findByIds(registrationIds);
+    private async signalAvailabilityChangeForRegistrations(
+        registrationIds: number[],
+        tx?: Prisma.TransactionClient,
+    ): Promise<void> {
+        const registrations = await this.registrationRepository.findByIds(registrationIds, tx);
         for (const eventId of new Set(registrations.map(r => r.eventId))) {
-            await this.signalAvailabilityChange(eventId);
+            await this.signalAvailabilityChange(eventId, tx);
         }
     }
 }
