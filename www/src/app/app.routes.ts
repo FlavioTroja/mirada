@@ -2,7 +2,15 @@ import { Routes } from '@angular/router';
 import { eventDetailResolver, eventsSearchResolver } from './pages/events/events.resolvers';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: 'eventi' },
+  {
+    // La home non e piu un rinvio a `/eventi`. Con il catalogo ancora da
+    // riempire, la prima cosa che il visitatore vedeva era la prova che non
+    // c'e niente da comprare: ora la home racconta il progetto, e la ricerca
+    // resta dov'era.
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./pages/home/home.page').then((m) => m.HomePage),
+  },
   {
     path: 'eventi',
     loadComponent: () => import('./pages/events/events-search.page').then((m) => m.EventsSearchPage),

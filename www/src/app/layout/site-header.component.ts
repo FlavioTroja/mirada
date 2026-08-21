@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, afterNextRender, inject } from '@an
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
 import { ThemeService } from '../core/theme/theme.service';
+import { MOSTRA_VETRINA_EVENTI } from '../core/flags';
 import { AvatarComponent } from '../shared/avatar.component';
 
 /**
@@ -14,14 +15,22 @@ import { AvatarComponent } from '../shared/avatar.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="site-header">
-      <a class="brand" routerLink="/eventi" aria-label="Mirada Tango — vai alla ricerca eventi">
+      <a class="brand" routerLink="/" aria-label="Mirada Tango — vai alla home">
         <span class="brand-mark" aria-hidden="true">◆</span>
         <span class="brand-name">Mirada <em>Tango</em></span>
       </a>
 
-      <nav class="site-nav" aria-label="Navigazione principale">
-        <a routerLink="/eventi" routerLinkActive="active">Eventi</a>
-      </nav>
+      <!--
+        La voce «Eventi» segue la vetrina — vedi core/flags.ts. Spenta, la testata resta
+        con il solo marchio: un menu con una voce che porta a «0 eventi trovati»
+        e peggio di un menu che non c'e. La PAGINA continua a esistere e a
+        rispondere — si spegne l'insegna, non il negozio.
+      -->
+      @if (mostraVetrina) {
+        <nav class="site-nav" aria-label="Navigazione principale">
+          <a routerLink="/eventi" routerLinkActive="active">Eventi</a>
+        </nav>
+      }
 
       <div class="site-actions">
         @if (auth.isAuthenticated()) {
@@ -111,6 +120,11 @@ import { AvatarComponent } from '../shared/avatar.component';
         display: flex;
         align-items: center;
         gap: 0.5rem;
+        /* A destra per conto proprio, non perche il menu accanto occupa lo
+           spazio. Era il flex:1 di .site-nav a spingerli in fondo, e bastava
+           che il menu non ci fosse — nascosto sotto i 640px da sempre, o spento
+           con la vetrina — perche i comandi scivolassero accanto al marchio. */
+        margin-left: auto;
       }
       .me {
         display: inline-flex;
@@ -147,6 +161,9 @@ import { AvatarComponent } from '../shared/avatar.component';
   ],
 })
 export class SiteHeaderComponent {
+  /** Vedi flags.ts. */
+  protected readonly mostraVetrina = MOSTRA_VETRINA_EVENTI;
+
   protected readonly auth = inject(AuthService);
   protected readonly theme = inject(ThemeService);
 
