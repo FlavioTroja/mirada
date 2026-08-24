@@ -220,7 +220,29 @@ export class OidcService {
   async esci(): Promise<boolean> {
     // La provenienza si legge PRIMA: `auth.logout()` la cancella insieme al
     // token, ed è giusto che lo faccia.
-    const viaSso = this.auth.viaSso();
+    const marcata = this.auth.viaSso();
+
+    // La configurazione può non essere in memoria: chi ha ricaricato la pagina
+    // a sessione aperta non è mai passato dalla pagina di accesso. `loadConfig`
+    // non solleva mai, e la rotta è pubblica: funziona anche senza token.
+    const config = this._config() ?? (await this.loadConfig());
+
+    // ⚠️ **Le sessioni nate prima che `sso-sessione` esistesse non ce l'hanno.**
+    // Prese alla lettera sarebbero «entrato con password», e riceverebbero la
+    // sola disconnessione locale: cioè il difetto che questo metodo esiste per
+    // chiudere, riproposto identico a chiunque fosse già dentro al momento
+    // della distribuzione. Non è un caso di confine, è **tutti** gli utenti in
+    // sessione quel giorno.
+    //
+    // Con la porta della password chiusa la deduzione è certa: se `POST
+    // /auth/login` rifiuta tutti, una sessione non può essere nata che dal
+    // fornitore. Negli altri modi (`on`, `god-only`) la password è una strada
+    // possibile, la deduzione non regge, e si resta prudenti — al più si esce
+    // solo da mirada, che è il comportamento di prima e non danneggia nessuno.
+    //
+    // Si ripara da sé: il primo accesso dopo questa versione scrive la
+    // marcatura, e da lì in poi conta quella.
+    const viaSso = marcata || (config.enabled && config.passwordLogin === 'off');
 
     // Chi è entrato con utente e password non ha nessuna sessione da chiudere
     // sul fornitore, e mandarcelo lo farebbe atterrare sulla schermata di
@@ -229,11 +251,6 @@ export class OidcService {
       this.auth.logout();
       return false;
     }
-
-    // La configurazione può non essere in memoria: chi ha ricaricato la pagina
-    // a sessione aperta non è mai passato dalla pagina di accesso. `loadConfig`
-    // non solleva mai, e la rotta è pubblica: funziona anche senza token.
-    const config = this._config() ?? (await this.loadConfig());
 
     // Il token locale si cancella **sempre**, e prima di partire: se il viaggio
     // dal fornitore non arriva a destinazione, l'uscita da mirada è comunque
