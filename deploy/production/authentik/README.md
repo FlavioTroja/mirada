@@ -343,6 +343,26 @@ Stage Bindings*: ci deve essere uno stadio **User Logout**. In alternativa si
 punta l'`invalidation_flow` del provider su `default-invalidation-flow`, quello
 che Authentik usa per il proprio «Log out» e che lo stadio ce l'ha di sicuro.
 
+### La sessione muore alla chiusura del browser, ed è un default
+
+Chiudere Chrome e riaprirlo obbliga a rifare l'accesso. Non è un guasto: è
+`session_duration` sullo stadio **User Login** del `default-authentication-flow`,
+lasciato al valore di serie. Lo dice lo schema dell'API dell'istanza:
+
+> *Determines how long a session lasts. Default of 0 means that the sessions
+> lasts until the browser is closed.* (formato: `hours=-1;minutes=-2;seconds=-3`)
+
+Con `0` Authentik emette un **cookie di sessione**, che il browser scarta alla
+chiusura. Accanto c'è `remember_me_offset`, anch'esso a `0`: è il motivo per cui
+la casella «ricordami» non compare: mostrarla è ciò che quel valore accende.
+
+⚠️ **Non allungare la durata prima che la correzione dell'uscita sia in
+esercizio.** Finché «Esci» lascia viva la sessione del fornitore, chiudere il
+browser è **l'unica uscita che resta**: estendere la sessione la toglierebbe, e
+il risultato sarebbe una sessione da cui non si esce in nessun modo. L'ordine
+giusto è distribuire prima l'uscita completa, poi — se serve — decidere quanto
+deve durare una sessione.
+
 ⚠️ **Chi è entrato con utente e password non passa di qui.** Non ha alcuna
 sessione dal fornitore, e `end-session/` a un anonimo risponde con un `302` sul
 flusso di **autenticazione**: premere «Esci» lo porterebbe davanti a un login.
