@@ -64,7 +64,9 @@ export class AuthController {
             summary: "Identity provider settings for the sign-in page",
             description:
                 "Public. Returns what the SPA needs to build the authorization request: the provider's authorization "
-                + "endpoint, the client id and the scopes. Answers enabled=false — never an error — when the provider "
+                + "endpoint, the client id and the scopes — plus the end-session endpoint, with which signing out also "
+                + "closes the session on the provider instead of only dropping the local token. Answers enabled=false "
+                + "— never an error — when the provider "
                 + "is not configured or is unreachable, so the sign-in page falls back to username and password "
                 + "instead of becoming unusable.",
             response: {

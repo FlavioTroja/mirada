@@ -20,6 +20,7 @@ import { PageAction, PageActionsService } from './services/page-actions.service'
 import { ToastService } from './services/toast.service';
 import { ThemeService } from './core/theme/theme.service';
 import { AuthService } from './core/auth/auth.service';
+import { OidcService } from './core/auth/oidc.service';
 
 @Component({
   selector: 'app-root',
@@ -196,6 +197,7 @@ export class App {
   private readonly router = inject(Router);
   private readonly activatedRoute = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
+  private readonly oidc = inject(OidcService);
   readonly headerTitle = inject(HeaderTitleService);
   readonly pageActions = inject(PageActionsService);
   readonly toastService = inject(ToastService);
@@ -299,8 +301,14 @@ export class App {
     void this.router.navigateByUrl('/settings');
   }
 
-  onLogout(): void {
-    this.auth.logout();
+  /**
+   * «Esci» chiude **anche** la sessione su Authentik: senza, il tasto «Accedi»
+   * subito dopo non chiede nulla e riporta dentro la stessa persona.
+   * `esci()` che risponde `true` significa che il browser sta partendo per il
+   * fornitore, e navigare adesso annullerebbe l'uscita.
+   */
+  async onLogout(): Promise<void> {
+    if (await this.oidc.esci()) return;
     void this.router.navigateByUrl('/login');
   }
 

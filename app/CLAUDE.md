@@ -44,6 +44,34 @@ interceptor no longer redirects away from `/auth/callback` and `/registrazione`.
 Provider settings are **not compiled into the bundle**: they come from
 `GET /api/auth/sso/config`. Changing provider must not require rebuilding the SPA.
 
+## Signing out is two sessions, not one
+
+⚠️ **`AuthService.logout()` is local only.** It drops the JWT; the Authentik
+session stays open, so «Accedi» right after asks nothing and lets the same person
+straight back in. The symptom people report is «I can't log out», and it looks
+like a bug in this app. The full exit is **`OidcService.esci()`**, which also
+sends the browser to the provider's `end_session_endpoint`.
+
+That split is deliberate: the `401` interceptor and `OidcService.start()` both
+call `logout()`, and handing the browser to the provider there would mean, in
+order, a redirect loop and a half-cancelled sign-in.
+
+⚠️ **`esci()` returns `true` when the browser is leaving.** Navigating after that
+cancels the sign-out. Every caller is `if (await this.oidc.esci()) return;`.
+
+⚠️ **The post-logout URI is the root, not `/login`.** With `passwordLogin: 'off'`
+the sign-in page starts OIDC on its own: landing there after signing out walks
+straight back in.
+
+⚠️ **Password sessions never go to the provider.** They have no session to close,
+and `end-session/` answers an anonymous visitor with the *authentication* flow —
+"log out" would land on a login screen. `localStorage['sso-sessione']`, written
+beside the token and cleared with it, is what tells the two apart.
+
+Authentik must be configured for this to complete: the post-logout URI among the
+provider's `redirect_uris`, and an invalidation flow that really contains the
+logout stage. Both in `deploy/production/authentik/README.md`.
+
 ## Two traps that cost real time
 
 ⚠️ **Backticks inside a `styles` comment break the build.** `npm run check:templates`

@@ -73,6 +73,12 @@ export type PasswordLoginMode = 'on' | 'god-only' | 'off';
 export interface SsoConfig {
   enabled: boolean;
   authorizationEndpoint: string | null;
+  /**
+   * L'`end_session_endpoint` del fornitore: dove va il browser per chiudere la
+   * sessione **su Authentik**, non solo qui. `null` = il fornitore non lo
+   * dichiara, e «Esci» resta la sola disconnessione locale.
+   */
+  endSessionEndpoint: string | null;
   clientId: string | null;
   scope: string | null;
   /**
@@ -115,6 +121,7 @@ export class OidcService {
       const spento: SsoConfig = {
         enabled: false,
         authorizationEndpoint: null,
+        endSessionEndpoint: null,
         clientId: null,
         scope: null,
         passwordLogin: 'on',
@@ -186,6 +193,71 @@ export class OidcService {
   }
 
   /**
+   * Esce **da tutte e due** le sessioni: il JWT di mirada e quella su Authentik.
+   *
+   * ⚠️ È la metà che mancava. `AuthService.logout()` cancella il token e nulla
+   * più: la sessione sul fornitore resta aperta, e il tasto «Accedi» subito dopo
+   * non chiede niente e riporta dentro la stessa persona. Chi lo prova legge
+   * «non riesco più a uscire» e sospetta la SPA, mentre è l'SSO che sta facendo
+   * il suo lavoro — nessuno gli aveva chiesto di smettere.
+   *
+   * Si va all'`end_session_endpoint` con `post_logout_redirect_uri` sulla
+   * **radice** dell'applicazione, non su `/login`: con `passwordLogin: 'off'`
+   * la pagina di accesso riparte da sé verso il fornitore, e atterrarci dopo
+   * un'uscita significherebbe rientrare al primo rimbalzo. La radice presenta
+   * il prodotto e aspetta un clic.
+   *
+   * ⚠️ Perché funzioni, su Authentik servono **due** cose che il codice non può
+   * darsi da sé — sono in `deploy/production/authentik/README.md`:
+   * l'URI post-uscita fra i `redirect_uris` del provider, e un flusso di
+   * invalidazione che contenga davvero lo stadio di disconnessione.
+   *
+   * @returns `true` se il browser sta partendo per il fornitore — in quel caso
+   *          chi chiama non deve navigare da nessuna parte, o la navigazione
+   *          annullerebbe l'uscita. `false` = disconnessione locale già fatta,
+   *          tocca al chiamante portare l'utente dove serve.
+   */
+  async esci(): Promise<boolean> {
+    // La provenienza si legge PRIMA: `auth.logout()` la cancella insieme al
+    // token, ed è giusto che lo faccia.
+    const viaSso = this.auth.viaSso();
+
+    // Chi è entrato con utente e password non ha nessuna sessione da chiudere
+    // sul fornitore, e mandarcelo lo farebbe atterrare sulla schermata di
+    // accesso di Authentik: uscire lo riporterebbe davanti a un login.
+    if (!viaSso) {
+      this.auth.logout();
+      return false;
+    }
+
+    // La configurazione può non essere in memoria: chi ha ricaricato la pagina
+    // a sessione aperta non è mai passato dalla pagina di accesso. `loadConfig`
+    // non solleva mai, e la rotta è pubblica: funziona anche senza token.
+    const config = this._config() ?? (await this.loadConfig());
+
+    // Il token locale si cancella **sempre**, e prima di partire: se il viaggio
+    // dal fornitore non arriva a destinazione, l'uscita da mirada è comunque
+    // avvenuta. L'ordine inverso lascerebbe dentro chi chiude la scheda.
+    this.auth.logout();
+
+    if (!config.endSessionEndpoint) {
+      return false;
+    }
+
+    const params = new URLSearchParams({ post_logout_redirect_uri: `${location.origin}/` });
+    // `client_id` dice ad Authentik quale applicazione sta chiedendo l'uscita,
+    // ed è ciò che le permette di validare l'URI di ritorno senza un
+    // `id_token_hint` — che qui non abbiamo, perché nessun token del fornitore
+    // entra mai nella pagina.
+    if (config.clientId) {
+      params.set('client_id', config.clientId);
+    }
+
+    location.assign(`${config.endSessionEndpoint}?${params.toString()}`);
+    return true;
+  }
+
+  /**
    * Il ritorno dal fornitore: consegna il codice al backend.
    *
    * Due esiti possibili, e il secondo non è un errore: chi non ha ancora
@@ -227,7 +299,7 @@ export class OidcService {
     });
 
     if (res.esito === 'sessione' && res.token) {
-      this.auth.setToken(res.token);
+      this.auth.setToken(res.token, true);
       await this.auth.loadProfile();
       this._registrazione.set(null);
       return { esito: 'sessione', redirect: transito.redirect || '/' };
@@ -277,7 +349,7 @@ export class OidcService {
       ticket: registrazione.ticket,
       ...corpo,
     });
-    this.auth.setToken(res.token);
+    this.auth.setToken(res.token, true);
     await this.auth.loadProfile();
     this._registrazione.set(null);
   }

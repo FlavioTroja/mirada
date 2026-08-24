@@ -48,6 +48,19 @@ export const SsoConfigSchema = z.object({
     /** `false` quando OIDC_ISSUER/OIDC_CLIENT_ID non sono configurati: il tasto non si mostra. */
     enabled: z.boolean(),
     authorizationEndpoint: z.string().nullable(),
+    /**
+     * Dove mandare il browser per chiudere la sessione **sul fornitore** —
+     * l'`end_session_endpoint` del documento di scoperta.
+     *
+     * Serve perché «Esci» cancelli anche l'altra metà della sessione. Senza,
+     * si cancella il solo JWT di mirada, la sessione di Authentik resta aperta,
+     * e il tasto «Accedi» riporta dentro senza chiedere niente: dall'esterno è
+     * indistinguibile da un logout che non funziona.
+     *
+     * `null` quando il fornitore non lo dichiara: la SPA torna alla sola
+     * disconnessione locale.
+     */
+    endSessionEndpoint: z.string().nullable(),
     clientId: z.string().nullable(),
     scope: z.string().nullable(),
     /**

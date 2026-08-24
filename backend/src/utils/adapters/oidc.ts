@@ -179,3 +179,20 @@ export async function exchangeCode(
 export async function authorizationEndpoint(config: OidcConfig): Promise<string> {
     return (await discovery(config)).authorization_endpoint;
 }
+
+/**
+ * L'URL con cui si **chiude** la sessione dal lato del fornitore — quello che
+ * l'OIDC chiama *RP-Initiated Logout*.
+ *
+ * ⚠️ Senza questo giro, «Esci» cancella solo il JWT di mirada e la sessione di
+ * Authentik resta aperta: il tasto «Accedi» subito dopo non chiede nulla e
+ * riporta dentro la stessa persona. Il sintomo che si vede è «non riesco più a
+ * uscire», e sembra un guasto della SPA mentre è esattamente ciò che l'SSO deve
+ * fare — finché nessuno chiude anche l'altra metà.
+ *
+ * `null` quando il fornitore non lo dichiara: il frontend in quel caso si limita
+ * alla disconnessione locale, che è il comportamento di prima e non peggiora.
+ */
+export async function endSessionEndpoint(config: OidcConfig): Promise<string | null> {
+    return (await discovery(config)).end_session_endpoint ?? null;
+}

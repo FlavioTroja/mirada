@@ -8,7 +8,7 @@ import { SsoConfigDTO, SsoLoginDTO, SsoSignupDTO } from "@DTOs/login/SsoLoginDTO
 import { OrganizationService } from "@services/OrganizationService";
 import { OrganizationInvitationService } from "@services/OrganizationInvitationService";
 import { signSsoTicket, verifySsoTicket } from "@utils/helpers/ssoTicket";
-import { authorizationEndpoint, exchangeCode, IdTokenClaims, oidcConfig } from "@utils/adapters/oidc";
+import { authorizationEndpoint, endSessionEndpoint, exchangeCode, IdTokenClaims, oidcConfig } from "@utils/adapters/oidc";
 
 /**
  * Accesso tramite fornitore di identità — Authentik (`auth.mirada.dance`).
@@ -67,13 +67,16 @@ export class SsoService {
         const passwordLogin = this.authService.passwordLoginMode();
         const config = oidcConfig();
         if (!config) {
-            return { enabled: false, authorizationEndpoint: null, clientId: null, scope: null, passwordLogin };
+            return { enabled: false, authorizationEndpoint: null, endSessionEndpoint: null, clientId: null, scope: null, passwordLogin };
         }
 
         try {
             return {
                 enabled: true,
                 authorizationEndpoint: await authorizationEndpoint(config),
+                // Una sola scoperta serve entrambi: `discovery()` ha la sua
+                // cache, quindi la seconda chiamata non esce dal processo.
+                endSessionEndpoint: await endSessionEndpoint(config),
                 clientId: config.clientId,
                 scope: config.scope,
                 passwordLogin,
@@ -85,7 +88,7 @@ export class SsoService {
             // renderebbe inaccessibile il backoffice per un guasto di un
             // servizio che è, di proposito, soltanto una seconda strada.
             Log.warn(`[Sso Service]: identity provider unreachable, SSO announced as disabled: ${(err as Error).message}`);
-            return { enabled: false, authorizationEndpoint: null, clientId: null, scope: null, passwordLogin };
+            return { enabled: false, authorizationEndpoint: null, endSessionEndpoint: null, clientId: null, scope: null, passwordLogin };
         }
     }
 

@@ -57,6 +57,11 @@ first know it is this person.
   everyone — see `deploy/production/authentik/README.md` on Authentik's mapping.
 - **`OIDC_ISSUER` must end with a slash** and is the *application's* issuer, not
   the domain root. `jose` compares the exact string.
+- **`GET /auth/sso/config` also carries `endSessionEndpoint`**, and it is what
+  makes signing out actually sign out. Without it the SPA can only drop its own
+  token: the Authentik session survives, «Accedi» asks nothing, and the user
+  reports that logging out does not work. `null` when the provider does not
+  declare one — the SPA falls back to the local-only sign-out.
 - Missing `OIDC_ISSUER`/`OIDC_CLIENT_ID` means SSO is **off, not broken**:
   `GET /auth/sso/config` answers `enabled: false` and the sign-in page falls back.
   An unreachable identity provider must never make the back-office unreachable.

@@ -54,7 +54,7 @@ perché ritrovarlo nell'interfaccia richiede di sapere già cosa cercare.
 | `client_type` | `public` | una SPA nel browser non può custodire un segreto, e nemmeno un'app mobile. Il flusso corretto per entrambi è Authorization Code con **PKCE** |
 | `grant_types` | `authorization_code`, `refresh_token` | ⚠️ vedi sotto |
 | `sub_mode` | `user_uuid` | il `sub` del token è un UUID stabile, non lo username: rinominare un utente non ne cambia l'identità |
-| `redirect_uris` | `https://app.mirada.dance/auth/callback`, `http://localhost:4200/auth/callback` | corrispondenza **stretta**; un URI non in elenco riceve `400`, verificato |
+| `redirect_uris` | `https://app.mirada.dance/auth/callback`, `http://localhost:4200/auth/callback`, `https://app.mirada.dance/`, `http://localhost:4200/` | corrispondenza **stretta**; un URI non in elenco riceve `400`, verificato. Le due **radici** non servono all'ingresso: sono gli URI di ritorno dell'**uscita** — vedi «L'uscita» |
 | durate | codice 1 min, access token 10 min, refresh 30 giorni | |
 
 ⚠️ **`grant_types` nasce VUOTO.** In questa versione di Authentik è un campo
@@ -292,6 +292,62 @@ identità che non risponde non deve poter rendere inaccessibile il backoffice.
 ⚠️ **L'issuer termina con lo slash.** `jose` confronta la stringa esatta, e uno
 slash mancante fa fallire ogni verifica con un messaggio che non dice quale dei
 due issuer sia quello sbagliato.
+
+## L'uscita
+
+**Uscire da mirada non è uscire da Authentik**, e per un po' qui lo è stato solo
+a metà: «Esci» cancellava il JWT dal `localStorage` e basta. La sessione sul
+fornitore restava aperta, quindi il tasto «Accedi» premuto un istante dopo non
+chiedeva nulla e riportava dentro la stessa persona — con `PASSWORD_LOGIN=off`,
+che manda `/login` direttamente dal fornitore, bastava tornare sulla pagina di
+accesso. Chi lo prova lo descrive come **«non riesco più a uscire»**, e sospetta
+la SPA: non è la SPA, è l'SSO che fa esattamente il suo mestiere finché qualcuno
+non gli chiede di smettere.
+
+Ora `OidcService.esci()` fa il giro completo — *RP-Initiated Logout*:
+
+```
+[SPA]  «Esci» ──▶ cancella il JWT locale
+          │
+          └──▶ https://auth.mirada.dance/application/o/mirada-backoffice/end-session/
+                    ?post_logout_redirect_uri=https://app.mirada.dance/
+                    &client_id=mirada-backoffice
+                         │  esegue il FLUSSO DI INVALIDAZIONE del provider
+                         ▼
+               [SPA]  https://app.mirada.dance/  — pagina del prodotto, nessuna sessione
+```
+
+L'endpoint non è scritto nel bundle: arriva da `GET /api/auth/sso/config`, che a
+sua volta lo legge dal documento di scoperta (`end_session_endpoint`). Se il
+fornitore non lo dichiara, il campo è `null` e «Esci» resta la sola
+disconnessione locale — cioè il comportamento di prima, che non peggiora nulla.
+
+⚠️ **L'URI di ritorno è la RADICE, non `/login`.** Con `PASSWORD_LOGIN=off` la
+pagina di accesso riparte da sé verso il fornitore: atterrarci subito dopo
+un'uscita significherebbe rientrare al primo rimbalzo, e l'uscita sarebbe di
+nuovo invisibile. La radice presenta il prodotto e aspetta un clic.
+
+⚠️ **`post_logout_redirect_uri` è validato contro i `redirect_uris` del
+provider.** È il motivo per cui in quell'elenco ci sono anche le due radici. Un
+URI non in elenco fa fallire il ritorno e lascia la persona su una pagina di
+Authentik: **la sessione è chiusa lo stesso**, ma sembra un guasto.
+
+⚠️ **Il flusso di invalidazione del provider deve contenere davvero lo stadio di
+disconnessione.** È lo stesso genere di trappola di «creare un flusso non lo mette
+in servizio»: `end-session/` esegue l'`invalidation_flow` del provider, e un
+flusso che si limita a mostrare un messaggio termina **senza chiudere la
+sessione**. Da fuori si vede il giro completo, il ritorno sulla radice, e poi
+«Accedi» che di nuovo non chiede niente — identico al guasto che si stava
+correggendo. Da verificare in *Flows → `default-provider-invalidation-flow` →
+Stage Bindings*: ci deve essere uno stadio **User Logout**. In alternativa si
+punta l'`invalidation_flow` del provider su `default-invalidation-flow`, quello
+che Authentik usa per il proprio «Log out» e che lo stadio ce l'ha di sicuro.
+
+⚠️ **Chi è entrato con utente e password non passa di qui.** Non ha alcuna
+sessione dal fornitore, e `end-session/` a un anonimo risponde con un `302` sul
+flusso di **autenticazione**: premere «Esci» lo porterebbe davanti a un login.
+La SPA se ne ricorda con la chiave `sso-sessione` in `localStorage`, scritta
+accanto al token e cancellata insieme a lui.
 
 ## ⚠️ `email_verified`, e perché la mappatura è stata riscritta
 

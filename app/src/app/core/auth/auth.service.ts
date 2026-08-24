@@ -8,6 +8,20 @@ import { AppRole, Capabilities, capabilitiesOf, toAppRole } from './roles';
  */
 export const TOKEN_STORAGE_KEY = 'Authorization';
 
+/**
+ * Come è nata questa sessione: presente = si è passati dal fornitore.
+ *
+ * Serve a una cosa sola, e non è cosmetica: «Esci» deve mandare il browser a
+ * chiudere la sessione su Authentik **solo** se ce n'è una da chiudere. Chi è
+ * entrato con utente e password non ha alcuna sessione dal fornitore, e
+ * spedirlo all'`end_session_endpoint` lo farebbe atterrare sulla schermata di
+ * accesso di Authentik — l'esatto contrario di uscire.
+ *
+ * Sta accanto al token e viene cancellata insieme a lui: due chiavi che possono
+ * divergere sarebbero peggio di una sola sbagliata.
+ */
+const SSO_STORAGE_KEY = 'sso-sessione';
+
 export interface ProfileRole {
   roleName: string;
   isActive: boolean;
@@ -38,10 +52,13 @@ export class AuthService {
   private readonly api = inject(ApiClient);
 
   private readonly _token = signal<string | null>(readStoredToken());
+  private readonly _viaSso = signal(readStoredSsoFlag());
   private readonly _profile = signal<UserProfile | null>(null);
   private readonly _loading = signal(false);
 
   readonly token = this._token.asReadonly();
+  /** `true` se la sessione corrente è nata dal fornitore di identità. */
+  readonly viaSso = this._viaSso.asReadonly();
   readonly profile = this._profile.asReadonly();
   readonly loading = this._loading.asReadonly();
 
@@ -102,15 +119,38 @@ export class AuthService {
     }
   }
 
-  setToken(token: string): void {
+  /**
+   * @param viaSso se la sessione nasce dal fornitore di identità. Lo passa
+   *        `OidcService`; l'accesso con password lascia il valore predefinito,
+   *        così un secondo accesso con password non eredita la marcatura del
+   *        primo fatto in SSO.
+   */
+  setToken(token: string, viaSso = false): void {
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    if (viaSso) {
+      localStorage.setItem(SSO_STORAGE_KEY, '1');
+    } else {
+      localStorage.removeItem(SSO_STORAGE_KEY);
+    }
     this._token.set(token);
+    this._viaSso.set(viaSso);
   }
 
-  /** Cancella il token e il profilo. Nessun refresh token da revocare (§3.1). */
+  /**
+   * Cancella il token e il profilo. Nessun refresh token da revocare (§3.1).
+   *
+   * ⚠️ **Locale, e solo locale.** La sessione sul fornitore non viene toccata:
+   * ci pensa `OidcService.esci()`, e la separazione è voluta perché questo
+   * metodo lo chiamano anche l'interceptor su `401` e `OidcService.start()`
+   * prima di partire — due casi in cui portare il browser fuori dall'app
+   * significherebbe, nell'ordine, un ciclo di redirect e un accesso annullato
+   * a metà.
+   */
   logout(): void {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(SSO_STORAGE_KEY);
     this._token.set(null);
+    this._viaSso.set(false);
     this._profile.set(null);
   }
 }
@@ -120,5 +160,13 @@ function readStoredToken(): string | null {
     return localStorage.getItem(TOKEN_STORAGE_KEY);
   } catch {
     return null;
+  }
+}
+
+function readStoredSsoFlag(): boolean {
+  try {
+    return localStorage.getItem(SSO_STORAGE_KEY) === '1';
+  } catch {
+    return false;
   }
 }

@@ -10,6 +10,7 @@ import { badge, contrast, darkMode, language, lightMode, logout as logoutIcon, t
 import { Router } from '@angular/router';
 import { HeaderTitleService } from '../../services/header-title.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { OidcService } from '../../core/auth/oidc.service';
 import { LocaleService, UI_LANG_LABEL } from '../../core/i18n/i18n-text';
 import { ORG_MEMBER_ROLE_LABEL } from '../../core/auth/roles';
 import { ThemeChoice, ThemeService } from '../../core/theme/theme.service';
@@ -111,6 +112,7 @@ import { ThemeChoice, ThemeService } from '../../core/theme/theme.service';
 export class SettingsComponent implements OnInit {
   private readonly headerTitle = inject(HeaderTitleService);
   private readonly router = inject(Router);
+  private readonly oidc = inject(OidcService);
   readonly auth = inject(AuthService);
   readonly locale = inject(LocaleService);
   readonly theme = inject(ThemeService);
@@ -171,8 +173,14 @@ export class SettingsComponent implements OnInit {
     this.locale.toggle();
   }
 
-  onLogout(): void {
-    this.auth.logout();
+  /**
+   * «Esci» chiude **anche** la sessione su Authentik: senza, il tasto «Accedi»
+   * subito dopo non chiede nulla e riporta dentro la stessa persona.
+   * `esci()` che risponde `true` significa che il browser sta partendo per il
+   * fornitore, e navigare adesso annullerebbe l'uscita.
+   */
+  async onLogout(): Promise<void> {
+    if (await this.oidc.esci()) return;
     void this.router.navigateByUrl('/login');
   }
 }
