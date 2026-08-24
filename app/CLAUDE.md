@@ -68,6 +68,13 @@ and `end-session/` answers an anonymous visitor with the *authentication* flow �
 "log out" would land on a login screen. `localStorage['sso-sessione']`, written
 beside the token and cleared with it, is what tells the two apart.
 
+⚠️ **A missing `sso-sessione` does not mean "password".** Sessions opened before
+that key existed do not carry it, and reading it literally hands every user who
+was signed in on deploy day the exact bug this is meant to fix. With
+`passwordLogin: 'off'` the inference is certain — `POST /auth/login` refuses
+everyone, so the session can only have come from the provider — and `esci()`
+falls back to it. It heals itself: the next sign-in writes the key.
+
 Authentik must be configured for this to complete: the post-logout URI among the
 provider's `redirect_uris`, and an invalidation flow that really contains the
 logout stage. Both in `deploy/production/authentik/README.md`.
