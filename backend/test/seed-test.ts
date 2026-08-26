@@ -22,6 +22,10 @@ export async function seed(prisma: PrismaClient) {
     // Ticket è Restrict da Event e TicketType, SetNull da OrderLine/PassIssuance:
     // va prima di tutti e quattro. TicketTransfer è Cascade da Ticket ma si
     // cancella esplicitamente, così l'ordine resta leggibile.
+    // Acconto e saldo (`14`): BalanceSettlement è Restrict da Registration e da
+    // User, quindi precede entrambe — e siccome User è l'ultima tabella del
+    // blocco, precede di fatto tutto il resto.
+    await prisma.balanceSettlement.deleteMany();
     await prisma.checkIn.deleteMany();
     await prisma.ticketTransfer.deleteMany();
     await prisma.ticket.deleteMany();
@@ -41,6 +45,7 @@ export async function seed(prisma: PrismaClient) {
     await prisma.externalSaleEvent.deleteMany();
     await prisma.externalSale.deleteMany();
     await prisma.salesChannelMapping.deleteMany();
+    await prisma.salesChannelDepositCode.deleteMany();
     await prisma.salesChannel.deleteMany();
 
     // Fase C — il motore di capienza. QuotaConsumption discende da CapacityQuota e

@@ -47,11 +47,48 @@ export const ExternalSaleSchema = z.object({
   buyerSurname: z.string(),
   buyerEmail: z.string(),
   /**
+   * L'identificativo del cliente **presso il negozio**.
+   * 
+   * È l'unico modo di riconoscere chi ha già comprato l'anno scorso: l'email
+   * cambia, questo no. Non aggancia alcuna utenza di Mirada e non deve —
+   * l'aggancio a un account richiede un indirizzo **dimostrato**, non uno
+   * digitato al checkout (`authentication.md`).
+   * 
+   * Nullo sugli acquisti come ospite, dove il cliente non esiste sul negozio.
+   */
+  externalCustomerId: z.string().nullish(),
+  /**
+   * La lingua del cliente sul negozio (`it`, `en-GB`, …), quando la dichiara.
+   * È ciò in cui va scritta l'email dei biglietti.
+   */
+  customerLocale: z.string().nullish(),
+  /**
    * Centesimi interi, come ovunque nel dominio (§3.1). È l'importo incassato
    * **dal negozio**, non da Mirada: serve a riconciliare, non a contabilizzare.
    */
   totalAmount: z.number().int(),
   currency: z.string(),
+  /**
+   * Il prezzo di **listino** delle sole righe biglietto, prima dello sconto di
+   * acconto: è ciò che la persona avrà pagato in tutto quando avrà saldato.
+   */
+  ticketListAmount: z.number().int(),
+  /**
+   * L'**acconto** realmente incassato dal negozio sulle righe biglietto.
+   */
+  depositPaidAmount: z.number().int(),
+  /**
+   * Il **residuo** che questa vendita ha generato, cioè la somma delle quote
+   * scritte sulle iscrizioni. `RB28`: le due cifre coincidono sempre.
+   */
+  balanceDueAmount: z.number().int(),
+  /**
+   * La quota di sconto di acconto caduta su righe che **non** sono biglietti
+   * (`14` §4.4). Non è residuo — alla porta nessuno chiede il saldo di una
+   * maglietta già consegnata — ma si registra e si segnala: quasi sempre
+   * significa che il codice, sul negozio, non è limitato ai soli pacchetti.
+   */
+  nonTicketDepositAmount: z.number().int(),
   /**
    * La vendita nella forma **canonica** — l'esito della traduzione, non il corpo
    * che è arrivato. Il corpo grezzo esiste e sta su `ExternalSaleEvent.payload`:
@@ -99,6 +136,27 @@ export const ExternalSaleOptionalDefaultsSchema = ExternalSaleSchema.merge(z.obj
    */
   totalAmount: z.number().int().optional(),
   currency: z.string().optional(),
+  /**
+   * Il prezzo di **listino** delle sole righe biglietto, prima dello sconto di
+   * acconto: è ciò che la persona avrà pagato in tutto quando avrà saldato.
+   */
+  ticketListAmount: z.number().int().optional(),
+  /**
+   * L'**acconto** realmente incassato dal negozio sulle righe biglietto.
+   */
+  depositPaidAmount: z.number().int().optional(),
+  /**
+   * Il **residuo** che questa vendita ha generato, cioè la somma delle quote
+   * scritte sulle iscrizioni. `RB28`: le due cifre coincidono sempre.
+   */
+  balanceDueAmount: z.number().int().optional(),
+  /**
+   * La quota di sconto di acconto caduta su righe che **non** sono biglietti
+   * (`14` §4.4). Non è residuo — alla porta nessuno chiede il saldo di una
+   * maglietta già consegnata — ma si registra e si segnala: quasi sempre
+   * significa che il codice, sul negozio, non è limitato ai soli pacchetti.
+   */
+  nonTicketDepositAmount: z.number().int().optional(),
   receivedAt: z.coerce.date().optional(),
   deleted: z.boolean().optional(),
   createdAt: z.coerce.date().optional(),

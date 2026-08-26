@@ -5,6 +5,8 @@ import { OrganizationWithRelationsSchema, OrganizationPartialWithRelationsSchema
 import type { OrganizationWithRelations, OrganizationPartialWithRelations, OrganizationOptionalDefaultsWithRelations } from './OrganizationSchema'
 import { SalesChannelMappingWithRelationsSchema, SalesChannelMappingPartialWithRelationsSchema, SalesChannelMappingOptionalDefaultsWithRelationsSchema } from './SalesChannelMappingSchema'
 import type { SalesChannelMappingWithRelations, SalesChannelMappingPartialWithRelations, SalesChannelMappingOptionalDefaultsWithRelations } from './SalesChannelMappingSchema'
+import { SalesChannelDepositCodeWithRelationsSchema, SalesChannelDepositCodePartialWithRelationsSchema, SalesChannelDepositCodeOptionalDefaultsWithRelationsSchema } from './SalesChannelDepositCodeSchema'
+import type { SalesChannelDepositCodeWithRelations, SalesChannelDepositCodePartialWithRelations, SalesChannelDepositCodeOptionalDefaultsWithRelations } from './SalesChannelDepositCodeSchema'
 import { ExternalSaleWithRelationsSchema, ExternalSalePartialWithRelationsSchema, ExternalSaleOptionalDefaultsWithRelationsSchema } from './ExternalSaleSchema'
 import type { ExternalSaleWithRelations, ExternalSalePartialWithRelations, ExternalSaleOptionalDefaultsWithRelations } from './ExternalSaleSchema'
 import { ExternalSaleEventWithRelationsSchema, ExternalSaleEventPartialWithRelationsSchema, ExternalSaleEventOptionalDefaultsWithRelationsSchema } from './ExternalSaleEventSchema'
@@ -63,6 +65,17 @@ export const SalesChannelSchema = z.object({
    * tutto lo storico del negozio.
    */
   lastReconciledAt: z.coerce.date().nullish(),
+  /**
+   * Come si chiama, sul negozio, il campo che porta il **ruolo di ballo**.
+   * Il confronto è normalizzato (maiuscole e spazi non contano).
+   */
+  roleAttributeName: z.string().nullish(),
+  /**
+   * Come si chiama il campo che porta il **nominativo del partecipante**.
+   * Serve agli ordini da più posti, dove altrimenti tutte le iscrizioni
+   * nascono intestate a chi ha comprato.
+   */
+  attendeeNameAttributeName: z.string().nullish(),
   deleted: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -99,6 +112,7 @@ export type SalesChannelOptionalDefaults = z.infer<typeof SalesChannelOptionalDe
 export type SalesChannelRelations = {
   organization: OrganizationWithRelations;
   mappings: SalesChannelMappingWithRelations[];
+  depositCodes: SalesChannelDepositCodeWithRelations[];
   sales: ExternalSaleWithRelations[];
   events: ExternalSaleEventWithRelations[];
 };
@@ -108,6 +122,7 @@ export type SalesChannelWithRelations = z.infer<typeof SalesChannelSchema> & Sal
 export const SalesChannelWithRelationsSchema: z.ZodType<SalesChannelWithRelations> = SalesChannelSchema.merge(z.object({
   organization: z.lazy(() => OrganizationWithRelationsSchema),
   mappings: z.lazy(() => SalesChannelMappingWithRelationsSchema).array(),
+  depositCodes: z.lazy(() => SalesChannelDepositCodeWithRelationsSchema).array(),
   sales: z.lazy(() => ExternalSaleWithRelationsSchema).array(),
   events: z.lazy(() => ExternalSaleEventWithRelationsSchema).array(),
 }))
@@ -119,6 +134,7 @@ export const SalesChannelWithRelationsSchema: z.ZodType<SalesChannelWithRelation
 export type SalesChannelOptionalDefaultsRelations = {
   organization: OrganizationOptionalDefaultsWithRelations;
   mappings: SalesChannelMappingOptionalDefaultsWithRelations[];
+  depositCodes: SalesChannelDepositCodeOptionalDefaultsWithRelations[];
   sales: ExternalSaleOptionalDefaultsWithRelations[];
   events: ExternalSaleEventOptionalDefaultsWithRelations[];
 };
@@ -128,6 +144,7 @@ export type SalesChannelOptionalDefaultsWithRelations = z.infer<typeof SalesChan
 export const SalesChannelOptionalDefaultsWithRelationsSchema: z.ZodType<SalesChannelOptionalDefaultsWithRelations> = SalesChannelOptionalDefaultsSchema.merge(z.object({
   organization: z.lazy(() => OrganizationOptionalDefaultsWithRelationsSchema),
   mappings: z.lazy(() => SalesChannelMappingOptionalDefaultsWithRelationsSchema).array(),
+  depositCodes: z.lazy(() => SalesChannelDepositCodeOptionalDefaultsWithRelationsSchema).array(),
   sales: z.lazy(() => ExternalSaleOptionalDefaultsWithRelationsSchema).array(),
   events: z.lazy(() => ExternalSaleEventOptionalDefaultsWithRelationsSchema).array(),
 }))
@@ -139,6 +156,7 @@ export const SalesChannelOptionalDefaultsWithRelationsSchema: z.ZodType<SalesCha
 export type SalesChannelPartialRelations = {
   organization?: OrganizationPartialWithRelations;
   mappings?: SalesChannelMappingPartialWithRelations[];
+  depositCodes?: SalesChannelDepositCodePartialWithRelations[];
   sales?: ExternalSalePartialWithRelations[];
   events?: ExternalSaleEventPartialWithRelations[];
 };
@@ -148,6 +166,7 @@ export type SalesChannelPartialWithRelations = z.infer<typeof SalesChannelPartia
 export const SalesChannelPartialWithRelationsSchema: z.ZodType<SalesChannelPartialWithRelations> = SalesChannelPartialSchema.merge(z.object({
   organization: z.lazy(() => OrganizationPartialWithRelationsSchema),
   mappings: z.lazy(() => SalesChannelMappingPartialWithRelationsSchema).array(),
+  depositCodes: z.lazy(() => SalesChannelDepositCodePartialWithRelationsSchema).array(),
   sales: z.lazy(() => ExternalSalePartialWithRelationsSchema).array(),
   events: z.lazy(() => ExternalSaleEventPartialWithRelationsSchema).array(),
 })).partial()
@@ -157,6 +176,7 @@ export type SalesChannelOptionalDefaultsWithPartialRelations = z.infer<typeof Sa
 export const SalesChannelOptionalDefaultsWithPartialRelationsSchema: z.ZodType<SalesChannelOptionalDefaultsWithPartialRelations> = SalesChannelOptionalDefaultsSchema.merge(z.object({
   organization: z.lazy(() => OrganizationPartialWithRelationsSchema),
   mappings: z.lazy(() => SalesChannelMappingPartialWithRelationsSchema).array(),
+  depositCodes: z.lazy(() => SalesChannelDepositCodePartialWithRelationsSchema).array(),
   sales: z.lazy(() => ExternalSalePartialWithRelationsSchema).array(),
   events: z.lazy(() => ExternalSaleEventPartialWithRelationsSchema).array(),
 }).partial())
@@ -166,6 +186,7 @@ export type SalesChannelWithPartialRelations = z.infer<typeof SalesChannelSchema
 export const SalesChannelWithPartialRelationsSchema: z.ZodType<SalesChannelWithPartialRelations> = SalesChannelSchema.merge(z.object({
   organization: z.lazy(() => OrganizationPartialWithRelationsSchema),
   mappings: z.lazy(() => SalesChannelMappingPartialWithRelationsSchema).array(),
+  depositCodes: z.lazy(() => SalesChannelDepositCodePartialWithRelationsSchema).array(),
   sales: z.lazy(() => ExternalSalePartialWithRelationsSchema).array(),
   events: z.lazy(() => ExternalSaleEventPartialWithRelationsSchema).array(),
 }).partial())

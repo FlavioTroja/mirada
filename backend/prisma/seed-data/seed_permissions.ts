@@ -468,7 +468,56 @@ const MATRIX: ResourceMatrix[] = [
             own(RoleName.EVENT_MANAGER, [PermissionAction.READ, PermissionAction.UPDATE]),
         ],
     },
+
+    // ─── L'acconto e il saldo (`14` §6.3, `RF-SAL-9`) ─────────────────────────
+    {
+        // | BALANCE_SETTLEMENT | ∀ | ∀#OWN | ∀#OWN | CREATE/READ#OWN | – | – |
+        //
+        // ── Il CHECKIN_OPERATOR non compare, ed è il punto ────────────────────
+        // `RB27`: chi non tiene la cassa vede **che** un saldo esiste, mai quanto
+        // vale. Il flag della verifica alla porta non passa da qui — è un dato
+        // dell'iscrizione — mentre l'importo e le righe di incasso sì. Il
+        // volontario che scansiona legge «saldo da versare, manda alla cassa» e
+        // nient'altro, e non perché la schermata lo nasconda: perché il permesso
+        // che serve per leggere la cifra non ce l'ha.
+        //
+        // ── Il DELETE non c'è per nessuno ─────────────────────────────────────
+        // Una riga di incasso è un fatto: qualcuno ha preso in mano dei soldi.
+        // Si corregge con una riga che la contraddice, non facendola sparire —
+        // altrimenti la cassa quadra sullo schermo e non nel cassetto.
+        resource: PermissionResource.BALANCE_SETTLEMENT,
+        grants: [
+            own(RoleName.OWNER, [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE]),
+            own(RoleName.EVENT_MANAGER, [PermissionAction.CREATE, PermissionAction.READ, PermissionAction.UPDATE]),
+            own(RoleName.BOX_OFFICE, [PermissionAction.CREATE, PermissionAction.READ]),
+        ],
+    },
 ];
+
+/**
+ * **La cassa vede la porta, più il registro dei saldi.**
+ *
+ * `BOX_OFFICE` eredita ogni concessione del `CHECKIN_OPERATOR` invece di
+ * riscriverle una per una, e la ragione non è la brevità: sono diciassette righe
+ * sparse su quindici risorse, e il giorno in cui la porta guadagnasse un
+ * permesso, la copia scritta a mano resterebbe indietro **in silenzio** — la
+ * cassa smetterebbe di poter fare a una postazione ciò che fa all'altra, e il
+ * difetto si scoprirebbe la sera dell'evento.
+ *
+ * Il verso conta: la cassa è la porta **più** qualcosa, mai meno. Ciò che il
+ * `BOX_OFFICE` ha in proprio — il registro dei saldi qui sopra — è dichiarato
+ * nella matrice e questa funzione non lo tocca.
+ */
+function withBoxOffice(matrix: ResourceMatrix[]): ResourceMatrix[] {
+    return matrix.map(entry => {
+        const doorGrant = entry.grants.find(grant => grant.role === RoleName.CHECKIN_OPERATOR);
+        const already = entry.grants.some(grant => grant.role === RoleName.BOX_OFFICE);
+        if (!doorGrant || already) {
+            return entry;
+        }
+        return { ...entry, grants: [...entry.grants, { ...doorGrant, role: RoleName.BOX_OFFICE }] };
+    });
+}
 
 /** Terne di rotta prodotte da una singola azione della matrice. */
 const ROUTE_SCOPES: Record<string, PermissionScope[]> = {
@@ -506,4 +555,4 @@ function expand(matrix: ResourceMatrix[]) {
     return rows;
 }
 
-export const seed_permissions = expand(MATRIX);
+export const seed_permissions = expand(withBoxOffice(MATRIX));

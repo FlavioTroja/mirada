@@ -36,6 +36,17 @@ export const CheckInManifestEntrySchema = z.object({
     ticketTypeName: z.unknown(),
     sessionIds: z.number().int().array(),
     services: z.object({ id: z.number().int(), name: z.unknown() }).array(),
+    /**
+     * C'è un saldo ancora da versare (`14` §7.4). **Per tutti i dispositivi.**
+     */
+    balanceOpen: z.boolean(),
+    /**
+     * Quanto, in centesimi. **`null` sui dispositivi il cui operatore non ha il
+     * permesso di cassa** — e non è una rifinitura: un manifesto che porta le
+     * cifre a tutti aggira in un colpo solo `RB27`, e lo fa in un file che resta
+     * sul telefono, scaricato una volta e letto per giorni.
+     */
+    balanceAmount: z.number().int().nullish(),
     /** Requisiti bloccanti in ingresso ancora non soddisfatti — solo il nome (`RB12`). */
     blockingRequirements: z
         .object({

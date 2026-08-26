@@ -39,6 +39,8 @@ export const DashboardDataSourceSchema = z.enum([
     "Order",
     "OrderLine",
     "Payment",
+    // Acconto e saldo (`14`).
+    "BalanceSettlement",
 ]);
 export type DashboardDataSource = z.infer<typeof DashboardDataSourceSchema>;
 
@@ -287,6 +289,36 @@ export const NetRevenueSchema = availableSection({
     cashed: z.number().int(),
 });
 
+/**
+ * **I saldi del botteghino** — `14` §8, `RF-SAL-16`.
+ *
+ * Tre numeri che rispondono alla sola domanda che l'organizzatore si fa la
+ * mattina dell'evento: *quanti soldi mi aspetto alla porta, quanti ne ho già
+ * presi, quanti mancano ancora*.
+ *
+ * ── Perché non stanno in `netRevenue` ───────────────────────────────────────
+ * Perché non sono un incasso della piattaforma (`RB26`): quel denaro non passa
+ * da Mirada, né l'acconto sul negozio né il saldo in contanti. Sommarlo agli
+ * ordini saldati produrrebbe un totale che non corrisponde a nessun conto
+ * corrente esistente — e sarebbe quello, non questo, il numero da spiegare al
+ * commercialista.
+ *
+ * `expected` conta le sole iscrizioni **vive**: un residuo di chi ha annullato
+ * si chiude con la vendita e smette di essere atteso.
+ */
+export const BalancesSchema = availableSection({
+    /** Somma dei residui nati, in centesimi — ciò che è atteso al botteghino. */
+    expected: z.number().int(),
+    /** Quanto ne è già stato incassato, alla porta o in anticipo per bonifico. */
+    collected: z.number().int(),
+    /** `expected - collected`: quanto resta da incassare. */
+    open: z.number().int(),
+    /** Quante persone si presenteranno con qualcosa da versare. */
+    peopleWithOpenBalance: z.number().int(),
+    /** Righe di incasso in conflitto — il doppio incasso ancora da risolvere. */
+    conflicts: z.number().int(),
+});
+
 export const EventDashboardSchema = z.object({
     eventId: z.number().int(),
     slug: z.string(),
@@ -316,6 +348,7 @@ export const EventDashboardSchema = z.object({
 
         soldByTicketType: SoldByTicketTypeSchema,
         netRevenue: NetRevenueSchema,
+        balances: BalancesSchema,
     }),
 });
 export type EventDashboardDTO = z.infer<typeof EventDashboardSchema>;

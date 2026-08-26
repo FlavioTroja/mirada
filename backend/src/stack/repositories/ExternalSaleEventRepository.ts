@@ -31,6 +31,32 @@ export class ExternalSaleEventRepository extends BaseRepository<"externalSaleEve
         return this.findOne({ salesChannelId, externalEventId }, undefined, tx);
     }
 
+    /**
+     * L'ultima notifica **grezza** ricevuta per un ordine.
+     *
+     * Serve alla rielaborazione delle quarantene create prima che il modello
+     * canonico conoscesse gli sconti (`14` §3.6): il corpo che è arrivato dal
+     * negozio è l'unico posto dove quegli sconti esistono ancora, ed è
+     * precisamente il motivo per cui questa tabella conserva il corpo grezzo.
+     *
+     * La più recente, perché lo stesso ordine genera più notifiche legittime e
+     * l'ultima è quella che descrive l'ordine come è adesso.
+     */
+    async findByExternalOrder(
+        salesChannelId: number,
+        externalOrderId: string,
+        take = 10,
+        tx?: Prisma.TransactionClient,
+    ): Promise<ExternalSaleEvent[]> {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { salesChannelId, externalOrderId },
+                orderBy: { receivedAt: "desc" },
+                take,
+            })
+        );
+    }
+
     async markProcessed(
         id: number,
         status: ExternalSaleEventStatus,

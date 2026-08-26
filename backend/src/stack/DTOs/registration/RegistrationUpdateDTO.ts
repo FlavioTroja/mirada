@@ -11,6 +11,13 @@ import { withoutMetadata } from "@utils/helpers/schemaTransformers";
  *
  * Fuori anche `status`, `confirmedAt` e `declinedAt`: sono transizioni
  * (`confirm`, `decline`), non campi.
+ *
+ * ── E fuori i due campi del residuo (`14` §5.2) ─────────────────────────────
+ * `balanceDueAmount` è **quanto è nato** con la vendita e non si muove più;
+ * `balanceSettledAmount` è un contatore che si sposta solo attraverso
+ * `BalanceSettlementService`, come `CapacityQuota.consumed`. Lasciarli qui
+ * significherebbe poter cancellare un debito — o inventare un incasso — con un
+ * `PATCH`, senza che una sola riga del registro di cassa se ne accorga.
  */
 export const RegistrationUpdateSchema = withoutMetadata(RegistrationPartialSchema)
     .omit({
@@ -19,6 +26,8 @@ export const RegistrationUpdateSchema = withoutMetadata(RegistrationPartialSchem
         status: true,
         confirmedAt: true,
         declinedAt: true,
+        balanceDueAmount: true,
+        balanceSettledAmount: true,
     });
 
 export type RegistrationUpdateDTO = z.infer<typeof RegistrationUpdateSchema>;

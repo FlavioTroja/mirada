@@ -65,7 +65,58 @@ export async function mapProduct(input: {
     });
 }
 
-/** Il corpo di un ordine Shopify, nella forma che il prestatore spedisce davvero. */
+/**
+ * I nomi dei campi che il negozio raccoglie al checkout — ruolo e nominativo.
+ *
+ * Sono configurazione del canale perché il nome lo sceglie l'organizzatore: non
+ * esiste un nome «giusto» che il codice possa dare per scontato.
+ */
+export async function setCheckoutFields(input: {
+    salesChannelId: number;
+    roleAttributeName?: string | null;
+    attendeeNameAttributeName?: string | null;
+    prisma?: PrismaClient;
+}) {
+    const prisma = input.prisma ?? getPrismaClient();
+    return prisma.salesChannel.update({
+        where: { id: input.salesChannelId },
+        data: {
+            roleAttributeName: input.roleAttributeName ?? null,
+            attendeeNameAttributeName: input.attendeeNameAttributeName ?? null,
+        },
+    });
+}
+
+/** Un codice di acconto configurato sul canale — `14` §3.1. */
+export async function addDepositCode(input: {
+    salesChannelId: number;
+    code: string;
+    label?: string;
+    prisma?: PrismaClient;
+}) {
+    const prisma = input.prisma ?? getPrismaClient();
+    return prisma.salesChannelDepositCode.create({
+        data: {
+            salesChannelId: input.salesChannelId,
+            // Il servizio normalizza in scrittura; qui si scrive direttamente in
+            // banca dati, quindi si normalizza a mano — altrimenti il test
+            // collauderebbe un dato che le rotte non producono mai.
+            code: input.code.replace(/\s+/g, "").toUpperCase(),
+            label: input.label ?? input.code,
+        },
+    });
+}
+
+/**
+ * Il corpo di un ordine Shopify, nella forma che il prestatore spedisce davvero.
+ *
+ * ── Gli sconti sono due liste che si guardano per indice ────────────────────
+ * `discount_applications[]` dice quali sconti esistono sull'ordine;
+ * `line_item.discount_allocations[]` dice quanto ciascuno ha tolto a ciascuna
+ * riga, nominandolo con la sua **posizione** nella prima lista. È esattamente
+ * così che Shopify li manda, ed è la ragione per cui il residuo di una riga si
+ * può calcolare senza inventare una ripartizione.
+ */
 export function shopifyOrderPayload(input: {
     id?: number;
     orderNumber?: number;
@@ -73,7 +124,25 @@ export function shopifyOrderPayload(input: {
     firstName?: string;
     lastName?: string;
     totalPrice?: string;
-    lines: { productId: string; variantId?: string; quantity: number; price?: string; title?: string }[];
+    /** `null` = acquisto come ospite: il negozio ha incassato senza un cliente. */
+    customerId?: number | null;
+    /** `customer_locale` — la lingua scelta al checkout. */
+    locale?: string;
+    /** Attributi del **carrello** (`note_attributes`): descrivono chi ha comprato. */
+    noteAttributes?: { name: string; value: string }[];
+    /** Gli sconti dell'ordine, nell'ordine in cui le allocazioni li indicizzano. */
+    discountCodes?: string[];
+    lines: {
+        productId: string;
+        variantId?: string;
+        quantity: number;
+        price?: string;
+        title?: string;
+        /** `{ index, amount }` — quale sconto, e quanto ha tolto a QUESTA riga. */
+        discounts?: { index: number; amount: string }[];
+        /** Proprietà della riga: lo stesso nome può ripetersi, uno per posto. */
+        properties?: { name: string; value: string }[];
+    }[];
 }): Record<string, unknown> {
     const id = input.id ?? Math.floor(Math.random() * 1_000_000_000);
     return {
@@ -84,10 +153,23 @@ export function shopifyOrderPayload(input: {
         currency: "EUR",
         total_price: input.totalPrice ?? "90.00",
         processed_at: new Date().toISOString(),
-        customer: {
-            first_name: input.firstName ?? "Giulia",
-            last_name: input.lastName ?? "Rossi",
-        },
+        customer_locale: input.locale ?? "it",
+        customer: input.customerId === null
+            ? undefined
+            : {
+                id: input.customerId ?? 7_700_001,
+                first_name: input.firstName ?? "Giulia",
+                last_name: input.lastName ?? "Rossi",
+            },
+        note_attributes: input.noteAttributes ?? [],
+        discount_applications: (input.discountCodes ?? []).map(code => ({
+            type: "discount_code",
+            code,
+            value_type: "percentage",
+            allocation_method: "across",
+            target_selection: "all",
+            target_type: "line_item",
+        })),
         line_items: input.lines.map((line, index) => ({
             id: id * 10 + index,
             product_id: line.productId,
@@ -95,6 +177,11 @@ export function shopifyOrderPayload(input: {
             title: line.title ?? "Full Pass",
             quantity: line.quantity,
             price: line.price ?? "90.00",
+            discount_allocations: (line.discounts ?? []).map(allocation => ({
+                amount: allocation.amount,
+                discount_application_index: allocation.index,
+            })),
+            properties: line.properties ?? [],
         })),
     };
 }

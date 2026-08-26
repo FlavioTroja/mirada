@@ -13,9 +13,16 @@ import { SessionRepository } from "@repositories/SessionRepository";
 import { TicketRepository } from "@repositories/TicketRepository";
 import { FileRepository } from "@repositories/FileRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
+import { BalanceSettlementRepository } from "@repositories/BalanceSettlementRepository";
+import { hasPermissionOrThrow } from "@utils/adapters/permission";
+import { PermissionAction } from "@enums/PermissionAction";
+import { PermissionResource } from "@enums/PermissionResource";
+import { PermissionScope } from "@enums/PermissionScope";
 import {
     AttendanceExportColumn,
     AttendanceExportColumnSchema,
+    BalanceExportColumn,
+    BalanceExportColumnSchema,
     EventExportRequestDTO,
     EventExportResponseDTO,
     ExportKind,
@@ -65,6 +72,7 @@ export class EventExportService {
     constructor(
         private readonly eventRepository: EventRepository,
         private readonly registrationRepository: RegistrationRepository,
+        private readonly balanceSettlementRepository: BalanceSettlementRepository,
         private readonly checkInRepository: CheckInRepository,
         private readonly sessionRepository: SessionRepository,
         private readonly ticketRepository: TicketRepository,
@@ -97,6 +105,9 @@ export class EventExportService {
 
         if (dto.kind === "ATTENDANCE") {
             return this.exportAttendance(event.id, event.slug, dto.columns);
+        }
+        if (dto.kind === "BALANCES") {
+            return this.exportBalances(principalId, event.id, event.slug, dto.columns);
         }
 
         const columns = this.resolveRegistrationColumns(dto.columns);
@@ -201,6 +212,108 @@ export class EventExportService {
      *
      * `RB12` — nessun contatto, nessun dato dei requisiti, nessuna dieta.
      */
+    /**
+     * **Chi deve cosa, per la serata** — `RF-SAL-16`.
+     *
+     * ── Il permesso si chiede QUI, e non è pedanteria ───────────────────────
+     * Gli altri tracciati escono con `READ#EVENT`, che il `CHECKIN_OPERATOR` ha.
+     * Questo porta gli **importi** dei residui, che `RB27` tiene lontani da chi
+     * non tiene la cassa: senza questo controllo, la regola difesa dalla
+     * schermata e dal manifesto verrebbe aggirata scaricando un CSV.
+     *
+     * Solo le iscrizioni con un residuo **nato**: un elenco che comprendesse
+     * tutti con una colonna a zero non sarebbe la lista della cassa, sarebbe
+     * l'elenco iscritti con due colonne in più.
+     */
+    private async exportBalances(
+        principalId: number,
+        eventId: number,
+        slug: string,
+        requested: string[],
+    ): Promise<EventExportResponseDTO> {
+        await hasPermissionOrThrow(principalId, {
+            action: PermissionAction.READ,
+            entity: PermissionResource.BALANCE_SETTLEMENT,
+            scope: PermissionScope.ALL,
+        });
+
+        const columns = this.resolveBalanceColumns(requested);
+
+        const registrations = (await this.registrationRepository.findByEvent(eventId))
+            .filter(registration => registration.balanceDueAmount > 0)
+            .sort((a, b) => a.holderSurname.localeCompare(b.holderSurname));
+
+        const settlements = new Map<number, { count: number; last: Date | null }>();
+        for (const registration of registrations) {
+            const rows = await this.balanceSettlementRepository.findByRegistration(registration.id);
+            settlements.set(registration.id, {
+                count: rows.length,
+                last: rows.length ? rows[rows.length - 1]!.collectedAt : null,
+            });
+        }
+
+        const rows = registrations.map(registration => columns.map(column => {
+            const settlement = settlements.get(registration.id);
+            switch (column) {
+                case "registrationId": return String(registration.id);
+                case "holderName": return registration.holderName;
+                case "holderSurname": return registration.holderSurname;
+                case "holderEmail": return registration.holderEmail;
+                case "status": return registration.status;
+                case "dueAmount": return String(registration.balanceDueAmount);
+                case "settledAmount": return String(registration.balanceSettledAmount);
+                case "openAmount": return String(registration.balanceDueAmount - registration.balanceSettledAmount);
+                case "settlementCount": return String(settlement?.count ?? 0);
+                case "lastSettlementAt": return settlement?.last?.toISOString() ?? "";
+                default: return "";
+            }
+        }));
+
+        const csv = this.toCsv(columns, rows);
+        const filename = `${slug}-balances-${generateRandomString(8)}.csv`;
+        const { url, filePath } = await this.write(filename, csv);
+
+        const file = await this.fileRepository.save({
+            name: filename,
+            path: filePath,
+            url,
+            mimeType: "text/csv",
+            size: Buffer.byteLength(csv, "utf8"),
+        });
+
+        Log.info(
+            `[EventExport Service]: export 'BALANCES' produced for event (id ${eventId}) — `
+            + `${rows.length} open balance(s), file (id ${file.id}) at ${url}`,
+        );
+
+        return {
+            fileUrl: url,
+            fileId: file.id,
+            kind: "BALANCES",
+            columns,
+            rows: rows.length,
+            generatedAt: new Date(),
+            basedOn: ["Registration", "BalanceSettlement"],
+        };
+    }
+
+    private resolveBalanceColumns(requested: string[]): BalanceExportColumn[] {
+        const available = BalanceExportColumnSchema.options;
+        if (!requested.length) {
+            return [...available];
+        }
+
+        const unknown = requested.filter(c => !(available as readonly string[]).includes(c));
+        if (unknown.length) {
+            Log.warn(`[EventExport Service]: balances export refused — unknown column(s): ${unknown.join(", ")}`);
+            throw new httpErrors.BadRequest(
+                `Colonne non disponibili: ${unknown.join(", ")}. Colonne ammesse: ${available.join(", ")}.`,
+            );
+        }
+
+        return requested as BalanceExportColumn[];
+    }
+
     private async exportAttendance(
         eventId: number,
         slug: string,

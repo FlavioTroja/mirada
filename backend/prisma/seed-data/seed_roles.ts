@@ -28,6 +28,12 @@ export const seed_roles = [
         isActive: true,
     },
     {
+        name: RoleName.BOX_OFFICE,
+        label: "Cassa",
+        rank: 25,
+        isActive: true,
+    },
+    {
         name: RoleName.CHECKIN_OPERATOR,
         label: "Operatore check-in",
         rank: 30,

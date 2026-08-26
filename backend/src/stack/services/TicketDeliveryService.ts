@@ -18,6 +18,16 @@ export type TicketDeliveryInput = {
     tickets: Ticket[];
     /** Centesimi interi. Zero è un caso normale (accrediti, ingressi gratuiti). */
     total: number;
+    /**
+     * Il saldo ancora da versare alla porta, in centesimi (`RF-SAL-13`). Assente
+     * o zero su tutto ciò che è stato pagato per intero, che è la norma.
+     */
+    balanceDue?: number;
+    /**
+     * La lingua in cui scrivere, quando il chiamante la conosce (`it`, `en-GB`).
+     * Assente = si ricade sull'italiano, come sempre.
+     */
+    locale?: string | null;
     /** Da dove arriva la consegna — compare nel log, non nell'email. */
     source: string;
 };
@@ -110,8 +120,10 @@ export class TicketDeliveryService {
                         qrCid: qrByTicket.get(ticket.id),
                     })),
                     total: input.total,
+                    balanceDue: input.balanceDue ?? 0,
                 },
                 inlineImages,
+                input.locale,
             );
 
             Log.info(

@@ -6,6 +6,8 @@ import { Log } from "@utils/adapters/log";
 import { fetch } from "@utils/adapters/fetch";
 import { open } from "@utils/adapters/secretBox";
 import {
+    CanonicalAttribute,
+    CanonicalDiscount,
     CanonicalNotification,
     CanonicalSale,
     CanonicalSaleLine,
@@ -113,6 +115,22 @@ export class ShopifyChannelAdapterService implements ExternalSaleChannelAdapter 
     }
 
     /**
+     * Un corpo già registrato, riletto come vendita.
+     *
+     * Il riconoscimento è per **forma** e non per argomento: un ordine ha un `id`
+     * e un elenco di righe, un rimborso no. Fondarlo sull'argomento vorrebbe dire
+     * fidarsi di una colonna scritta mesi fa da una versione del codice che non
+     * è più questa.
+     */
+    public readSale(payload: unknown): CanonicalSale | null {
+        const order = payload as Record<string, any> | null;
+        if (!order || order.id == null || !Array.isArray(order.line_items)) {
+            return null;
+        }
+        return this.toCanonicalSale(order);
+    }
+
+    /**
      * Gli argomenti che ci riguardano, e nient'altro.
      *
      * `orders/paid` e non `orders/create`: un ordine creato non è un ordine
@@ -133,12 +151,16 @@ export class ShopifyChannelAdapterService implements ExternalSaleChannelAdapter 
     }
 
     private toCanonicalSale(payload: Record<string, any>): CanonicalSale {
+        const discountNames = this.discountNames(payload);
+
         const lines: CanonicalSaleLine[] = (payload.line_items ?? []).map((item: Record<string, any>) => ({
             externalProductId: item.product_id != null ? String(item.product_id) : "",
             externalVariantId: item.variant_id != null ? String(item.variant_id) : "",
             title: [item.title, item.variant_title].filter(Boolean).join(" — ") || "riga senza titolo",
             quantity: Number(item.quantity ?? 0),
             unitPrice: this.toCents(item.price),
+            discounts: this.discountsOf(item, discountNames),
+            attributes: this.attributesOf(item.properties),
         }));
 
         const { name, surname } = this.splitBuyerName(payload);
@@ -152,11 +174,113 @@ export class ShopifyChannelAdapterService implements ExternalSaleChannelAdapter 
             buyerName: name,
             buyerSurname: surname,
             buyerEmail: (payload.email ?? payload.contact_email ?? "").trim().toLowerCase(),
+            // `customer` manca sugli acquisti come ospite, ed è un caso normale:
+            // il negozio ha incassato lo stesso.
+            externalCustomerId: payload.customer?.id != null ? String(payload.customer.id) : null,
+            locale: payload.customer_locale ?? null,
             totalAmount: this.toCents(payload.total_price),
             currency: payload.currency ?? "EUR",
             lines,
+            attributes: this.attributesOf(payload.note_attributes),
             paidAt: payload.processed_at ? new Date(payload.processed_at) : null,
         };
+    }
+
+    /**
+     * I nomi degli sconti dell'ordine, **nell'ordine in cui Shopify li elenca**.
+     *
+     * ── L'indice è il legame, e non è un dettaglio ──────────────────────────
+     * `discount_applications[]` dice **quali** sconti esistono sull'ordine;
+     * `line_item.discount_allocations[]` dice **quanto** ciascuno ha tolto a
+     * ciascuna riga, e li nomina soltanto con `discount_application_index`, cioè
+     * con la posizione in quel primo elenco. Le due liste vanno lette insieme,
+     * ed è tutto ciò che serve: nessuna aritmetica inversa, nessuna percentuale
+     * da ricostruire.
+     *
+     * Il nome di uno sconto è `code` quando è un codice digitato dal cliente, e
+     * `title` per gli sconti automatici o applicati a mano dal back-office del
+     * negozio. Si prendono entrambi perché l'organizzatore può benissimo aver
+     * chiamato «ACCONTO 30%» uno sconto manuale — e in quel caso è un acconto
+     * esattamente come l'altro.
+     */
+    private discountNames(payload: Record<string, any>): string[] {
+        return (payload.discount_applications ?? []).map(
+            (application: Record<string, any>) => String(application.code ?? application.title ?? "").trim(),
+        );
+    }
+
+    /**
+     * Gli sconti caduti su **questa** riga, con il loro nome.
+     *
+     * ── Perché per riga, e non `total_discounts` ────────────────────────────
+     * Finché l'acconto è l'unico sconto dell'ordine le due strade danno lo stesso
+     * numero, ed è per questo che la differenza non si vede. Divergono appena se
+     * ne aggiunge un secondo: un pacchetto da €155 con early bird −10% e poi
+     * `ACCONTO_30` ha un residuo di €97,65, non di €113,15 — e la differenza è
+     * l'early bird, che con `total_discounts` evaporerebbe e verrebbe richiesto
+     * di nascosto alla porta (`14` §4.2).
+     *
+     * Il codice applicato **all'intero carrello** non fa eccezione: le
+     * allocazioni sono comunque per riga, quindi il dato c'è già ripartito e non
+     * lo ripartiamo noi.
+     *
+     * Un'allocazione che punta a un indice fuori elenco è saltata invece di
+     * diventare uno sconto senza nome: uno sconto anonimo non potrebbe mai essere
+     * riconosciuto come acconto, e trascinarlo a valle vorrebbe dire far comparire
+     * nel back-office una riga che non significa niente.
+     */
+    private discountsOf(item: Record<string, any>, names: string[]): CanonicalDiscount[] {
+        const discounts: CanonicalDiscount[] = [];
+
+        for (const allocation of item.discount_allocations ?? []) {
+            const index = Number(allocation.discount_application_index);
+            const code = Number.isInteger(index) ? names[index] : undefined;
+            if (!code) {
+                Log.warn(
+                    "[ShopifyChannelAdapter Service]: line discount allocation points at unknown application "
+                    + `index ${allocation.discount_application_index} — skipped`,
+                );
+                continue;
+            }
+
+            const amount = this.toCents(allocation.amount);
+            if (amount <= 0) {
+                continue;
+            }
+
+            discounts.push({ code, amount });
+        }
+
+        return discounts;
+    }
+
+    /**
+     * I campi raccolti al checkout, nell'ordine in cui il negozio li consegna.
+     *
+     * Shopify usa **due forme diverse** per la stessa cosa — `note_attributes`
+     * sull'ordine porta `{ name, value }`, `line_items[].properties` porta
+     * anch'esso `{ name, value }` — e in entrambi i casi il nome è quello che
+     * l'organizzatore ha scritto nel proprio modulo. Qui non si interpreta
+     * nulla: si normalizza soltanto la forma.
+     *
+     * Le voci senza nome, o con valore vuoto, si scartano: un campo lasciato in
+     * bianco al checkout non è un'informazione, ed è ciò che produrrebbe
+     * un'iscrizione intestata alla stringa vuota.
+     */
+    private attributesOf(source: unknown): CanonicalAttribute[] {
+        if (!Array.isArray(source)) {
+            return [];
+        }
+
+        const attributes: CanonicalAttribute[] = [];
+        for (const entry of source) {
+            const name = String(entry?.name ?? "").trim();
+            const value = String(entry?.value ?? "").trim();
+            if (name && value) {
+                attributes.push({ name, value });
+            }
+        }
+        return attributes;
     }
 
     /**

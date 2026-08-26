@@ -69,6 +69,33 @@ export const BlockingRequirementSchema = z.object({
     status: z.string().nullish(),
 });
 
+/**
+ * L'avviso del saldo alla porta — `14` §7, `RB25` e `RB27`.
+ *
+ * ── Due campi, e la differenza fra loro è tutta la regola ───────────────────
+ * `open` dice **che** un saldo esiste, e lo vede chiunque stia scansionando.
+ * `amount` dice **quanto**, ed è `null` per chi non tiene la cassa — non
+ * nascosto dalla schermata, proprio assente dalla risposta: la sola strada per
+ * non mostrare un dato è non spedirlo, ed è la stessa disciplina di `RB12` sui
+ * requisiti.
+ *
+ * ── L'esito resta `VALID`: un residuo non blocca mai l'ingresso (`RB25`) ────
+ * I cinque esiti non diventano sei. La vendita è avvenuta, il denaro si è mosso,
+ * e Mirada non fa il buttafuori per conto dell'organizzatore: si registra, si
+ * avvisa, si procede. L'operatore fa entrare comunque anche se la persona non
+ * paga o discute la cifra — il residuo resta aperto e la questione si risolve
+ * fra umani, che è dove va risolta.
+ *
+ * `null` quando quella persona non deve nulla, che è il caso normale.
+ */
+export const BalanceNoticeSchema = z.object({
+    registrationId: z.number().int(),
+    /** C'è ancora qualcosa da versare. È il flag che il volontario vede. */
+    open: z.boolean(),
+    /** Centesimi ancora aperti. **`null` senza il permesso di cassa** (`RB27`). */
+    amount: z.number().int().nullable(),
+});
+
 export const TicketVerifyResponseSchema = z.object({
     result: CheckInResultSchema,
     ticketId: z.number().int().nullish(),
@@ -83,6 +110,16 @@ export const TicketVerifyResponseSchema = z.object({
     services: VerifiedServiceSchema.array(),
     blockingRequirement: BlockingRequirementSchema.nullish(),
     firstEntry: FirstEntrySchema.nullish(),
+    /**
+     * Il saldo ancora da versare, quando c'è (`14` §7.3).
+     *
+     * Compare a **ogni** scansione finché il residuo è aperto, non solo alla
+     * prima: legarlo al primo ingresso avrebbe l'effetto perverso di non
+     * intercettare mai più chi non è stato intercettato la prima sera — perché
+     * c'era coda, perché la cassa era chiusa, perché il volontario ha lasciato
+     * correre.
+     */
+    balance: BalanceNoticeSchema.nullish(),
     /** Esito della verifica crittografica del QR, quando il codice era un JWS. */
     signature: z
         .object({

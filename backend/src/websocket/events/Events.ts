@@ -73,6 +73,22 @@ export const Events = {
      * scrive all'organizzatore.
      */
     EXTERNAL_SALE_QUARANTINED: "external-sale/quarantined",
+    /**
+     * Un saldo è stato incassato al botteghino (`14` §8, `RF-SAL-17`). Ai MEMBRI
+     * dell'organizzazione, nella stessa forma di `external-sale/ingested`.
+     *
+     * Serve a due schermi che non si parlano: il cruscotto — «atteso al
+     * botteghino · già incassato · ancora aperto» — e la scheda della persona,
+     * che qualcuno può avere aperta mentre un'altra postazione incassa. Senza,
+     * chi guarda la scheda vede un residuo che è già stato pagato e lo chiede una
+     * seconda volta.
+     *
+     * ⚠️ **Non porta la cifra**, come nessun altro segnale di questo backend: è
+     * una notifica e un invito a rileggere, mai un canale di dati. Un fotogramma
+     * vecchio non deve poter contraddire la banca dati, e l'importo di un residuo
+     * ha per giunta un permesso suo (`RB27`).
+     */
+    BALANCE_SETTLED: "balance/settled",
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

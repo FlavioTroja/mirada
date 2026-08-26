@@ -62,6 +62,10 @@ export const ModelNameItalian: Record<Prisma.ModelName, string> = {
     SalesChannelMapping: "associazione di prodotto",
     ExternalSale: "vendita esterna",
     ExternalSaleEvent: "notifica del canale di vendita",
+    SalesChannelDepositCode: "codice di acconto",
+
+    // Mirada Tango — acconto e saldo
+    BalanceSettlement: "incasso del saldo",
 };
 
 export const italianModelName = (name: Prisma.ModelName): string => ModelNameItalian[name];

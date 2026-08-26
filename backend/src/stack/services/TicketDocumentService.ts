@@ -58,8 +58,20 @@ export class TicketDocumentService {
         sessions: Session[];
         qrToken: string;
         organizationName: string;
+        /**
+         * Il saldo ancora da versare al check-in, in centesimi (`14` §8,
+         * `RF-SAL-13`). Zero, che è la norma, quando non c'è nessun acconto.
+         *
+         * ── Perché anche qui, e non solo nell'email ─────────────────────────
+         * L'email si perde in fondo a una casella. Il PDF è ciò che la persona
+         * ha materialmente in mano quando arriva alla porta, ed è lì che deve
+         * poter leggere da sé che le manca ancora qualcosa da versare — invece
+         * di sentirselo dire da un volontario che non può nemmeno dirle quanto.
+         */
+        balanceDue?: number;
     }): Promise<{ url: string; filePath: string; size: number; filename: string }> {
         const { ticket, event, ticketType, sessions, qrToken, organizationName } = input;
+        const balanceDue = input.balanceDue ?? 0;
 
         // Il QR contiene il JWS firmato, non il codice nudo: ciò che si inquadra
         // deve essere verificabile senza rete (assunzione `AS-7`).
@@ -106,6 +118,25 @@ export class TicketDocumentService {
                         },
                     ],
                 },
+
+                ...(balanceDue > 0
+                    ? [
+                        {
+                            text: "Saldo da versare al check-in",
+                            style: "label",
+                            margin: [0, 12, 0, 2] as [number, number, number, number],
+                        },
+                        {
+                            text: `${(balanceDue / 100).toFixed(2).replace(".", ",")} €`,
+                            style: "value",
+                        },
+                        {
+                            text: "L'importo si versa alla cassa il giorno dell'evento. "
+                                + "Il biglietto è valido: il saldo non condiziona l'ingresso.",
+                            style: "muted",
+                        },
+                    ]
+                    : []),
 
                 { text: "Sessioni incluse", style: "label", margin: [0, 12, 0, 4] },
                 sessions.length

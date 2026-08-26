@@ -19,6 +19,8 @@ import { TicketWithRelationsSchema, TicketPartialWithRelationsSchema, TicketOpti
 import type { TicketWithRelations, TicketPartialWithRelations, TicketOptionalDefaultsWithRelations } from './TicketSchema'
 import { CheckInWithRelationsSchema, CheckInPartialWithRelationsSchema, CheckInOptionalDefaultsWithRelationsSchema } from './CheckInSchema'
 import type { CheckInWithRelations, CheckInPartialWithRelations, CheckInOptionalDefaultsWithRelations } from './CheckInSchema'
+import { BalanceSettlementWithRelationsSchema, BalanceSettlementPartialWithRelationsSchema, BalanceSettlementOptionalDefaultsWithRelationsSchema } from './BalanceSettlementSchema'
+import type { BalanceSettlementWithRelations, BalanceSettlementPartialWithRelations, BalanceSettlementOptionalDefaultsWithRelations } from './BalanceSettlementSchema'
 
 /////////////////////////////////////////
 // REGISTRATION SCHEMA
@@ -58,6 +60,26 @@ export const RegistrationSchema = z.object({
    * le altre — vendita online, porta, accredito.
    */
   externalSaleId: z.number().int().nullish(),
+  /**
+   * ── Il residuo di questa persona (`14` §5.1, `RF-SAL-7`) ─────────────────
+   * Centesimi interi. `0` su tutte le iscrizioni che non nascono da un acconto,
+   * che oggi sono la quasi totalità.
+   * 
+   * **Sta qui e non sulla vendita** per tre ragioni, in ordine: al botteghino si
+   * presentano persone e non ordini; il giorno in cui a generare il residuo sarà
+   * un `Order` con Stripe (fase D2) non cambia una riga a valle; e sopravvive
+   * alla rielaborazione della vendita, che è un'operazione normale.
+   * 
+   * `balanceDueAmount` è **quanto è nato** e non si muove più.
+   */
+  balanceDueAmount: z.number().int(),
+  /**
+   * **Quanto ne è stato saldato**, ed è un contatore: si muove SOLO attraverso
+   * `BalanceSettlementService`, mai da un DTO di aggiornamento — esattamente
+   * come `CapacityQuota.consumed`, e per la stessa ragione (`14` §5.2).
+   * Il residuo ancora aperto è la differenza fra i due.
+   */
+  balanceSettledAmount: z.number().int(),
   deleted: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -82,6 +104,26 @@ export const RegistrationOptionalDefaultsSchema = RegistrationSchema.merge(z.obj
   status: RegistrationStatusSchema.optional(),
   id: z.number().int().optional(),
   isMinor: z.boolean().optional(),
+  /**
+   * ── Il residuo di questa persona (`14` §5.1, `RF-SAL-7`) ─────────────────
+   * Centesimi interi. `0` su tutte le iscrizioni che non nascono da un acconto,
+   * che oggi sono la quasi totalità.
+   * 
+   * **Sta qui e non sulla vendita** per tre ragioni, in ordine: al botteghino si
+   * presentano persone e non ordini; il giorno in cui a generare il residuo sarà
+   * un `Order` con Stripe (fase D2) non cambia una riga a valle; e sopravvive
+   * alla rielaborazione della vendita, che è un'operazione normale.
+   * 
+   * `balanceDueAmount` è **quanto è nato** e non si muove più.
+   */
+  balanceDueAmount: z.number().int().optional(),
+  /**
+   * **Quanto ne è stato saldato**, ed è un contatore: si muove SOLO attraverso
+   * `BalanceSettlementService`, mai da un DTO di aggiornamento — esattamente
+   * come `CapacityQuota.consumed`, e per la stessa ragione (`14` §5.2).
+   * Il residuo ancora aperto è la differenza fra i due.
+   */
+  balanceSettledAmount: z.number().int().optional(),
   deleted: z.boolean().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
@@ -103,6 +145,7 @@ export type RegistrationRelations = {
   requirementOutcomes: RequirementOutcomeWithRelations[];
   tickets: TicketWithRelations[];
   checkIns: CheckInWithRelations[];
+  balanceSettlements: BalanceSettlementWithRelations[];
 };
 
 export type RegistrationWithRelations = z.infer<typeof RegistrationSchema> & RegistrationRelations
@@ -117,6 +160,7 @@ export const RegistrationWithRelationsSchema: z.ZodType<RegistrationWithRelation
   requirementOutcomes: z.lazy(() => RequirementOutcomeWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -133,6 +177,7 @@ export type RegistrationOptionalDefaultsRelations = {
   requirementOutcomes: RequirementOutcomeOptionalDefaultsWithRelations[];
   tickets: TicketOptionalDefaultsWithRelations[];
   checkIns: CheckInOptionalDefaultsWithRelations[];
+  balanceSettlements: BalanceSettlementOptionalDefaultsWithRelations[];
 };
 
 export type RegistrationOptionalDefaultsWithRelations = z.infer<typeof RegistrationOptionalDefaultsSchema> & RegistrationOptionalDefaultsRelations
@@ -147,6 +192,7 @@ export const RegistrationOptionalDefaultsWithRelationsSchema: z.ZodType<Registra
   requirementOutcomes: z.lazy(() => RequirementOutcomeOptionalDefaultsWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInOptionalDefaultsWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -163,6 +209,7 @@ export type RegistrationPartialRelations = {
   requirementOutcomes?: RequirementOutcomePartialWithRelations[];
   tickets?: TicketPartialWithRelations[];
   checkIns?: CheckInPartialWithRelations[];
+  balanceSettlements?: BalanceSettlementPartialWithRelations[];
 };
 
 export type RegistrationPartialWithRelations = z.infer<typeof RegistrationPartialSchema> & RegistrationPartialRelations
@@ -177,6 +224,7 @@ export const RegistrationPartialWithRelationsSchema: z.ZodType<RegistrationParti
   requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
 })).partial()
 
 export type RegistrationOptionalDefaultsWithPartialRelations = z.infer<typeof RegistrationOptionalDefaultsSchema> & RegistrationPartialRelations
@@ -191,6 +239,7 @@ export const RegistrationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<R
   requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
 }).partial())
 
 export type RegistrationWithPartialRelations = z.infer<typeof RegistrationSchema> & RegistrationPartialRelations
@@ -205,6 +254,7 @@ export const RegistrationWithPartialRelationsSchema: z.ZodType<RegistrationWithP
   requirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
 }).partial())
 
 export default RegistrationSchema;

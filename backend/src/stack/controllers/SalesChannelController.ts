@@ -21,6 +21,10 @@ import {
     SalesChannelMappingUpdateDTO,
     SalesChannelMappingUpdateSchema,
 } from "@DTOs/sales_channel/SalesChannelMappingUpdateDTO";
+import {
+    SalesChannelDepositCodeUpdateDTO,
+    SalesChannelDepositCodeUpdateSchema,
+} from "@DTOs/sales_channel/SalesChannelDepositCodeUpdateDTO";
 
 const PublicIdParamSchema = z.object({
     publicId: z.string().min(1).describe("Opaque public id of the sales channel — the webhook URL segment"),
@@ -239,6 +243,40 @@ export class SalesChannelController {
     ) {
         reply.status(200).send(
             await this.salesChannelService.updateMappings(+req.user.id, +req.params.id, req.body),
+        );
+    }
+
+    /**
+     * I codici sconto che, su questo negozio, significano «acconto» (`14` §3.1).
+     *
+     * Il permesso è quello del canale e non uno suo: dichiarare che `ACCONTO_30`
+     * è un acconto è configurare il negozio, esattamente come dire quale prodotto
+     * è quale titolo.
+     */
+    @PUT("/:id/deposit-codes", {
+        schema: {
+            operationId: "updateSalesChannelDepositCodes",
+            summary: "Replace the deposit discount codes of a sales channel",
+            description:
+                "Takes the WHOLE desired collection: id -1 creates, toBeDisconnected removes, the rest updates. Codes "
+                + "are normalised (spaces stripped, upper-cased) before being stored, because a code typed with a "
+                + "different capitalisation on the shop would otherwise go unrecognised — silently, leaving the balance "
+                + "unclaimed at the door. Removing a code does NOT clear balances already opened by it.",
+            params: exz.pathId,
+            body: SalesChannelDepositCodeUpdateSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.UPDATE, PermissionResource.SALES_CHANNEL, PermissionScope.SINGLE),
+        ],
+    })
+    async updateDepositCodes(
+        req: FastifyRequest<{ Params: { id: string }, Body: SalesChannelDepositCodeUpdateDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(
+            await this.salesChannelService.updateDepositCodes(+req.user.id, +req.params.id, req.body),
         );
     }
 }

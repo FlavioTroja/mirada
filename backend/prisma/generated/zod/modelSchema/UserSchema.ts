@@ -29,6 +29,8 @@ import { TicketTransferWithRelationsSchema, TicketTransferPartialWithRelationsSc
 import type { TicketTransferWithRelations, TicketTransferPartialWithRelations, TicketTransferOptionalDefaultsWithRelations } from './TicketTransferSchema'
 import { CheckInWithRelationsSchema, CheckInPartialWithRelationsSchema, CheckInOptionalDefaultsWithRelationsSchema } from './CheckInSchema'
 import type { CheckInWithRelations, CheckInPartialWithRelations, CheckInOptionalDefaultsWithRelations } from './CheckInSchema'
+import { BalanceSettlementWithRelationsSchema, BalanceSettlementPartialWithRelationsSchema, BalanceSettlementOptionalDefaultsWithRelationsSchema } from './BalanceSettlementSchema'
+import type { BalanceSettlementWithRelations, BalanceSettlementPartialWithRelations, BalanceSettlementOptionalDefaultsWithRelations } from './BalanceSettlementSchema'
 
 /////////////////////////////////////////
 // USER SCHEMA
@@ -131,6 +133,7 @@ export type UserRelations = {
   ticketTransfersFrom: TicketTransferWithRelations[];
   ticketTransfersTo: TicketTransferWithRelations[];
   checkIns: CheckInWithRelations[];
+  balanceSettlements: BalanceSettlementWithRelations[];
 };
 
 export type UserWithRelations = z.infer<typeof UserSchema> & UserRelations
@@ -154,6 +157,7 @@ export const UserWithRelationsSchema: z.ZodType<UserWithRelations> = UserSchema.
   ticketTransfersFrom: z.lazy(() => TicketTransferWithRelationsSchema).array(),
   ticketTransfersTo: z.lazy(() => TicketTransferWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -179,6 +183,7 @@ export type UserOptionalDefaultsRelations = {
   ticketTransfersFrom: TicketTransferOptionalDefaultsWithRelations[];
   ticketTransfersTo: TicketTransferOptionalDefaultsWithRelations[];
   checkIns: CheckInOptionalDefaultsWithRelations[];
+  balanceSettlements: BalanceSettlementOptionalDefaultsWithRelations[];
 };
 
 export type UserOptionalDefaultsWithRelations = z.infer<typeof UserOptionalDefaultsSchema> & UserOptionalDefaultsRelations
@@ -202,6 +207,7 @@ export const UserOptionalDefaultsWithRelationsSchema: z.ZodType<UserOptionalDefa
   ticketTransfersFrom: z.lazy(() => TicketTransferOptionalDefaultsWithRelationsSchema).array(),
   ticketTransfersTo: z.lazy(() => TicketTransferOptionalDefaultsWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInOptionalDefaultsWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -227,6 +233,7 @@ export type UserPartialRelations = {
   ticketTransfersFrom?: TicketTransferPartialWithRelations[];
   ticketTransfersTo?: TicketTransferPartialWithRelations[];
   checkIns?: CheckInPartialWithRelations[];
+  balanceSettlements?: BalanceSettlementPartialWithRelations[];
 };
 
 export type UserPartialWithRelations = z.infer<typeof UserPartialSchema> & UserPartialRelations
@@ -250,6 +257,7 @@ export const UserPartialWithRelationsSchema: z.ZodType<UserPartialWithRelations>
   ticketTransfersFrom: z.lazy(() => TicketTransferPartialWithRelationsSchema).array(),
   ticketTransfersTo: z.lazy(() => TicketTransferPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
 })).partial()
 
 export type UserOptionalDefaultsWithPartialRelations = z.infer<typeof UserOptionalDefaultsSchema> & UserPartialRelations
@@ -273,6 +281,7 @@ export const UserOptionalDefaultsWithPartialRelationsSchema: z.ZodType<UserOptio
   ticketTransfersFrom: z.lazy(() => TicketTransferPartialWithRelationsSchema).array(),
   ticketTransfersTo: z.lazy(() => TicketTransferPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
 }).partial())
 
 export type UserWithPartialRelations = z.infer<typeof UserSchema> & UserPartialRelations
@@ -296,6 +305,7 @@ export const UserWithPartialRelationsSchema: z.ZodType<UserWithPartialRelations>
   ticketTransfersFrom: z.lazy(() => TicketTransferPartialWithRelationsSchema).array(),
   ticketTransfersTo: z.lazy(() => TicketTransferPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
+  balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
 }).partial())
 
 export default UserSchema;

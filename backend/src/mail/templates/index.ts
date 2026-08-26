@@ -138,8 +138,23 @@ export interface RegistrationConfirmedInput {
      * generazione è fallita — resta il solo codice, e l'email vale comunque.
      */
     tickets: { code: string; holder: string; qrCid?: string }[];
-    /** Centesimi interi. Zero è un caso normale, non un errore. */
+    /**
+     * Centesimi interi **realmente incassati**. Zero è un caso normale, non un
+     * errore.
+     */
     total: number;
+    /**
+     * Il **saldo ancora da versare al check-in**, in centesimi (`14` §8,
+     * `RF-SAL-13`). Zero, che è la norma, quando non c'è nessun acconto.
+     *
+     * ── Perché senza questo campo l'email mentiva ───────────────────────────
+     * Su una vendita con acconto `total` è la sola cifra incassata dal negozio —
+     * €46,50 su un pacchetto da €155. Mostrarla come totale e tacere del resto
+     * significa dire a qualcuno che ha pagato quando non ha finito di pagare, e
+     * lasciargli scoprire il contrario alla porta: nel posto peggiore, davanti a
+     * una fila, con un volontario che non può nemmeno spiegare la cifra.
+     */
+    balanceDue?: number;
 }
 
 /** Centesimi → «145,00 €». La formattazione vive qui, non nei dati. */
@@ -153,6 +168,7 @@ function euro(cents: number, locale: MailLocale): string {
 export function registrationConfirmedMail(input: RegistrationConfirmedInput): Rendered {
     const { locale, firstName, eventTitle, eventSlug, eventDates, venue, tickets, total } = input;
     const url = `${publicUrl()}/eventi/${eventSlug}`;
+    const balanceDue = input.balanceDue ?? 0;
 
     // Il QR ha già il codice scritto sotto: ripeterlo anche nell'elenco dei
     // dettagli sarebbe la stessa stringa due volte a mezzo centimetro di
@@ -179,9 +195,12 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
             heading: "Registration confirmed.",
             paragraphs: [
                 `${firstName}, your place at ${eventTitle} is secured.`,
-                total === 0
-                    ? "Nothing was charged: this ticket type is free."
-                    : `You paid ${euro(total, locale)}.`,
+                balanceDue > 0
+                    ? `You paid a deposit of ${euro(total, locale)}. The remaining `
+                        + `${euro(balanceDue, locale)} is due at check-in, at the box office.`
+                    : total === 0
+                        ? "Nothing was charged: this ticket type is free."
+                        : `You paid ${euro(total, locale)}.`,
                 withQr.length
                     ? (tickets.length > 1
                         ? "Show these QR codes at the entrance — one per person. If your mail app hides the images, the code written underneath works just as well."
@@ -194,6 +213,12 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
                 { label: "Event", value: eventTitle },
                 { label: "When", value: eventDates },
                 ...(venue ? [{ label: "Where", value: venue }] : []),
+                ...(balanceDue > 0
+                    ? [
+                        { label: "Deposit paid", value: euro(total, locale) },
+                        { label: "Balance due at check-in", value: euro(balanceDue, locale) },
+                    ]
+                    : []),
                 ...ticketFacts,
             ],
             qrCodes,
@@ -208,9 +233,12 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
         heading: "Iscrizione confermata.",
         paragraphs: [
             `${firstName}, il tuo posto a ${eventTitle} è assicurato.`,
-            total === 0
-                ? "Non è stato addebitato nulla: questo titolo d'ingresso è gratuito."
-                : `Hai pagato ${euro(total, locale)}.`,
+            balanceDue > 0
+                ? `Hai versato un acconto di ${euro(total, locale)}. Il saldo di `
+                    + `${euro(balanceDue, locale)} si versa al check-in, alla cassa.`
+                : total === 0
+                    ? "Non è stato addebitato nulla: questo titolo d'ingresso è gratuito."
+                    : `Hai pagato ${euro(total, locale)}.`,
             withQr.length
                 ? (tickets.length > 1
                     ? "Mostra questi QR all'ingresso — uno per persona. Se il tuo programma di posta nasconde le immagini, il codice scritto sotto vale allo stesso modo."
@@ -223,6 +251,12 @@ export function registrationConfirmedMail(input: RegistrationConfirmedInput): Re
             { label: "Evento", value: eventTitle },
             { label: "Quando", value: eventDates },
             ...(venue ? [{ label: "Dove", value: venue }] : []),
+            ...(balanceDue > 0
+                ? [
+                    { label: "Acconto versato", value: euro(total, locale) },
+                    { label: "Saldo da versare al check-in", value: euro(balanceDue, locale) },
+                ]
+                : []),
             ...ticketFacts,
         ],
         qrCodes,

@@ -4,6 +4,10 @@ import { CheckIn, CheckInKind, CheckInResult, Event, Prisma, RequirementBlocking
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { getPrismaClient } from "@utils/adapters/prisma";
+import { hasPermission } from "@utils/adapters/permission";
+import { PermissionAction } from "@enums/PermissionAction";
+import { PermissionResource } from "@enums/PermissionResource";
+import { PermissionScope } from "@enums/PermissionScope";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { createObjectWithoutThrow } from "@utils/helpers/query";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
@@ -90,13 +94,27 @@ export class CheckInService {
      * L'operatore riscansiona quando il telefono non ha vibrato, e una verifica
      * che scrivesse trasformerebbe la seconda scansione in un doppio ingresso.
      */
-    public async verify(dto: TicketVerifyDTO): Promise<TicketVerifyResponseDTO> {
+    public async verify(principalId: number, dto: TicketVerifyDTO): Promise<TicketVerifyResponseDTO> {
         Log.info(`[CheckIn Service]: verifying a ticket for session (id ${dto.sessionId})`);
         const outcome = await this.checkInVerificationService.evaluate({
             codeOrToken: dto.code,
             sessionId: dto.sessionId,
         });
-        return this.checkInVerificationService.describe(outcome);
+        // Chi sta scansionando vede **che** c'è un saldo; la cifra solo se tiene
+        // la cassa (`RB27`). Il permesso si chiede qui e non in rotta: la rotta
+        // ne dichiara già uno — `READ#TICKET#SINGLE` — e questo non condiziona
+        // l'accesso, condiziona il contenuto.
+        const showBalanceAmount = await this.canReadBalanceAmount(principalId);
+        return this.checkInVerificationService.describe(outcome, undefined, showBalanceAmount);
+    }
+
+    /** Il permesso di cassa: `READ#BALANCE_SETTLEMENT#SINGLE` (`14` §6.3). */
+    private async canReadBalanceAmount(principalId: number): Promise<boolean> {
+        return hasPermission(principalId, {
+            action: PermissionAction.READ,
+            entity: PermissionResource.BALANCE_SETTLEMENT,
+            scope: PermissionScope.SINGLE,
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -424,6 +442,12 @@ export class CheckInService {
         );
         const servicesByRegistration = await this.resolveServicesByRegistration([...new Set(registrationIds)]);
 
+        // ── Il manifesto e la cifra (`14` §7.4) ──────────────────────────────
+        // Il flag per tutti, l'importo solo se l'operatore che sta scaricando ha
+        // il permesso di cassa. Un manifesto che porta le cifre a tutti aggira
+        // `RB27` in un file che resta sul telefono per giorni.
+        const showBalanceAmount = await this.canReadBalanceAmount(principalId);
+
         const entries: CheckInManifestEntryDTO[] = tickets.map(ticket => ({
             ticketId: ticket.id,
             code: ticket.code,
@@ -437,6 +461,10 @@ export class CheckInService {
             ticketTypeName: ticket.ticketType.name,
             sessionIds: ticket.ticketType.sessions.map(link => link.sessionId),
             services: ticket.registrationId ? servicesByRegistration.get(ticket.registrationId) ?? [] : [],
+            balanceOpen: this.openBalanceOf(ticket.registration) > 0,
+            balanceAmount: showBalanceAmount && this.openBalanceOf(ticket.registration) > 0
+                ? this.openBalanceOf(ticket.registration)
+                : null,
             blockingRequirements: ticket.registrationId
                 ? (blockingByRegistration.get(ticket.registrationId) ?? []).map(item => ({
                     eventRequirementId: item.eventRequirementId,
@@ -611,6 +639,14 @@ export class CheckInService {
         } catch (err) {
             Log.error(`[CheckIn Service]: failed to publish 'checkin/registered' for event (id ${eventId}): ${(err as Error).message}`);
         }
+    }
+
+    /** Quanto resta da versare su quell'iscrizione. `0` quando non c'è nulla. */
+    private openBalanceOf(registration: { balanceDueAmount: number; balanceSettledAmount: number } | null | undefined): number {
+        if (!registration) {
+            return 0;
+        }
+        return Math.max(0, registration.balanceDueAmount - registration.balanceSettledAmount);
     }
 
     private async findEventInScopeOrThrow(principalId: number, eventId: number): Promise<Event> {

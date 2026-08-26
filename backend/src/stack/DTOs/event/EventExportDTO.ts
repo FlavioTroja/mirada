@@ -15,6 +15,8 @@ export const ExportKindSchema = z.enum([
     "REVENUE",
     "ATTENDANCE",
     "SALES_BY_SESSION",
+    /** Chi deve cosa al botteghino — `14` §8, `RF-SAL-16`. */
+    "BALANCES",
 ]);
 export type ExportKind = z.infer<typeof ExportKindSchema>;
 
@@ -73,6 +75,34 @@ export const AttendanceExportColumnSchema = z.enum([
     "conflictWithId",
 ]);
 export type AttendanceExportColumn = z.infer<typeof AttendanceExportColumnSchema>;
+
+/**
+ * Colonne esportabili per `BALANCES`, elenco chiuso — `14` §8.
+ *
+ * È **l'elenco che si stampa per la serata**: chi si presenterà con qualcosa da
+ * versare, quanto, e quanto ha già dato. Serve alla cassa, e a chi la mattina
+ * dopo vuole sapere quanto è rimasto aperto.
+ *
+ * ⚠️ Porta le **cifre**, quindi l'esportazione chiede il permesso di cassa
+ * (`RB27`): a differenza degli altri tracciati, `READ#EVENT` non basta. Un CSV è
+ * il modo più semplice di far uscire da una regola un dato che la regola teneva
+ * dentro.
+ *
+ * `RB12` — nessun contatto oltre l'email del titolare, come in `REGISTRATIONS`.
+ */
+export const BalanceExportColumnSchema = z.enum([
+    "registrationId",
+    "holderName",
+    "holderSurname",
+    "holderEmail",
+    "status",
+    "dueAmount",
+    "settledAmount",
+    "openAmount",
+    "settlementCount",
+    "lastSettlementAt",
+]);
+export type BalanceExportColumn = z.infer<typeof BalanceExportColumnSchema>;
 
 export const EventExportRequestSchema = z.object({
     kind: ExportKindSchema,

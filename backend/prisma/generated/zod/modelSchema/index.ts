@@ -45,5 +45,7 @@ export * from './TicketTransferSchema';
 export * from './CheckInSchema';
 export * from './SalesChannelSchema';
 export * from './SalesChannelMappingSchema';
+export * from './SalesChannelDepositCodeSchema';
 export * from './ExternalSaleSchema';
 export * from './ExternalSaleEventSchema';
+export * from './BalanceSettlementSchema';

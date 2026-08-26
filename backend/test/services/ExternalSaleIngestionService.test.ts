@@ -1,5 +1,6 @@
 import { configureServiceTest } from "fastify-decorators/testing";
 import {
+    DeclaredDanceRole,
     ExternalSaleStatus,
     QuotaReservedFor,
     QuotaScope,
@@ -15,8 +16,10 @@ import { QrImageService } from "@mail/QrImageService";
 import { ShopifyChannelAdapterService } from "@services/ShopifyChannelAdapterService";
 import { createEventScenario, createQuota, readConsumed } from "../fixtures/capacity";
 import {
+    addDepositCode,
     connectShopifyChannel,
     mapProduct,
+    setCheckoutFields,
     shopifyOrderPayload,
     signedDelivery,
     waitForSale,
@@ -38,7 +41,7 @@ import {
 describe("ExternalSaleIngestionService — la vendita incassata non si rifiuta", () => {
     let ingestion: ExternalSaleIngestionService;
     let adapter: ShopifyChannelAdapterService;
-    let sentMails: { to: string; input: any }[];
+    let sentMails: { to: string; input: any; localeHint?: string | null }[];
 
     /**
      * ── Le due sole sostituzioni, e perché sono legittime ────────────────────
@@ -65,8 +68,13 @@ describe("ExternalSaleIngestionService — la vendita incassata non si rifiuta",
             {
                 provide: MailService,
                 useValue: {
-                    sendRegistrationConfirmed: async (to: string, input: any) => {
-                        sentMails.push({ to, input });
+                    sendRegistrationConfirmed: async (
+                        to: string,
+                        input: any,
+                        _images?: unknown,
+                        localeHint?: string | null,
+                    ) => {
+                        sentMails.push({ to, input, localeHint });
                     },
                 },
             },
@@ -437,6 +445,385 @@ describe("ExternalSaleIngestionService — la vendita incassata non si rifiuta",
         // La notifica c'è, la vendita no: è ciò che permette di riprenderla.
         expect(await getPrismaClient().externalSaleEvent.count({ where: { salesChannelId: channel.id } })).toBe(1);
         expect(await getPrismaClient().externalSale.count({ where: { salesChannelId: channel.id } })).toBe(0);
+    });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Il profilo che arriva dal negozio
+    // ═════════════════════════════════════════════════════════════════════════
+
+    it("il RUOLO e il NOMINATIVO dichiarati al checkout finiscono sull'iscrizione, posto per posto", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await setCheckoutFields({
+            salesChannelId: channel.id,
+            roleAttributeName: "Ruolo",
+            attendeeNameAttributeName: "Nome partecipante",
+        });
+
+        // Una riga da due posti con il campo ripetuto: è così che un ordine da
+        // due pass porta due persone invece di due volte l'acquirente.
+        const payload = shopifyOrderPayload({
+            lines: [{
+                productId: "P1",
+                quantity: 2,
+                properties: [
+                    { name: "Nome partecipante", value: "Giulia Rossi" },
+                    { name: "Nome partecipante", value: "Marco Bianchi" },
+                    { name: "Ruolo", value: "follower" },
+                    { name: "Ruolo", value: "Leader" },
+                ],
+            }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        const registrations = await getPrismaClient().registration.findMany({
+            where: { externalSaleId: sale.id },
+            orderBy: { id: "asc" },
+        });
+
+        expect(registrations).toHaveLength(2);
+        expect(registrations[0]).toMatchObject({
+            holderName: "Giulia",
+            holderSurname: "Rossi",
+            declaredRole: DeclaredDanceRole.FOLLOWER,
+        });
+        expect(registrations[1]).toMatchObject({
+            holderName: "Marco",
+            holderSurname: "Bianchi",
+            declaredRole: DeclaredDanceRole.LEADER,
+        });
+        // L'indirizzo resta quello dell'acquirente su entrambe: è l'unico che il
+        // negozio ha visto, ed è a lui che i biglietti sono stati mandati.
+        expect(registrations.every(r => r.holderEmail === "ballerina@example.it")).toBe(true);
+    });
+
+    it("l'attributo del CARRELLO vale per il primo posto, non per tutti", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await setCheckoutFields({ salesChannelId: channel.id, roleAttributeName: "Ruolo" });
+
+        const payload = shopifyOrderPayload({
+            // Un carrello ha un solo insieme di attributi, e chi lo compila è la
+            // persona al checkout: spalmarlo su tre pass produrrebbe tre leader
+            // dichiarati, cioè un equilibrio falso — peggio di uno mancante.
+            noteAttributes: [{ name: "Ruolo", value: "leader" }],
+            lines: [{ productId: "P1", quantity: 3 }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        const registrations = await getPrismaClient().registration.findMany({
+            where: { externalSaleId: sale.id },
+            orderBy: { id: "asc" },
+        });
+
+        expect(registrations[0]!.declaredRole).toBe(DeclaredDanceRole.LEADER);
+        expect(registrations[1]!.declaredRole).toBe(DeclaredDanceRole.FLEXIBLE);
+        expect(registrations[2]!.declaredRole).toBe(DeclaredDanceRole.FLEXIBLE);
+    });
+
+    it("un ruolo che non si riconosce NON si indovina: resta flessibile", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await setCheckoutFields({ salesChannelId: channel.id, roleAttributeName: "Ruolo" });
+
+        // Non esiste alcuna corrispondenza fra genere e ruolo: dedurla
+        // manderebbe una persona dalla parte sbagliata della sala, e il difetto
+        // si vedrebbe alla porta.
+        const payload = shopifyOrderPayload({
+            lines: [{ productId: "P1", quantity: 1, properties: [{ name: "Ruolo", value: "donna" }] }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        const registrations = await getPrismaClient().registration.findMany({ where: { externalSaleId: sale.id } });
+        expect(registrations[0]!.declaredRole).toBe(DeclaredDanceRole.FLEXIBLE);
+    });
+
+    it("senza i campi configurati NULLA cambia: flessibile e intestato all'acquirente", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+
+        // Il negozio manda i campi lo stesso, ma il canale non sa come si
+        // chiamano: senza configurazione non si indovina un nome.
+        const payload = shopifyOrderPayload({
+            lines: [{
+                productId: "P1",
+                quantity: 1,
+                properties: [{ name: "Ruolo", value: "leader" }, { name: "Nome partecipante", value: "Ada Neri" }],
+            }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        const registrations = await getPrismaClient().registration.findMany({ where: { externalSaleId: sale.id } });
+        expect(registrations[0]).toMatchObject({
+            holderName: "Giulia",
+            holderSurname: "Rossi",
+            declaredRole: DeclaredDanceRole.FLEXIBLE,
+        });
+    });
+
+    it("il cliente del negozio e la sua lingua si registrano, e la lingua arriva alla posta", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+
+        const payload = shopifyOrderPayload({
+            customerId: 998_877,
+            locale: "en-GB",
+            email: "dancer@example.co.uk",
+            lines: [{ productId: "P1", quantity: 1 }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        // È l'unico modo di riconoscere chi ha già comprato l'anno scorso:
+        // l'email cambia, questo no. Non aggancia alcuna utenza di Mirada.
+        expect(sale.externalCustomerId).toBe("998877");
+        expect(sale.customerLocale).toBe("en-GB");
+
+        const deadline = Date.now() + 5_000;
+        let mail = sentMails.find(sent => sent.to === "dancer@example.co.uk");
+        while (Date.now() < deadline && !mail) {
+            await new Promise(resolve => setTimeout(resolve, 25));
+        mail = sentMails.find(sent => sent.to === "dancer@example.co.uk");
+        }
+        expect(mail).toBeDefined();
+        // La lingua viaggia fino al servizio di posta, che è l'unico punto in
+        // cui si decide in che lingua scrivere (`MailService.localeFor`).
+        expect(mail!.localeHint).toBe("en-GB");
+    });
+
+    it("l'acquisto come OSPITE non ha cliente, e non è un errore", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+
+        const payload = shopifyOrderPayload({ customerId: null, lines: [{ productId: "P1", quantity: 1 }] });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        expect(sale.status).toBe(ExternalSaleStatus.INGESTED);
+        expect(sale.externalCustomerId).toBeNull();
+    });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // L'acconto e il residuo — `14-acconto-e-saldo.md`
+    // ═════════════════════════════════════════════════════════════════════════
+
+    it("il residuo è la quota del SOLO codice di acconto — l'early bird resta onorato", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await addDepositCode({ salesChannelId: channel.id, code: "ACCONTO_30" });
+
+        // Il caso del §4.2: pacchetto da €155, early bird −10%, poi `ACCONTO_30`.
+        // La persona paga €41,85 adesso e deve €97,65 alla porta: in tutto
+        // €139,50, non €155. Con `total_discounts` il residuo sarebbe €113,15 e
+        // l'early bird promesso si riprenderebbe di nascosto, alla porta.
+        const payload = shopifyOrderPayload({
+            totalPrice: "41.85",
+            discountCodes: ["EARLYBIRD", "ACCONTO_30"],
+            lines: [{
+                productId: "P1",
+                quantity: 1,
+                price: "155.00",
+                discounts: [
+                    { index: 0, amount: "15.50" },
+                    { index: 1, amount: "97.65" },
+                ],
+            }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        expect(sale.status).toBe(ExternalSaleStatus.INGESTED);
+        expect(sale.ticketListAmount).toBe(15_500);
+        expect(sale.depositPaidAmount).toBe(4_185);
+        expect(sale.balanceDueAmount).toBe(9_765);
+        expect(sale.nonTicketDepositAmount).toBe(0);
+
+        const registrations = await getPrismaClient().registration.findMany({ where: { externalSaleId: sale.id } });
+        expect(registrations).toHaveLength(1);
+        expect(registrations[0]!.balanceDueAmount).toBe(9_765);
+        expect(registrations[0]!.balanceSettledAmount).toBe(0);
+    });
+
+    it("RB28 — la somma delle quote per posto è ESATTAMENTE il residuo: 108,50 su 3 fa 36,17 · 36,17 · 36,16", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await addDepositCode({ salesChannelId: channel.id, code: "ACCONTO_30" });
+
+        const payload = shopifyOrderPayload({
+            totalPrice: "139.50",
+            discountCodes: ["ACCONTO_30"],
+            lines: [{
+                productId: "P1",
+                quantity: 3,
+                price: "155.00",
+                discounts: [{ index: 0, amount: "108.50" }],
+            }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        const registrations = await getPrismaClient().registration.findMany({
+            where: { externalSaleId: sale.id },
+            orderBy: { id: "asc" },
+        });
+
+        expect(registrations.map(r => r.balanceDueAmount)).toEqual([3_617, 3_617, 3_616]);
+        // L'invariante, che è l'unica cosa che conta: nessun centesimo si crea e
+        // nessuno si perde. Un centesimo per posto su ottocento posti sono otto
+        // euro che non tornano e una serata a cercarli.
+        expect(registrations.reduce((sum, r) => sum + r.balanceDueAmount, 0)).toBe(10_850);
+        expect(sale.balanceDueAmount).toBe(10_850);
+    });
+
+    it("RF-SAL-4 — la fetta di acconto caduta sulla MERCE non è residuo: si registra e si segnala", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        // Mappatura senza titolo: «so cos'è, non è un biglietto».
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "T-SHIRT", ticketTypeId: null });
+        await addDepositCode({ salesChannelId: channel.id, code: "ACCONTO_30" });
+
+        const payload = shopifyOrderPayload({
+            totalPrice: "52.50",
+            discountCodes: ["ACCONTO_30"],
+            lines: [
+                { productId: "P1", quantity: 1, price: "155.00", discounts: [{ index: 0, amount: "108.50" }] },
+                { productId: "T-SHIRT", quantity: 1, price: "25.00", discounts: [{ index: 0, amount: "17.50" }] },
+            ],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        // Alla porta nessuno chiede il saldo di una maglietta già consegnata.
+        expect(sale.balanceDueAmount).toBe(10_850);
+        expect(sale.nonTicketDepositAmount).toBe(1_750);
+        // Si SEGNALA, non si mette in quarantena: la vendita è legittima e incassata.
+        expect(sale.status).toBe(ExternalSaleStatus.INGESTED);
+
+        const registrations = await getPrismaClient().registration.findMany({ where: { externalSaleId: sale.id } });
+        expect(registrations).toHaveLength(1);
+        expect(registrations[0]!.balanceDueAmount).toBe(10_850);
+    });
+
+    it("RF-SAL-2 — il confronto è normalizzato: ` acconto_30 ` è lo stesso codice", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await addDepositCode({ salesChannelId: channel.id, code: "ACCONTO_30" });
+
+        const payload = shopifyOrderPayload({
+            totalPrice: "46.50",
+            // Applicato a mano dal back-office del negozio, con un'altra
+            // capitalizzazione. Senza normalizzazione la vendita entrerebbe come
+            // se fosse a prezzo pieno: nessun errore, nessun segnale, e al
+            // botteghino nessuno chiede quei €108,50.
+            discountCodes: [" acconto_30 "],
+            lines: [{ productId: "P1", quantity: 1, price: "155.00", discounts: [{ index: 0, amount: "108.50" }] }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        expect(sale.balanceDueAmount).toBe(10_850);
+    });
+
+    it("RF-SAL-3 — uno sconto NON configurato come acconto è uno sconto, e non genera residuo", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await addDepositCode({ salesChannelId: channel.id, code: "ACCONTO_30" });
+
+        const payload = shopifyOrderPayload({
+            totalPrice: "139.50",
+            discountCodes: ["EARLYBIRD"],
+            lines: [{ productId: "P1", quantity: 1, price: "155.00", discounts: [{ index: 0, amount: "15.50" }] }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+
+        const sale = await waitForSale(channel.id, String(payload.id));
+        expect(sale.status).toBe(ExternalSaleStatus.INGESTED);
+        expect(sale.balanceDueAmount).toBe(0);
+
+        const registrations = await getPrismaClient().registration.findMany({ where: { externalSaleId: sale.id } });
+        expect(registrations[0]!.balanceDueAmount).toBe(0);
+    });
+
+    it("RF-SAL-13 — l'email dice l'acconto versato E il saldo da versare al check-in", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await addDepositCode({ salesChannelId: channel.id, code: "ACCONTO_30" });
+
+        const payload = shopifyOrderPayload({
+            totalPrice: "46.50",
+            discountCodes: ["ACCONTO_30"],
+            lines: [{ productId: "P1", quantity: 1, price: "155.00", discounts: [{ index: 0, amount: "108.50" }] }],
+        });
+        const { rawBody, headers } = signedDelivery({ payload, webhookSecret });
+        await ingestion.receive(channel.publicId, rawBody, headers);
+        await waitForSale(channel.id, String(payload.id));
+
+        // Si cerca **l'email di QUESTO ordine**, non «la prima arrivata»: la
+        // consegna avviene dopo il commit, quindi l'email di un caso precedente
+        // può atterrare qui dentro un istante dopo che il registratore è stato
+        // svuotato. Un test che contasse le email sarebbe intermittente.
+        const deadline = Date.now() + 5_000;
+        let mail = sentMails.find(sent => sent.input.total === 4_650);
+        while (Date.now() < deadline && !mail) {
+            await new Promise(resolve => setTimeout(resolve, 25));
+            mail = sentMails.find(sent => sent.input.total === 4_650);
+        }
+
+        expect(mail).toBeDefined();
+        // Senza `balanceDue`, `total` sarebbe l'unica cifra dell'email — €46,50
+        // su un pacchetto da €155 — e direbbe a qualcuno che ha pagato quando non
+        // ha finito di pagare.
+        expect(mail!.input.balanceDue).toBe(10_850);
+    });
+
+    it("la revoca CHIUDE il residuo: nessuno si presenterà a quella porta", async () => {
+        const { scenario, channel, webhookSecret } = await externalChannelEvent();
+        await mapProduct({ salesChannelId: channel.id, externalProductId: "P1", ticketTypeId: scenario.ticketTypeId });
+        await addDepositCode({ salesChannelId: channel.id, code: "ACCONTO_30" });
+
+        const payload = shopifyOrderPayload({
+            totalPrice: "46.50",
+            discountCodes: ["ACCONTO_30"],
+            lines: [{ productId: "P1", quantity: 1, price: "155.00", discounts: [{ index: 0, amount: "108.50" }] }],
+        });
+        await ingestion.receive(channel.publicId, ...deliveryArgs(payload, webhookSecret, "consegna-acconto"));
+        const sale = await waitForSale(channel.id, String(payload.id));
+
+        const refund = { id: 99_001, order_id: payload.id };
+        const revocation = signedDelivery({
+            payload: refund,
+            webhookSecret,
+            topic: "refunds/create",
+            deliveryId: "consegna-rimborso",
+        });
+        await ingestion.receive(channel.publicId, revocation.rawBody, revocation.headers);
+
+        const deadline = Date.now() + 5_000;
+        while (Date.now() < deadline) {
+            const current = await getPrismaClient().externalSale.findFirstOrThrow({ where: { id: sale.id } });
+            if (current.status === ExternalSaleStatus.REFUNDED) {
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 25));
+        }
+
+        const registrations = await getPrismaClient().registration.findMany({ where: { externalSaleId: sale.id } });
+        expect(registrations.every(r => r.balanceDueAmount === 0)).toBe(true);
     });
 
     // ═════════════════════════════════════════════════════════════════════════

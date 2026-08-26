@@ -35,6 +35,15 @@ enum RoleName {
   USER // legacy template — nessun permesso concesso
   OWNER
   EVENT_MANAGER
+  /// Chi tiene la cassa al botteghino (`02` ruolo **BO**, `14` §6.3).
+  ///
+  /// Esiste separato da `EVENT_MANAGER` per la ragione dichiarata in `14` §7.2:
+  /// la cassa è una postazione, spesso presidiata da una persona di fiducia che
+  /// **non** deve poter modificare l'evento. Senza questo ruolo l'unico modo di
+  /// far incassare un saldo sarebbe dare a quella persona i poteri di chi
+  /// costruisce il festival — e l'importo del residuo, che `RB27` tiene lontano
+  /// dai volontari, finirebbe comunque sotto gli occhi di tutti.
+  BOX_OFFICE
   CHECKIN_OPERATOR
   DANCER
 }
@@ -136,6 +145,7 @@ model User {
   ticketTransfersFrom         TicketTransfer[]     @relation("TicketTransferFrom")
   ticketTransfersTo           TicketTransfer[]     @relation("TicketTransferTo")
   checkIns                    CheckIn[]            @relation("CheckInOperator")
+  balanceSettlements          BalanceSettlement[]  @relation("BalanceSettlementOperator")
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -371,6 +381,9 @@ enum PayoutStatus {
 enum OrgMemberRole {
   OWNER
   EVENT_MANAGER
+  /// Vedi `RoleName.BOX_OFFICE`. I due enum restano allineati a mano
+  /// (`ROLE_OF_MEMBERSHIP` in `OrganizationMemberService`).
+  BOX_OFFICE
   CHECKIN_OPERATOR
 }
 
@@ -1360,10 +1373,28 @@ model Registration {
   externalSaleId Int?
   externalSale   ExternalSale? @relation(fields: [externalSaleId], references: [id], onDelete: SetNull)
 
+  /// ── Il residuo di questa persona (`14` §5.1, `RF-SAL-7`) ─────────────────
+  /// Centesimi interi. `0` su tutte le iscrizioni che non nascono da un acconto,
+  /// che oggi sono la quasi totalità.
+  ///
+  /// **Sta qui e non sulla vendita** per tre ragioni, in ordine: al botteghino si
+  /// presentano persone e non ordini; il giorno in cui a generare il residuo sarà
+  /// un `Order` con Stripe (fase D2) non cambia una riga a valle; e sopravvive
+  /// alla rielaborazione della vendita, che è un'operazione normale.
+  ///
+  /// `balanceDueAmount` è **quanto è nato** e non si muove più.
+  balanceDueAmount     Int @default(0)
+  /// **Quanto ne è stato saldato**, ed è un contatore: si muove SOLO attraverso
+  /// `BalanceSettlementService`, mai da un DTO di aggiornamento — esattamente
+  /// come `CapacityQuota.consumed`, e per la stessa ragione (`14` §5.2).
+  /// Il residuo ancora aperto è la differenza fra i due.
+  balanceSettledAmount Int @default(0)
+
   quotaConsumptions   QuotaConsumption[]
   requirementOutcomes RequirementOutcome[]
   tickets             Ticket[]
   checkIns            CheckIn[]
+  balanceSettlements  BalanceSettlement[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -2063,9 +2094,32 @@ model SalesChannel {
   /// tutto lo storico del negozio.
   lastReconciledAt DateTime?
 
-  mappings SalesChannelMapping[]
-  sales    ExternalSale[]
-  events   ExternalSaleEvent[]
+  // ── Ciò che il negozio chiede al checkout, e che Mirada sa leggere ─────────
+  //
+  // Il ruolo di ballo e il nominativo del partecipante **non esistono nel
+  // dominio di un negozio**: ci sono soltanto se l'organizzatore li chiede al
+  // carrello (attributi d'ordine) o al prodotto (proprietà di riga). Quando li
+  // chiede, li chiama come vuole — «Ruolo», «Ruolo di ballo», «Dance role» — e
+  // il nome cambia da negozio a negozio e da edizione a edizione.
+  //
+  // Sono quindi **configurazione**, per la stessa ragione dei codici di acconto:
+  // un `if (name === "Ruolo")` sarebbe una modifica al software a ogni edizione,
+  // e un giorno la modifica non verrebbe fatta. Nulli = il negozio non li
+  // raccoglie, e l'iscrizione nasce flessibile e intestata all'acquirente.
+
+  /// Come si chiama, sul negozio, il campo che porta il **ruolo di ballo**.
+  /// Il confronto è normalizzato (maiuscole e spazi non contano).
+  roleAttributeName String?
+
+  /// Come si chiama il campo che porta il **nominativo del partecipante**.
+  /// Serve agli ordini da più posti, dove altrimenti tutte le iscrizioni
+  /// nascono intestate a chi ha comprato.
+  attendeeNameAttributeName String?
+
+  mappings     SalesChannelMapping[]
+  depositCodes SalesChannelDepositCode[]
+  sales        ExternalSale[]
+  events       ExternalSaleEvent[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -2119,6 +2173,50 @@ model SalesChannelMapping {
   @@index([ticketTypeId])
 }
 
+/// I codici sconto che, **sul negozio**, significano «acconto» (`14` §3.1,
+/// `RF-SAL-1`).
+///
+/// ── Perché è configurazione e non codice ────────────────────────────────────
+/// International Trani Tango vende con `ACCONTO_30`; esistono già varianti e ne
+/// esisteranno altre — `ACCONTO_50`, codici per edizione, codici per pacchetto.
+/// Un `if (code === "ACCONTO_30")` sarebbe una modifica al software a ogni
+/// edizione, e un giorno la modifica non verrebbe fatta: la vendita entrerebbe
+/// come se fosse a prezzo pieno, il residuo non nascerebbe, e al botteghino
+/// nessuno chiederebbe quei centoventi euro.
+///
+/// ── La percentuale NON è qui, ed è deliberato ───────────────────────────────
+/// Il codice **marca** la vendita come acconto; a dire quanto manca è l'importo
+/// che quel codice ha scontato, che il negozio consegna esatto per riga. Il `30`
+/// nel nome è un'etichetta per gli umani: il giorno in cui l'organizzatore
+/// cambierà la percentuale del codice senza rinominarlo, un calcolo fondato sul
+/// nome sbaglierebbe in silenzio.
+model SalesChannelDepositCode {
+  id Int @id @default(autoincrement())
+
+  salesChannelId Int
+  salesChannel   SalesChannel @relation(fields: [salesChannelId], references: [id], onDelete: Cascade)
+
+  /// Il codice **normalizzato** — maiuscolo, senza spazi (`RF-SAL-2`). È la
+  /// forma su cui si confronta, e si normalizza in scrittura perché confrontare
+  /// normalizzando a ogni lettura sarebbe la stessa regola scritta in due posti.
+  ///
+  /// Il difetto che la normalizzazione evita è muto: un codice applicato a mano
+  /// dal back-office del negozio con una capitalizzazione diversa non verrebbe
+  /// riconosciuto come acconto. Nessun errore, nessuna quarantena, nessun
+  /// segnale. Se ne accorge il commercialista a settembre.
+  code String
+
+  /// Come l'organizzatore lo chiama — «Acconto 30%». Serve a lui, non al calcolo.
+  label String
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([salesChannelId, code])
+  @@index([salesChannelId])
+}
+
 enum ExternalSaleStatus {
   /// Notifica ricevuta e firmata, non ancora elaborata.
   RECEIVED
@@ -2166,10 +2264,48 @@ model ExternalSale {
   buyerSurname String
   buyerEmail   String
 
+  /// L'identificativo del cliente **presso il negozio**.
+  ///
+  /// È l'unico modo di riconoscere chi ha già comprato l'anno scorso: l'email
+  /// cambia, questo no. Non aggancia alcuna utenza di Mirada e non deve —
+  /// l'aggancio a un account richiede un indirizzo **dimostrato**, non uno
+  /// digitato al checkout (`authentication.md`).
+  ///
+  /// Nullo sugli acquisti come ospite, dove il cliente non esiste sul negozio.
+  externalCustomerId String?
+
+  /// La lingua del cliente sul negozio (`it`, `en-GB`, …), quando la dichiara.
+  /// È ciò in cui va scritta l'email dei biglietti.
+  customerLocale String?
+
   /// Centesimi interi, come ovunque nel dominio (§3.1). È l'importo incassato
   /// **dal negozio**, non da Mirada: serve a riconciliare, non a contabilizzare.
   totalAmount Int    @default(0)
   currency    String @default("EUR")
+
+  // ── I numeri dell'acconto (`14` §5) ────────────────────────────────────────
+  // Rispondono a una domanda sola: «questo ordine torna con Shopify?». La
+  // domanda operativa — «questo che si presenta alla porta, quanto deve?» — la
+  // risponde `Registration`, ed è il motivo per cui i due posti non sono uno.
+  //
+  // Tutti a zero sulle vendite a prezzo pieno, che sono la norma.
+
+  /// Il prezzo di **listino** delle sole righe biglietto, prima dello sconto di
+  /// acconto: è ciò che la persona avrà pagato in tutto quando avrà saldato.
+  ticketListAmount Int @default(0)
+
+  /// L'**acconto** realmente incassato dal negozio sulle righe biglietto.
+  depositPaidAmount Int @default(0)
+
+  /// Il **residuo** che questa vendita ha generato, cioè la somma delle quote
+  /// scritte sulle iscrizioni. `RB28`: le due cifre coincidono sempre.
+  balanceDueAmount Int @default(0)
+
+  /// La quota di sconto di acconto caduta su righe che **non** sono biglietti
+  /// (`14` §4.4). Non è residuo — alla porta nessuno chiede il saldo di una
+  /// maglietta già consegnata — ma si registra e si segnala: quasi sempre
+  /// significa che il codice, sul negozio, non è limitato ai soli pacchetti.
+  nonTicketDepositAmount Int @default(0)
 
   /// La vendita nella forma **canonica** — l'esito della traduzione, non il corpo
   /// che è arrivato. Il corpo grezzo esiste e sta su `ExternalSaleEvent.payload`:
@@ -2251,4 +2387,121 @@ model ExternalSaleEvent {
   @@unique([salesChannelId, externalEventId])
   @@index([salesChannelId, status])
   @@index([externalOrderId])
+}
+
+// =============================================================================
+// L'ACCONTO E IL SALDO — `14-acconto-e-saldo.md`
+//
+// Il negozio dell'organizzatore vende un pacchetto da €155 con un codice sconto
+// chiamato `ACCONTO_30`: il ballerino paga €46,50 adesso e salda €108,50 al
+// botteghino, quasi sempre in contanti. È una pratica che funziona da anni.
+//
+// ── Ciò che il negozio vede non è ciò che sta succedendo ────────────────────
+// Con un codice sconto, per Shopify quell'ordine non è parzialmente pagato: è
+// **pagato per intero, a un prezzo ridotto**. `financial_status` vale `paid` e
+// da nessuna parte esiste un residuo. L'unica traccia dell'acconto è il **nome
+// del codice** — quindi è configurazione (`SalesChannelDepositCode`), non una
+// deduzione dai numeri, che sarebbe indovinare.
+//
+// Ne discende il fatto che governa tutte le tabelle qui sotto: **il residuo
+// esiste solo dentro Mirada**. Nessuna riconciliazione con il negozio potrà mai
+// confermarlo, perché il negozio non sa di averlo generato.
+//
+// ── Mirada non concede l'acconto: lo registra ───────────────────────────────
+// `01-decisioni-prese.md` abolisce gli acconti, e quella decisione resta intatta
+// perché riguarda **il checkout di Mirada**: qui non c'è un pagamento rateale,
+// non ci sono solleciti, non ci sono ordini parzialmente pagati. C'è il
+// riconoscimento di un acconto incassato altrove e il debito che ne consegue.
+//
+// ── Nessuna riga `Payment`, e non è una svista ──────────────────────────────
+// Il denaro dell'acconto non è mai passato da Mirada, e nemmeno quello del
+// saldo. Scrivere `Payment` metterebbe una bugia nel registro degli incassi
+// della piattaforma e romperebbe il significato di `Payment.idempotencyKey`. È
+// la stessa scelta già presa per la fase E, e vale identica qui (`RB26`).
+// =============================================================================
+
+/// Come il saldo è stato materialmente incassato.
+///
+/// È una **spunta, non un prestatore di pagamento**: Mirada non incassa nulla,
+/// prende nota di ciò che qualcuno ha preso in mano. Nessuno di questi valori
+/// apre un flusso, chiama un'API o produce una ricevuta.
+enum BalanceSettlementMethod {
+  CASH
+  POS
+  SATISPAY
+  BANK_TRANSFER
+  OTHER
+}
+
+/// Il registro dei saldi incassati (`14` §6, `RF-SAL-8`).
+///
+/// ── Perché ogni incasso è una riga ─────────────────────────────────────────
+/// Senza le righe, la chiusura di cassa e i totali all'organizzatore non hanno
+/// da dove uscire, e «chi ha in tasca cosa» a fine serata è un'opinione. La
+/// chiusura per operatore e per turno è fuori dal primo taglio, ma le righe ci
+/// sono tutte fin da subito: si costruirà senza migrare nulla.
+///
+/// ── Si registra, non si contabilizza (`RB26`) ──────────────────────────────
+/// Queste righe non compaiono fra i `Payment` né nei rendiconti degli incassi
+/// Mirada. Gli adempimenti fiscali su quel contante — ricevuta, corrispettivi —
+/// restano dell'organizzatore, come già oggi per l'incasso sul negozio.
+model BalanceSettlement {
+  id Int @id @default(autoincrement())
+
+  registrationId Int
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+
+  /// Centesimi interi. Positivo: una restituzione non è un incasso negativo, ed
+  /// è dichiarata fuori dal taglio finché non esiste la ricevuta che la regge.
+  amount Int
+
+  method BalanceSettlementMethod
+
+  operatorUserId Int
+  operator       User @relation("BalanceSettlementOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+
+  /// Momento della riscossione **sul dispositivo** — offline può precedere di
+  /// ore la sincronizzazione, ed è questo il momento in cui il denaro è passato
+  /// di mano. Stessa scelta di `CheckIn.scannedAt`, e per la stessa ragione.
+  collectedAt DateTime  @default(now())
+  /// Momento in cui la riga è arrivata al server. Nullo sugli incassi online.
+  syncedAt    DateTime?
+
+  /// La postazione. **Nullo sul saldo anticipato dal back-office** (`RF-SAL-10`),
+  /// che è una riga come le altre ma non nasce a una porta.
+  deviceId String?
+  offline  Boolean @default(false)
+
+  /// Il riferimento generato dal dispositivo, unico per postazione: è ciò che
+  /// rende la **stessa** riga sincronizzata due volte una riga sola.
+  ///
+  /// ⚠️ L'unicità è su `(deviceId, deviceReference)` e qui i `NULL` distinti di
+  /// PostgreSQL sono **voluti**, al contrario di `SalesChannelMapping`: le righe
+  /// del back-office non hanno né postazione né riferimento, e devono poter
+  /// essere molte — una persona può saldare in due bonifici.
+  deviceReference String?
+
+  /// Il **doppio incasso**: due postazioni scollegate possono incassare due
+  /// volte lo stesso residuo senza saperlo. Si tratta come il doppio ingresso di
+  /// `RF-CHK-6` — la seconda riga **viene creata**, marcata qui, e lasciata allo
+  /// staff. Mai scartata in silenzio: sono soldi che qualcuno ha realmente preso
+  /// in mano, e cancellarli perché il server preferisce il primo arrivato
+  /// significherebbe far quadrare i conti sul telefono e non nella cassa.
+  conflictWithId Int?
+  conflictWith   BalanceSettlement?  @relation("BalanceSettlementConflict", fields: [conflictWithId], references: [id], onDelete: SetNull)
+  conflicts      BalanceSettlement[] @relation("BalanceSettlementConflict")
+
+  /// Quello che l'operatore vuole lasciare scritto — «pagato in due banconote da
+  /// 50 e contestava la cifra». Serve a chi risolve il conflitto domani.
+  note String?
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([deviceId, deviceReference])
+  @@index([registrationId])
+  @@index([operatorUserId])
+  @@index([conflictWithId])
+  @@index([collectedAt])
 }

@@ -260,7 +260,17 @@ export class CheckInVerificationService {
      * di requisito, nessuna dieta: sono i dati che il volontario alla porta non
      * deve vedere, e la sola strada per non mostrarli è non spedirli.
      */
-    public async describe(outcome: VerificationOutcome, tx?: Prisma.TransactionClient): Promise<TicketVerifyResponseDTO> {
+    public async describe(
+        outcome: VerificationOutcome,
+        tx?: Prisma.TransactionClient,
+        /**
+         * `true` solo per chi ha il permesso di cassa: senza, l'avviso parte con
+         * `amount: null` (`RB27`). Il valore predefinito è il più prudente —
+         * chiamare questa funzione senza pensarci non deve poter far uscire una
+         * cifra.
+         */
+        showBalanceAmount = false,
+    ): Promise<TicketVerifyResponseDTO> {
         const ticket = outcome.ticket;
 
         if (!ticket) {
@@ -277,6 +287,7 @@ export class CheckInVerificationService {
                 services: [],
                 blockingRequirement: this.describeBlocking(outcome.blockingRequirement),
                 firstEntry: null,
+                balance: null,
                 signature: this.describeSignature(outcome),
             };
         }
@@ -346,7 +357,44 @@ export class CheckInVerificationService {
                     kind: outcome.firstEntry.kind,
                 }
                 : null,
+            balance: this.describeBalance(ticket.registration ?? null, showBalanceAmount),
             signature: this.describeSignature(outcome),
+        };
+    }
+
+    /**
+     * L'avviso del saldo — `14` §7.2, `RB25` e `RB27`.
+     *
+     * ── Che cosa esce, e che cosa no ────────────────────────────────────────
+     * Chi non tiene la cassa riceve `amount: null` e sulla schermata legge
+     * *«saldo da versare, manda alla cassa»*. È una scelta consapevole con un
+     * costo organizzativo dichiarato — due postazioni, l'ingresso e la cassa, e
+     * chi arriva con un residuo aperto fa un passaggio in più. In cambio, la
+     * cifra che una persona deve non passa sotto gli occhi di ogni volontario di
+     * turno.
+     *
+     * ── `null` quando non c'è niente da dire ────────────────────────────────
+     * Un residuo chiuso non lascia un avviso spento: sparisce. Un flag `open:
+     * false` che resta sullo schermo è un flag che qualcuno, prima o poi, legge
+     * come «c'è qualcosa».
+     */
+    private describeBalance(
+        registration: { id: number; balanceDueAmount: number; balanceSettledAmount: number } | null,
+        showAmount: boolean,
+    ): { registrationId: number; open: boolean; amount: number | null } | null {
+        if (!registration) {
+            return null;
+        }
+
+        const open = registration.balanceDueAmount - registration.balanceSettledAmount;
+        if (open <= 0) {
+            return null;
+        }
+
+        return {
+            registrationId: registration.id,
+            open: true,
+            amount: showAmount ? open : null,
         };
     }
 

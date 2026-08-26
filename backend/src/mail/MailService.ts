@@ -57,9 +57,20 @@ export class MailService {
      * da impostazione predefinita — è l'unica onesta finché il dato non c'è, e
      * il commento serve a chi si chiederà perché un ballerino inglese riceve
      * l'italiano.
+     *
+     * ── `hint`: la lingua che il mittente conosce già ───────────────────────
+     * Alcune strade la sanno davvero. Un ordine di un negozio esterno porta la
+     * lingua che il cliente aveva scelto al checkout (`customer_locale`): chi ha
+     * comprato in inglese non deve ricevere il biglietto in italiano, e
+     * l'indirizzo email non dice nulla al riguardo — `@gmail.com` è di tutti.
+     *
+     * Resta **l'unico punto in cui la lingua si decide**: il suggerimento entra
+     * qui e non nei quattro invii, e ciò che non si riconosce ricade
+     * sull'italiano invece di produrre un'email in una lingua inventata.
      */
-    private localeFor(_recipientEmail: string): MailLocale {
-        return "it";
+    private localeFor(_recipientEmail: string, hint?: string | null): MailLocale {
+        // `en-GB`, `en_US`, `EN` sono la stessa lingua: conta il prefisso.
+        return (hint ?? "").trim().slice(0, 2).toLowerCase() === "en" ? "en" : "it";
     }
 
     /** Benvenuto — spedito **dopo** la conferma dell'indirizzo, non prima (`RF-COM-1`). */
@@ -117,12 +128,14 @@ export class MailService {
         input: Omit<RegistrationConfirmedInput, "locale">,
         /** I QR dei biglietti, già disegnati. Il corpo li richiama per `cid`. */
         inlineImages?: InlineImage[],
+        /** La lingua che il chiamante conosce già — vedi `localeFor`. */
+        localeHint?: string | null,
     ): Promise<void> {
         await this.dispatch(
             "registration-confirmed",
             to,
             input.firstName,
-            () => registrationConfirmedMail({ ...input, locale: this.localeFor(to) }),
+            () => registrationConfirmedMail({ ...input, locale: this.localeFor(to, localeHint) }),
             inlineImages,
         );
     }

@@ -22,6 +22,7 @@ import { OrganizationMemberQueryDTO } from "@DTOs/organization_member/Organizati
 const ROLE_OF_MEMBERSHIP: Record<OrgMemberRole, RoleName> = {
     [OrgMemberRole.OWNER]: RoleName.OWNER,
     [OrgMemberRole.EVENT_MANAGER]: RoleName.EVENT_MANAGER,
+    [OrgMemberRole.BOX_OFFICE]: RoleName.BOX_OFFICE,
     [OrgMemberRole.CHECKIN_OPERATOR]: RoleName.CHECKIN_OPERATOR,
 };
 

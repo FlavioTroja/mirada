@@ -18,9 +18,12 @@ import {
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { getPrismaClient } from "@utils/adapters/prisma";
+import { splitCents } from "@utils/helpers/splitCents";
+import { normalizeDepositCode } from "@utils/helpers/depositCode";
 import { open } from "@utils/adapters/secretBox";
 import { SalesChannelRepository } from "@repositories/SalesChannelRepository";
 import { SalesChannelMappingRepository } from "@repositories/SalesChannelMappingRepository";
+import { SalesChannelDepositCodeRepository } from "@repositories/SalesChannelDepositCodeRepository";
 import { ExternalSaleRepository } from "@repositories/ExternalSaleRepository";
 import { ExternalSaleEventRepository } from "@repositories/ExternalSaleEventRepository";
 import { RegistrationRepository } from "@repositories/RegistrationRepository";
@@ -36,6 +39,7 @@ import { Events } from "@websocket/events/Events";
 import { ExternalSaleIngestedPayloadDTO } from "@websocket/dtos/ExternalSaleIngestedPayloadDTO";
 import { ExternalSaleQuarantinedPayloadDTO } from "@websocket/dtos/ExternalSaleQuarantinedPayloadDTO";
 import {
+    CanonicalAttribute,
     CanonicalNotification,
     CanonicalSale,
     ExternalNotificationKind,
@@ -52,11 +56,64 @@ export type ReceiveOutcome = {
     scheduled: boolean;
 };
 
+/**
+ * Chi è, e come balla, **il singolo posto** — per quanto il negozio ne sappia.
+ *
+ * Un posto ha sempre un'identità: quando il negozio non chiede nulla è quella di
+ * chi ha comprato, con ruolo flessibile. Non esiste il caso «non lo so»: sarebbe
+ * un'iscrizione senza nominativo alla porta.
+ */
+type SeatIdentity = {
+    declaredRole: DeclaredDanceRole;
+    name: string;
+    surname: string;
+};
+
 /** Una riga d'ordine già tradotta in posti da registrare. */
 type ResolvedLine = {
     ticketTypeId: number;
     seats: number;
     title: string;
+    /** Una identità per posto, nell'ordine in cui i posti vengono creati. */
+    identities: SeatIdentity[];
+    /** Prezzo di **listino** della riga, prima di qualunque sconto. */
+    listAmount: number;
+    /** Il **residuo** di questa riga: quanto i codici di acconto le hanno
+     *  scontato, e nient'altro (`14` §4.1). Zero sulle vendite a prezzo pieno. */
+    balanceDue: number;
+};
+
+/**
+ * I quattro numeri dell'acconto per l'intera vendita (`14` §5).
+ *
+ * `depositPaidAmount` + `balanceDueAmount` non fa `ticketListAmount` quando
+ * sull'ordine c'è **anche** uno sconto ordinario: la differenza è proprio quello
+ * sconto, ed è la ragione per cui il residuo non si calcola da `total_discounts`
+ * (`14` §4.2). Su un pacchetto da €155 con early bird −10% e poi `ACCONTO_30`,
+ * la persona paga €41,85 adesso, deve €97,65 alla porta, e avrà pagato €139,50 —
+ * non €155, che si riprenderebbe di nascosto l'early bird promesso.
+ */
+type DepositTally = {
+    ticketListAmount: number;
+    depositPaidAmount: number;
+    balanceDueAmount: number;
+    nonTicketDepositAmount: number;
+};
+
+/** Lo stato in cui la riga della vendita va scritta. */
+type SaleState = {
+    status: ExternalSaleStatus;
+    eventId: number | null;
+    ingestedAt: Date | null;
+    quarantineReason: string | null;
+    deposit: DepositTally;
+};
+
+const NO_DEPOSIT: DepositTally = {
+    ticketListAmount: 0,
+    depositPaidAmount: 0,
+    balanceDueAmount: 0,
+    nonTicketDepositAmount: 0,
 };
 
 /**
@@ -68,6 +125,7 @@ type LineResolution = {
     lines: ResolvedLine[];
     event: Event | null;
     reason: string | null;
+    deposit: DepositTally;
 };
 
 /**
@@ -107,6 +165,7 @@ export class ExternalSaleIngestionService {
     constructor(
         private readonly salesChannelRepository: SalesChannelRepository,
         private readonly salesChannelMappingRepository: SalesChannelMappingRepository,
+        private readonly salesChannelDepositCodeRepository: SalesChannelDepositCodeRepository,
         private readonly externalSaleRepository: ExternalSaleRepository,
         private readonly externalSaleEventRepository: ExternalSaleEventRepository,
         private readonly registrationRepository: RegistrationRepository,
@@ -296,11 +355,22 @@ export class ExternalSaleIngestionService {
                 `[ExternalSaleIngestion Service]: external order ${sale.externalOrderId} on sales channel (id ${channel.id}) `
                 + "carries no ticket line — recorded without registrations",
             );
+            if (resolution.deposit.nonTicketDepositAmount > 0) {
+                // Codice di acconto su un ordine senza righe biglietto (`14` §9).
+                // Nessun residuo — non c'è nessuno che si presenterà alla porta —
+                // ma è un fatto che l'organizzatore deve vedere.
+                Log.warn(
+                    `[ExternalSaleIngestion Service]: external order ${sale.externalOrderId} carries a deposit code `
+                    + `on non-ticket lines only (${resolution.deposit.nonTicketDepositAmount} cents) — no balance created`,
+                );
+            }
+
             return this.upsertSale(channel, sale, {
                 status: ExternalSaleStatus.INGESTED,
                 eventId: null,
                 ingestedAt: new Date(),
                 quarantineReason: null,
+                deposit: resolution.deposit,
             }, existing);
         }
 
@@ -318,38 +388,56 @@ export class ExternalSaleIngestionService {
                 eventId: event.id,
                 ingestedAt: null,
                 quarantineReason: null,
+                deposit: resolution.deposit,
             }, existing, prisma);
 
             const items: CommitItem[] = [];
             const tickets: Ticket[] = [];
 
             for (const line of resolution.lines) {
+                // ── La ripartizione fra i posti (`14` §4.5, `RB28`) ───────────
+                // Il residuo della riga si divide per i posti che quella riga
+                // vale, in centesimi interi, e il resto va ai primi. La somma
+                // delle quote è **esattamente** il residuo della riga: è
+                // l'invariante, e `splitCents` esiste solo per garantirla.
+                const shares = splitCents(line.balanceDue, line.seats);
+
                 for (let seat = 0; seat < line.seats; seat += 1) {
+                    const identity = line.identities[seat]!;
                     // Una iscrizione per posto: è la persona nell'evento, ed è
                     // ciò a cui i consumi di capienza si agganciano.
                     //
-                    // ── Il ruolo di ballo ───────────────────────────────────
-                    // Il negozio non lo chiede e non lo sa. `FLEXIBLE` non è un
-                    // ripiego: è la verità di questo momento, e il motore lo
-                    // risolve nel ruolo più scarso invece di lasciare
-                    // l'iscrizione senza (che l'invariante `I4` vieta). Quando il
-                    // modulo di completamento rientrerà con il ruolo vero,
-                    // `CapacityEngineService.reassignRole` correggerà. Fino ad
-                    // allora l'equilibrio leader/follower è **provvisorio**, e il
-                    // cruscotto lo deve dire.
+                    // ── Il ruolo di ballo, e chi occupa il posto ────────────
+                    // Il negozio li conosce **solo se li ha chiesti** al
+                    // checkout, e allora arrivano con il nome del campo che
+                    // l'organizzatore ha configurato sul canale. Quando non li
+                    // chiede, `FLEXIBLE` e il nominativo dell'acquirente non
+                    // sono un ripiego: sono la verità di questo momento. Il
+                    // motore risolve il ruolo flessibile in quello più scarso
+                    // invece di lasciare l'iscrizione senza (invariante `I4`), e
+                    // `CapacityEngineService.reassignRole` correggerà quando il
+                    // ruolo vero si saprà. Fino ad allora l'equilibrio
+                    // leader/follower è **provvisorio**, e il cruscotto lo dice.
+                    //
+                    // L'indirizzo resta quello dell'acquirente anche sui posti
+                    // intestati ad altri: è l'unico che il negozio ha visto, ed
+                    // è a lui che i biglietti sono stati mandati.
                     const registration = await this.registrationRepository.save(
                         {
                             eventId: event.id,
                             externalSaleId: externalSale.id,
-                            holderName: sale.buyerName,
-                            holderSurname: sale.buyerSurname,
+                            holderName: identity.name,
+                            holderSurname: identity.surname,
                             holderEmail: sale.buyerEmail,
-                            declaredRole: DeclaredDanceRole.FLEXIBLE,
+                            declaredRole: identity.declaredRole,
                             channel: RegistrationChannel.EXTERNAL_CHANNEL,
                             // La vendita è incassata: l'iscrizione è confermata.
                             // Ciò che manca è il ruolo, non il pagamento.
                             status: RegistrationStatus.CONFIRMED,
                             confirmedAt: sale.paidAt ?? new Date(),
+                            // La quota di residuo **di questa persona**. Zero su
+                            // ogni vendita a prezzo pieno, che sono la norma.
+                            balanceDueAmount: shares[seat] ?? 0,
                         },
                         prisma,
                     );
@@ -360,8 +448,8 @@ export class ExternalSaleIngestionService {
                             ticketTypeId: line.ticketTypeId,
                             registrationId: registration.id,
                             externalSaleId: externalSale.id,
-                            holderName: sale.buyerName,
-                            holderSurname: sale.buyerSurname,
+                            holderName: identity.name,
+                            holderSurname: identity.surname,
                             holderEmail: sale.buyerEmail,
                             // Nominale, non al portatore: un titolare c'è —
                             // l'acquirente — ed è a lui che si scrive per farsi
@@ -400,6 +488,23 @@ export class ExternalSaleIngestionService {
             + `${outcome.warnings.length} capacity warning(s), nothing blocked (RB20)`,
         );
 
+        if (resolution.deposit.balanceDueAmount > 0) {
+            Log.info(
+                `[ExternalSaleIngestion Service]: external sale (id ${outcome.sale.id}) opened a balance of `
+                + `${resolution.deposit.balanceDueAmount} cents across ${outcome.registrationIds.length} registration(s) — `
+                + "to be collected at the box office",
+            );
+        }
+        if (resolution.deposit.nonTicketDepositAmount > 0) {
+            // Si SEGNALA, non si mette in quarantena: la vendita è legittima e
+            // incassata, e una vendita già incassata non si rifiuta (`14` §4.4).
+            Log.warn(
+                `[ExternalSaleIngestion Service]: external sale (id ${outcome.sale.id}) had `
+                + `${resolution.deposit.nonTicketDepositAmount} cents of deposit discount falling on non-ticket lines — `
+                + "not part of the balance; check that the deposit code is limited to ticket products on the shop",
+            );
+        }
+
         // ── Tutto ciò che segue avviene DOPO il commit, e nulla di ciò che
         // segue può farlo rotolare indietro ────────────────────────────────
         // Vale per i due segnali (§3.9) e vale, per la ragione rovesciata, per
@@ -408,7 +513,7 @@ export class ExternalSaleIngestionService {
         // esiste, e un'email non si richiama indietro.
         await this.notifyIngested(channel, outcome.sale, outcome.registrationIds.length);
         await this.registrationNotifierService.registrationsCreated(event, outcome.registrationIds);
-        await this.deliverTickets(sale, event, outcome.tickets);
+        await this.deliverTickets(sale, event, outcome.tickets, resolution.deposit);
 
         return outcome.sale;
     }
@@ -424,13 +529,26 @@ export class ExternalSaleIngestionService {
      * L'importo è quello **incassato dal negozio**, e nell'email compare come
      * totale: è la cifra che l'acquirente riconosce, ed è l'unica che abbia visto.
      */
-    private async deliverTickets(sale: CanonicalSale, event: Event, tickets: Ticket[]): Promise<void> {
+    private async deliverTickets(
+        sale: CanonicalSale,
+        event: Event,
+        tickets: Ticket[],
+        deposit: DepositTally,
+    ): Promise<void> {
         await this.ticketDeliveryService.deliver({
             to: sale.buyerEmail,
             firstName: sale.buyerName,
             event,
             tickets,
             total: sale.totalAmount,
+            // Con un acconto, `totalAmount` è la sola cifra incassata dal negozio:
+            // senza il residuo accanto, l'email direbbe a qualcuno che ha pagato
+            // quando non ha finito di pagare (`14` §8).
+            balanceDue: deposit.balanceDueAmount,
+            // Chi ha comprato in inglese sul negozio riceve il biglietto in
+            // inglese: la lingua l'ha già dichiarata al checkout, e l'indirizzo
+            // email non dice nulla al riguardo.
+            locale: sale.locale,
             source: `external sale ${sale.externalOrderId}`,
         });
     }
@@ -448,6 +566,21 @@ export class ExternalSaleIngestionService {
         const lines: ResolvedLine[] = [];
         const events = new Map<number, Event>();
 
+        // Una lettura sola per vendita: i codici sono pochi e non cambiano
+        // durante l'ingestione di un ordine.
+        const depositCodes = await this.depositCodesOf(channel);
+        const deposit: DepositTally = { ...NO_DEPOSIT };
+
+        // ── I campi del checkout, se il negozio li raccoglie ─────────────────
+        // Gli attributi dell'ordine descrivono **chi ha comprato**: si applicano
+        // al primo posto, non a tutti. Un carrello ha un solo insieme di
+        // attributi, e spalmarlo su tre pass produrrebbe tre persone con lo
+        // stesso nome e lo stesso ruolo — cioè un equilibrio leader/follower
+        // falso, che è peggio di uno mancante.
+        const orderRoles = this.valuesOf(sale.attributes, channel.roleAttributeName);
+        const orderNames = this.valuesOf(sale.attributes, channel.attendeeNameAttributeName);
+        let seatIndex = 0;
+
         for (const line of sale.lines) {
             const mapping = await this.salesChannelMappingRepository.resolve(
                 channel.id,
@@ -459,26 +592,62 @@ export class ExternalSaleIngestionService {
                 return {
                     lines: [],
                     event: null,
+                    deposit: NO_DEPOSIT,
                     reason: `L'articolo «${line.title}» non è associato ad alcun titolo d'ingresso. `
                         + "Associalo nella configurazione del canale, poi rielabora la vendita.",
                 };
             }
+
+            const discounted = this.depositOfLine(line, depositCodes);
 
             if (!mapping.ticketTypeId || !mapping.ticketType) {
                 Log.debug(
                     `[ExternalSaleIngestion Service]: line '${line.title}' of external order ${sale.externalOrderId} `
                     + "is mapped to no ticket type — deliberately ignored",
                 );
+                // ── La merce resta fuori dal residuo (`14` §4.4, `RF-SAL-4`) ──
+                // Se il codice di acconto ha scontato anche la maglietta, quella
+                // fetta NON è un saldo: alla porta nessuno chiede il saldo di una
+                // maglietta già consegnata. Si registra e si segnala — quasi
+                // sempre significa che il codice, sul negozio, non è limitato ai
+                // soli pacchetti, ed è una cosa che l'organizzatore vuole sapere.
+                deposit.nonTicketDepositAmount += discounted.deposit;
                 continue;
             }
 
             const event = mapping.ticketType.event;
             events.set(event.id, event);
 
+            const seats = line.quantity * mapping.seatsPerUnit;
+            const lineRoles = this.valuesOf(line.attributes, channel.roleAttributeName);
+            const lineNames = this.valuesOf(line.attributes, channel.attendeeNameAttributeName);
+
+            const identities: SeatIdentity[] = [];
+            for (let seat = 0; seat < seats; seat += 1) {
+                // La riga vince sull'ordine: una proprietà scritta sul prodotto
+                // riguarda quel prodotto, un attributo del carrello riguarda il
+                // carrello. E l'attributo del carrello vale **solo per il primo
+                // posto**, che è quello dell'acquirente.
+                const rawRole = lineRoles[seat] ?? (seatIndex === 0 ? orderRoles[0] : undefined);
+                const rawName = lineNames[seat] ?? (seatIndex === 0 ? orderNames[0] : undefined);
+                identities.push(this.seatIdentity(sale, rawRole, rawName));
+                seatIndex += 1;
+            }
+
+            const listAmount = line.unitPrice * line.quantity;
+            deposit.ticketListAmount += listAmount;
+            deposit.balanceDueAmount += discounted.deposit;
+            // Ciò che il negozio ha davvero incassato su questa riga: il listino
+            // meno TUTTI gli sconti, acconto compreso.
+            deposit.depositPaidAmount += listAmount - discounted.total;
+
             lines.push({
                 ticketTypeId: mapping.ticketTypeId,
-                seats: line.quantity * mapping.seatsPerUnit,
+                seats,
                 title: line.title,
+                identities,
+                listAmount,
+                balanceDue: discounted.deposit,
             });
         }
 
@@ -491,6 +660,7 @@ export class ExternalSaleIngestionService {
             return {
                 lines: [],
                 event: null,
+                deposit: NO_DEPOSIT,
                 reason: `L'ordine contiene titoli di ${events.size} eventi diversi. `
                     + "Mirada registra una vendita esterna per evento: separa l'ordine sul negozio, oppure "
                     + "registra i posti a mano.",
@@ -501,11 +671,216 @@ export class ExternalSaleIngestionService {
         if (event) {
             const refusal = this.eventRefusal(event);
             if (refusal) {
-                return { lines: [], event: null, reason: refusal };
+                return { lines: [], event: null, deposit: NO_DEPOSIT, reason: refusal };
             }
         }
 
-        return { lines, event, reason: null };
+        if (deposit.balanceDueAmount > 0 || deposit.nonTicketDepositAmount > 0) {
+            Log.info(
+                `[ExternalSaleIngestion Service]: external order ${sale.externalOrderId} carries a deposit — `
+                + `list ${deposit.ticketListAmount}, paid ${deposit.depositPaidAmount}, `
+                + `balance due ${deposit.balanceDueAmount}, off-ticket ${deposit.nonTicketDepositAmount} (cents)`,
+            );
+        }
+
+        return { lines, event, deposit, reason: null };
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 3-bis. L'acconto — `14`
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /**
+     * La forma canonica di una vendita **con gli sconti**, anche quando quella
+     * salvata non li ha (`14` §3.6).
+     *
+     * ── Il caso che risolve ─────────────────────────────────────────────────
+     * Le vendite messe in quarantena prima di questa funzione hanno un
+     * `canonicalPayload` scritto da un adapter che gli sconti li buttava via.
+     * Rielaborarle così com'erano vorrebbe dire ingerirle come vendite a prezzo
+     * pieno: nessun residuo, e al botteghino nessuno chiede il saldo — cioè
+     * esattamente il difetto che tutto questo lavoro esiste per chiudere, in
+     * agguato proprio sulle vendite che qualcuno aveva già dovuto sbloccare a
+     * mano.
+     *
+     * Il rimedio è il corpo grezzo, ed è il motivo per cui `ExternalSaleEvent`
+     * lo conserva. Quando non c'è più — storico ripulito, vendita nata dalla
+     * riconciliazione — si procede con ciò che si ha: meglio una vendita
+     * ingerita senza residuo che una vendita che non entra.
+     */
+    public async hydrateDiscounts(channel: SalesChannel, sale: ExternalSale): Promise<CanonicalSale> {
+        const canonical = sale.canonicalPayload as unknown as CanonicalSale;
+
+        const complete = (canonical.lines ?? []).every(line => Array.isArray(line.discounts));
+        if (complete) {
+            return canonical;
+        }
+
+        const adapter = this.adapterRegistry.resolve(channel.provider);
+        const notifications = await this.externalSaleEventRepository.findByExternalOrder(
+            channel.id,
+            sale.externalOrderId,
+        );
+
+        for (const notification of notifications) {
+            // Le notifiche dello stesso ordine sono più d'una e non tutte sono
+            // ordini: un rimborso, per esempio. `readSale` risponde `null` su
+            // quelle, e si passa alla successiva.
+            const rebuilt = adapter.readSale(notification.payload);
+            if (!rebuilt || rebuilt.externalOrderId !== sale.externalOrderId) {
+                continue;
+            }
+
+            Log.info(
+                `[ExternalSaleIngestion Service]: external sale (id ${sale.id}) had a canonical payload without `
+                + `discounts — rebuilt from raw delivery (id ${notification.id})`,
+            );
+            return rebuilt;
+        }
+
+        Log.warn(
+            `[ExternalSaleIngestion Service]: external sale (id ${sale.id}) has a canonical payload without discounts `
+            + "and no raw delivery to rebuild from — reprocessed as a full-price sale, any deposit will be missed",
+        );
+        return canonical;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // 3-ter. Ciò che il negozio ha chiesto al checkout
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /**
+     * I valori di un campo del checkout, **nell'ordine in cui il negozio li
+     * consegna**.
+     *
+     * Lo stesso nome ripetuto è ciò che permette a una riga da tre posti di
+     * portare tre nominativi; il confronto è normalizzato perché il nome del
+     * campo lo scrive un umano nel modulo del negozio, e «Ruolo» e «ruolo » sono
+     * lo stesso campo — con la stessa conseguenza muta che ha insegnato
+     * `RF-SAL-2`: nessun errore, e il dato semplicemente non arriva.
+     *
+     * `configured` nullo significa «questo negozio non lo chiede»: nessun valore,
+     * e nessun confronto da fare.
+     */
+    private valuesOf(attributes: CanonicalAttribute[] | undefined, configured: string | null): string[] {
+        if (!configured?.trim() || !attributes?.length) {
+            return [];
+        }
+
+        const wanted = normalizeDepositCode(configured);
+        return attributes
+            .filter(attribute => normalizeDepositCode(attribute.name) === wanted)
+            .map(attribute => attribute.value.trim())
+            .filter(Boolean);
+    }
+
+    /**
+     * L'identità di un posto: quella dichiarata al checkout, o quella
+     * dell'acquirente.
+     *
+     * ── La ricaduta non è un ripiego, è la verità di quel momento ────────────
+     * Il negozio non chiede il ruolo, oppure lo chiede e quella persona non ha
+     * risposto: `FLEXIBLE` dice esattamente questo, e il motore di capienza lo
+     * risolve nel ruolo più scarso invece di lasciare l'iscrizione senza (che
+     * l'invariante `I4` vieta). Lo stesso vale per il nominativo: il posto resta
+     * intestato a chi ha comprato, che è l'unica persona di cui si conosca il
+     * nome.
+     */
+    private seatIdentity(sale: CanonicalSale, rawRole?: string, rawName?: string): SeatIdentity {
+        const declaredRole = this.parseRole(rawRole);
+        if (!rawName) {
+            return { declaredRole, name: sale.buyerName, surname: sale.buyerSurname };
+        }
+
+        // Un campo di testo libero porta «Maria Rossi», non due colonne: il primo
+        // pezzo è il nome, il resto il cognome. Con un pezzo solo il cognome
+        // resta da chiedere — e si scrive così, invece di prendere in prestito
+        // quello dell'acquirente, che sarebbe una parentela inventata.
+        const parts = rawName.split(/\s+/).filter(Boolean);
+        return {
+            declaredRole,
+            name: parts[0] ?? sale.buyerName,
+            surname: parts.slice(1).join(" ") || "—",
+        };
+    }
+
+    /**
+     * Il ruolo di ballo, come lo scrive chi compila il modulo del negozio.
+     *
+     * ── Ciò che NON si accetta, ed è deliberato ─────────────────────────────
+     * Non esiste alcuna corrispondenza fra genere e ruolo: «uomo» non significa
+     * leader e «donna» non significa follower. In una milonga è falso nel merito
+     * — le coppie si formano come vogliono — e sarebbe un difetto che si vede
+     * alla porta, con una persona mandata dalla parte sbagliata della sala.
+     *
+     * Un valore che non si riconosce **non si indovina**: diventa `FLEXIBLE` e
+     * lascia una riga nel registro. Il motore assegnerà il ruolo più scarso,
+     * che è ciò che sarebbe successo se il campo non ci fosse.
+     */
+    private parseRole(raw?: string): DeclaredDanceRole {
+        if (!raw) {
+            return DeclaredDanceRole.FLEXIBLE;
+        }
+
+        const value = normalizeDepositCode(raw);
+        if (["LEADER", "LEAD", "CONDUCE", "CONDUTTORE", "GUIDA"].includes(value)) {
+            return DeclaredDanceRole.LEADER;
+        }
+        if (["FOLLOWER", "FOLLOW", "SEGUE", "SEGUACE"].includes(value)) {
+            return DeclaredDanceRole.FOLLOWER;
+        }
+        if (["FLEXIBLE", "FLESSIBILE", "ENTRAMBI", "INDIFFERENTE", "BOTH", "ANY"].includes(value)) {
+            return DeclaredDanceRole.FLEXIBLE;
+        }
+
+        Log.warn(
+            `[ExternalSaleIngestion Service]: dance role '${raw}' from the shop is not recognised — `
+            + "the seat stays FLEXIBLE and the engine assigns the scarcest role",
+        );
+        return DeclaredDanceRole.FLEXIBLE;
+    }
+
+    /**
+     * I codici che, su questo canale, significano «acconto». Già normalizzati in
+     * colonna: qui si normalizza l'altra metà del confronto (`RF-SAL-2`).
+     */
+    private async depositCodesOf(channel: SalesChannel): Promise<Set<string>> {
+        const codes = await this.salesChannelDepositCodeRepository.findByChannel(channel.id);
+        return new Set(codes.map(row => normalizeDepositCode(row.code)));
+    }
+
+    /**
+     * Quanto questa riga ha di sconto in tutto, e quanto gliene ha fatto **un
+     * codice di acconto**.
+     *
+     * ── Un codice sconosciuto è uno sconto, non un errore (`14` §3.3) ────────
+     * Early bird, coupon, promozione: una riga scontata con un codice che non è
+     * configurato come acconto è una vendita scontata normale, e non genera
+     * residuo né quarantena. Mandare in quarantena ogni sconto significherebbe
+     * mandarci mezza campagna vendite, e la quarantena smetterebbe di voler dire
+     * «qualcosa non va» — che è l'unica cosa che deve voler dire.
+     */
+    private depositOfLine(
+        line: { discounts?: { code: string; amount: number }[] },
+        depositCodes: Set<string>,
+    ): { total: number; deposit: number } {
+        // `?? []` e non `.discounts`: le vendite messe in quarantena PRIMA di
+        // questa funzione hanno un `canonicalPayload` senza sconti, e vengono
+        // rielaborate così come sono. Trattarle come «nessuno sconto» è la
+        // risposta giusta — `hydrateDiscounts` le riporta al corpo grezzo prima
+        // di arrivare qui, quando quel corpo esiste ancora.
+        const discounts = line.discounts ?? [];
+
+        let total = 0;
+        let deposit = 0;
+        for (const discount of discounts) {
+            total += discount.amount;
+            if (depositCodes.has(normalizeDepositCode(discount.code))) {
+                deposit += discount.amount;
+            }
+        }
+
+        return { total, deposit };
     }
 
     /**
@@ -557,6 +932,10 @@ export class ExternalSaleIngestionService {
             eventId: null,
             ingestedAt: null,
             quarantineReason: reason,
+            // Una vendita che non si è saputa tradurre non ha residuo: i numeri
+            // si scriveranno alla rielaborazione, quando le righe avranno un
+            // titolo e si saprà quali di esse sono biglietti.
+            deposit: NO_DEPOSIT,
         }, existing);
 
         await this.notifyQuarantined(channel, row, reason);
@@ -618,12 +997,32 @@ export class ExternalSaleIngestionService {
             + "registration(s) and invalidating their tickets",
         );
 
+        // ── Un saldo già incassato non si disfa (`14` §9) ────────────────────
+        // Il residuo si chiude insieme alla vendita, ma le righe di incasso
+        // restano dove sono: quei soldi qualcuno li ha davvero presi in mano, e
+        // la restituzione avviene fuori piattaforma. Si segnala, non si inventa
+        // un rimborso che Mirada non può eseguire.
+        const settled = registrations.reduce((sum, row) => sum + row.balanceSettledAmount, 0);
+        if (settled > 0) {
+            Log.warn(
+                `[ExternalSaleIngestion Service]: external sale (id ${sale.id}) is being revoked but ${settled} cents `
+                + "of balance were already collected at the box office — the refund of that amount happens off-platform",
+            );
+        }
+
         await getPrismaClient().$transaction(async prisma => {
             for (const registration of registrations) {
                 await this.capacityEngineService.release(registration.id, prisma);
                 await this.registrationRepository.update(
                     { id: registration.id },
-                    { status: RegistrationStatus.DECLINED, declinedAt: new Date() },
+                    {
+                        status: RegistrationStatus.DECLINED,
+                        declinedAt: new Date(),
+                        // Nessuno si presenterà a questa porta: il residuo si
+                        // chiude, e smette di comparire nei totali del
+                        // cruscotto e nelle liste della serata.
+                        balanceDueAmount: 0,
+                    },
                     undefined,
                     undefined,
                     prisma,
@@ -654,7 +1053,10 @@ export class ExternalSaleIngestionService {
             );
         });
 
-        Log.info(`[ExternalSaleIngestion Service]: external sale (id ${sale.id}) revoked — capacity released, QR codes invalidated`);
+        Log.info(
+            `[ExternalSaleIngestion Service]: external sale (id ${sale.id}) revoked — capacity released, `
+            + "QR codes invalidated, open balances closed",
+        );
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -664,7 +1066,7 @@ export class ExternalSaleIngestionService {
     private async upsertSale(
         channel: SalesChannel,
         sale: CanonicalSale,
-        state: { status: ExternalSaleStatus; eventId: number | null; ingestedAt: Date | null; quarantineReason: string | null },
+        state: SaleState,
         existing: ExternalSale | null,
     ): Promise<ExternalSale> {
         return this.persistSale(channel, sale, state, existing);
@@ -673,7 +1075,7 @@ export class ExternalSaleIngestionService {
     private async persistSale(
         channel: SalesChannel,
         sale: CanonicalSale,
-        state: { status: ExternalSaleStatus; eventId: number | null; ingestedAt: Date | null; quarantineReason: string | null },
+        state: SaleState,
         existing: ExternalSale | null,
         tx?: Prisma.TransactionClient,
     ): Promise<ExternalSale> {
@@ -684,11 +1086,14 @@ export class ExternalSaleIngestionService {
             buyerName: sale.buyerName,
             buyerSurname: sale.buyerSurname,
             buyerEmail: sale.buyerEmail,
+            externalCustomerId: sale.externalCustomerId,
+            customerLocale: sale.locale,
             totalAmount: sale.totalAmount,
             currency: sale.currency,
             canonicalPayload: sale as unknown as Prisma.InputJsonValue,
             quarantineReason: state.quarantineReason,
             ingestedAt: state.ingestedAt,
+            ...state.deposit,
         };
 
         if (existing) {

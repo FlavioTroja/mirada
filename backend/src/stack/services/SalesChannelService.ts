@@ -4,6 +4,7 @@ import {
     ExternalSaleStatus,
     Prisma,
     SalesChannel,
+    SalesChannelDepositCode,
     SalesChannelMapping,
     SalesChannelStatus,
 } from "@prisma/client";
@@ -15,20 +16,22 @@ import { generateRandomString } from "@utils/helpers/crypto";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { createObjectWithoutThrow } from "@utils/helpers/query";
 import { splitLinkableEntities } from "@utils/helpers/mergeEntities";
+import { normalizeDepositCode } from "@utils/helpers/depositCode";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { SalesChannelCreateDTO } from "@DTOs/sales_channel/SalesChannelCreateDTO";
 import { SalesChannelUpdateDTO } from "@DTOs/sales_channel/SalesChannelUpdateDTO";
 import { SalesChannelQueryDTO } from "@DTOs/sales_channel/SalesChannelQueryDTO";
 import { SalesChannelMappingUpdateDTO } from "@DTOs/sales_channel/SalesChannelMappingUpdateDTO";
+import { SalesChannelDepositCodeUpdateDTO } from "@DTOs/sales_channel/SalesChannelDepositCodeUpdateDTO";
 import { ExternalSaleQueryDTO } from "@DTOs/external_sale/ExternalSaleQueryDTO";
 import { SalesChannelRepository } from "@repositories/SalesChannelRepository";
 import { SalesChannelMappingRepository } from "@repositories/SalesChannelMappingRepository";
+import { SalesChannelDepositCodeRepository } from "@repositories/SalesChannelDepositCodeRepository";
 import { ExternalSaleRepository } from "@repositories/ExternalSaleRepository";
 import { TicketTypeRepository } from "@repositories/TicketTypeRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { ExternalSaleIngestionService } from "@services/ExternalSaleIngestionService";
 import { SalesChannelAdapterRegistryService } from "@services/SalesChannelAdapterRegistryService";
-import { CanonicalSale } from "@interfaces/ExternalSaleChannelAdapter";
 
 /** Lunghezza del segmento opaco in URL del webhook. */
 const PUBLIC_ID_LENGTH = 32;
@@ -62,6 +65,7 @@ export class SalesChannelService {
     constructor(
         private readonly salesChannelRepository: SalesChannelRepository,
         private readonly salesChannelMappingRepository: SalesChannelMappingRepository,
+        private readonly salesChannelDepositCodeRepository: SalesChannelDepositCodeRepository,
         private readonly externalSaleRepository: ExternalSaleRepository,
         private readonly ticketTypeRepository: TicketTypeRepository,
         private readonly organizationScopeService: OrganizationScopeService,
@@ -216,6 +220,93 @@ export class SalesChannelService {
         return this.salesChannelMappingRepository.findByChannel(channel.id);
     }
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // I codici di acconto (`14` §3.1, `RF-SAL-1`)
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /**
+     * `PUT /sales-channels/:id/deposit-codes` — l'intera collezione in un colpo
+     * solo, come le mappature.
+     *
+     * ── Che cosa fa davvero questo elenco ───────────────────────────────────
+     * Dice quali codici sconto del negozio significano «acconto», e quindi quali
+     * vendite lasciano dietro un **saldo da incassare alla porta**. È l'unico
+     * segnale disponibile: per il negozio quell'ordine è pagato per intero a un
+     * prezzo ridotto, e il residuo esiste solo dentro Mirada (`14` §2).
+     *
+     * ── Toglierne uno non riscrive il passato ───────────────────────────────
+     * I residui già nati restano sulle iscrizioni: sono debiti di persone reali,
+     * non una vista sulla configurazione. Cancellare un codice significa «da
+     * adesso questo non è più un acconto», non «quelle persone non devono più
+     * niente».
+     */
+    public async updateDepositCodes(
+        principalId: number,
+        salesChannelId: number,
+        dto: SalesChannelDepositCodeUpdateDTO,
+    ): Promise<SalesChannelDepositCode[]> {
+        const channel = await this.findByIdOrThrow(principalId, salesChannelId);
+
+        const { toCreate, toUpdate, toDisconnect } = splitLinkableEntities(dto);
+
+        // La normalizzazione avviene **qui**, una volta, perché la colonna porti
+        // già la forma su cui l'ingestione confronta (`RF-SAL-2`). Un codice che
+        // si riduce al nulla — solo spazi — non è un codice: passerebbe il
+        // salvataggio e non corrisponderebbe mai a niente, che è il difetto muto
+        // che questa funzione esiste per evitare.
+        const normalized = new Map<number | undefined, string>();
+        const seen = new Set<string>();
+
+        for (const row of [...toCreate, ...toUpdate]) {
+            const code = normalizeDepositCode(row.code ?? "");
+            if (!code) {
+                Log.warn(`[SalesChannel Service]: deposit code refused on sales channel (id ${channel.id}) — empty code`);
+                throw new httpErrors.BadRequest("Un codice di acconto non può essere vuoto.");
+            }
+            if (seen.has(code)) {
+                Log.warn(
+                    `[SalesChannel Service]: deposit code refused on sales channel (id ${channel.id}) — `
+                    + `'${code}' appears twice in the same payload`,
+                );
+                throw new httpErrors.BadRequest(`Il codice «${code}» compare due volte: i codici sono distinti.`);
+            }
+            seen.add(code);
+            normalized.set(row.id, code);
+        }
+
+        Log.info(
+            `[SalesChannel Service]: replacing deposit codes of sales channel (id ${channel.id}) — `
+            + `${toCreate.length} to create, ${toUpdate.length} to update, ${toDisconnect.length} to remove`,
+        );
+
+        await getPrismaClient().$transaction(async prisma => {
+            for (const row of toDisconnect) {
+                await this.salesChannelDepositCodeRepository.safeDeleteById(row.id!, prisma);
+            }
+            for (const row of toUpdate) {
+                await this.salesChannelDepositCodeRepository.update(
+                    { id: row.id! },
+                    { code: normalized.get(row.id)!, label: row.label },
+                    undefined,
+                    undefined,
+                    prisma,
+                );
+            }
+            for (const row of toCreate) {
+                await this.salesChannelDepositCodeRepository.save(
+                    {
+                        salesChannelId: channel.id,
+                        code: normalized.get(row.id)!,
+                        label: row.label,
+                    },
+                    prisma,
+                );
+            }
+        });
+
+        return this.salesChannelDepositCodeRepository.findByChannel(channel.id);
+    }
+
     /**
      * Un titolo di un'altra organizzazione, mappato sul proprio negozio,
      * venderebbe posti dell'evento di qualcun altro. Il permesso da solo non lo
@@ -296,7 +387,13 @@ export class SalesChannelService {
         }
 
         Log.info(`[SalesChannel Service]: reingesting external sale (id ${sale.id}) of sales channel (id ${channel.id})`);
-        return this.ingestionService.ingest(channel, sale.canonicalPayload as unknown as CanonicalSale);
+
+        // Gli sconti della forma canonica possono mancare — la vendita è finita
+        // in quarantena prima che il canonico li conoscesse — e senza di essi il
+        // residuo dell'acconto non nascerebbe (`14` §3.6). `hydrateDiscounts` li
+        // recupera dal corpo grezzo quando c'è ancora.
+        const canonical = await this.ingestionService.hydrateDiscounts(channel, sale);
+        return this.ingestionService.ingest(channel, canonical);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -397,7 +494,7 @@ export class SalesChannelService {
             }
 
             try {
-                await this.ingestionService.ingest(channel, sale.canonicalPayload as unknown as CanonicalSale);
+                await this.ingestionService.ingest(channel, await this.ingestionService.hydrateDiscounts(channel, sale));
                 outcome.ingested += 1;
             } catch (err) {
                 outcome.failures += 1;

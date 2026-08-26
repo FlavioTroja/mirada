@@ -274,6 +274,12 @@ export class TicketService {
             ? await this.sessionRepository.findMany({ id: { in: sessionIds }, deleted: false }, { orderBy: { startAt: "asc" } })
             : [];
 
+        // Il residuo dell'iscrizione, se ce n'è uno: sul documento che la persona
+        // porta alla porta deve essere scritto (`RF-SAL-13`).
+        const registration = ticket.registrationId
+            ? await this.registrationRepository.findOne({ id: ticket.registrationId, deleted: false })
+            : null;
+
         const document = await this.ticketDocumentService.build({
             ticket,
             event,
@@ -281,6 +287,9 @@ export class TicketService {
             sessions,
             qrToken: this.qrToken(ticket),
             organizationName: organization?.name ?? "Organizzatore",
+            balanceDue: registration
+                ? Math.max(0, registration.balanceDueAmount - registration.balanceSettledAmount)
+                : 0,
         });
 
         const file = await this.fileRepository.save({

@@ -245,6 +245,6 @@ export class TicketController {
         req: FastifyRequest<{ Body: TicketVerifyDTO }>,
         reply: FastifyReply,
     ) {
-        reply.status(200).send(await this.checkInService.verify(req.body));
+        reply.status(200).send(await this.checkInService.verify(+req.user.id, req.body));
     }
 }

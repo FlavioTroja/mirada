@@ -307,7 +307,7 @@ describe("CheckInService — RB7, RB19 e la sincronizzazione della coda offline"
             scannedAt,
         });
 
-        const verification = await checkIns.verify({ code: ticket.code, sessionId: scenario.sessionIds[0]! });
+        const verification = await checkIns.verify(operatorId, { code: ticket.code, sessionId: scenario.sessionIds[0]! });
 
         expect(verification.result).toBe(CheckInResult.ALREADY_USED);
         expect(verification.firstEntry).toMatchObject({
@@ -324,7 +324,7 @@ describe("CheckInService — RB7, RB19 e la sincronizzazione della coda offline"
         });
         await createEntryRequirement({ eventId: scenario.event.id, label: "Liberatoria fotografica" });
 
-        const verification = await checkIns.verify({ code: ticket.code, sessionId: scenario.sessionIds[0]! });
+        const verification = await checkIns.verify(operatorId, { code: ticket.code, sessionId: scenario.sessionIds[0]! });
 
         expect(verification.result).toBe(CheckInResult.REQUIREMENT_BLOCKED);
         expect(verification.blockingRequirement).toBeTruthy();
@@ -353,7 +353,7 @@ describe("CheckInService — RB7, RB19 e la sincronizzazione della coda offline"
             ticketTypeId: restricted.id,
         });
 
-        const verification = await checkIns.verify({ code: ticket.code, sessionId: scenario.sessionIds[1]! });
+        const verification = await checkIns.verify(operatorId, { code: ticket.code, sessionId: scenario.sessionIds[1]! });
         expect(verification.result).toBe(CheckInResult.WRONG_EVENT);
     });
 
@@ -365,7 +365,7 @@ describe("CheckInService — RB7, RB19 e la sincronizzazione della coda offline"
             status: TicketStatus.CANCELLED,
         });
 
-        const verification = await checkIns.verify({ code: ticket.code, sessionId: scenario.sessionIds[0]! });
+        const verification = await checkIns.verify(operatorId, { code: ticket.code, sessionId: scenario.sessionIds[0]! });
         expect(verification.result).toBe(CheckInResult.REFUNDED_OR_CANCELLED);
     });
 
@@ -378,7 +378,7 @@ describe("CheckInService — RB7, RB19 e la sincronizzazione della coda offline"
         });
 
         const token = qr.issueToken(ticket);
-        const ok = await checkIns.verify({ code: token, sessionId: scenario.sessionIds[0]! });
+        const ok = await checkIns.verify(operatorId, { code: token, sessionId: scenario.sessionIds[0]! });
         expect(ok.result).toBe(CheckInResult.VALID);
         expect(ok.signature?.verified).toBe(true);
 
@@ -387,7 +387,7 @@ describe("CheckInService — RB7, RB19 e la sincronizzazione della coda offline"
         forged.code = "CODICE-INVENTATO";
         const tampered = `${header}.${Buffer.from(JSON.stringify(forged)).toString("base64url")}.${sig}`;
 
-        const refused = await checkIns.verify({ code: tampered, sessionId: scenario.sessionIds[0]! });
+        const refused = await checkIns.verify(operatorId, { code: tampered, sessionId: scenario.sessionIds[0]! });
         expect(refused.result).not.toBe(CheckInResult.VALID);
         expect(refused.signature?.verified).toBe(false);
     });
@@ -405,7 +405,7 @@ describe("CheckInService — RB7, RB19 e la sincronizzazione della coda offline"
             data: { code: `${oldCode}-NUOVO` },
         });
 
-        const verification = await checkIns.verify({ code: oldCode, sessionId: scenario.sessionIds[0]! });
+        const verification = await checkIns.verify(operatorId, { code: oldCode, sessionId: scenario.sessionIds[0]! });
         expect(verification.result).toBe(CheckInResult.WRONG_EVENT);
         expect(verification.ticketId).toBeNull();
     });

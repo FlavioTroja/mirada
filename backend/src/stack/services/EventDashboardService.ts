@@ -4,6 +4,7 @@ import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { EventRepository } from "@repositories/EventRepository";
 import { RegistrationRepository } from "@repositories/RegistrationRepository";
+import { BalanceSettlementRepository } from "@repositories/BalanceSettlementRepository";
 import { CapacityQuotaRepository } from "@repositories/CapacityQuotaRepository";
 import { QuotaConsumptionRepository } from "@repositories/QuotaConsumptionRepository";
 import { CoupleRepository } from "@repositories/CoupleRepository";
@@ -54,6 +55,7 @@ export class EventDashboardService {
     constructor(
         private readonly eventRepository: EventRepository,
         private readonly registrationRepository: RegistrationRepository,
+        private readonly balanceSettlementRepository: BalanceSettlementRepository,
         private readonly capacityQuotaRepository: CapacityQuotaRepository,
         private readonly quotaConsumptionRepository: QuotaConsumptionRepository,
         private readonly coupleRepository: CoupleRepository,
@@ -121,6 +123,7 @@ export class EventDashboardService {
 
                 soldByTicketType: this.buildSold(ticketTypes, paidLines),
                 netRevenue: this.buildRevenue(paidOrders, succeededPayments),
+                balances: await this.buildBalances(eventId, active),
             },
         };
 
@@ -461,6 +464,40 @@ export class EventDashboardService {
      * mostrerebbe un numero plausibile su un dato che nessuno ha ancora dirimito
      * (`RF-CHK-6`).
      */
+    /**
+     * **Atteso al botteghino · già incassato · ancora aperto** (`RF-SAL-16`).
+     *
+     * I due primi numeri escono dalle iscrizioni già in memoria: nessuna lettura
+     * in più per una sezione che, sulla quasi totalità degli eventi, vale zero.
+     * L'unica query è il conteggio dei conflitti, che è una riga sola e va fatta
+     * perché un doppio incasso non risolto è la sola cosa di questa sezione che
+     * chiede un'azione invece di un'occhiata.
+     */
+    private async buildBalances(
+        eventId: number,
+        active: { balanceDueAmount: number; balanceSettledAmount: number }[],
+    ) {
+        const expected = active.reduce((sum, r) => sum + r.balanceDueAmount, 0);
+        const collected = active.reduce((sum, r) => sum + r.balanceSettledAmount, 0);
+        const peopleWithOpenBalance = active.filter(r => r.balanceDueAmount > r.balanceSettledAmount).length;
+
+        const conflicts = await this.balanceSettlementRepository.count({
+            deleted: false,
+            conflictWithId: { not: null },
+            registration: { eventId, deleted: false },
+        });
+
+        return {
+            available: true as const,
+            basedOn: ["Registration" as const, "BalanceSettlement" as const],
+            expected,
+            collected,
+            open: expected - collected,
+            peopleWithOpenBalance,
+            conflicts,
+        };
+    }
+
     private async buildAttendance(
         eventId: number,
         sessions: Session[],
