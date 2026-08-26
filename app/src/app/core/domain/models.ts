@@ -473,3 +473,124 @@ export interface CheckIn extends Entity {
   /** Valorizzato quando l'ingresso e stato annullato (`RF-CHK-9`). */
   revokedAt?: string | null;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// I canali di vendita esterni, e l'acconto (`14-acconto-e-saldo.md`)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type SalesChannelProvider = 'SHOPIFY';
+export type SalesChannelStatus = 'ACTIVE' | 'PAUSED' | 'DISABLED';
+
+/**
+ * Il negozio esterno collegato all'organizzazione — fase E.
+ *
+ * ⚠️ **I due segreti non tornano mai indietro.** `webhookSecret` e `credentials`
+ * entrano in chiaro e finiscono cifrati in colonna: nella risposta non esiste
+ * una lettura che li restituisca. Un modulo che li ripresentasse vuoti come
+ * «campo da riempire» spingerebbe a riscriverli a ogni salvataggio, e a
+ * riscriverli sbagliati.
+ */
+export interface SalesChannel extends Entity {
+  organizationId: number;
+  provider: SalesChannelProvider;
+  /** Il nome che l'organizzatore legge nel back-office. */
+  label: string;
+  /** Il segmento in URL del webhook — generato dal server, mai scelto dal client. */
+  publicId: string;
+  /** Il dominio del negozio presso il prestatore (`qualcosa.myshopify.com`). */
+  externalShopId: string;
+  status: SalesChannelStatus;
+  lastReconciledAt?: string | null;
+  /**
+   * Come si chiama, sul negozio, il campo che porta il **ruolo di ballo** — e
+   * quello che porta il **nominativo del partecipante**.
+   *
+   * Nulli quando il negozio non li chiede, che è il caso di partenza: allora
+   * l'iscrizione nasce flessibile e intestata a chi ha comprato. Non sono dati
+   * che un negozio possiede: esistono solo se l'organizzatore li domanda al
+   * checkout, e il nome del campo lo sceglie lui.
+   */
+  roleAttributeName?: string | null;
+  attendeeNameAttributeName?: string | null;
+  mappings?: SalesChannelMapping[];
+  depositCodes?: SalesChannelDepositCode[];
+}
+
+/**
+ * La traduzione prodotto del negozio → titolo d'ingresso.
+ *
+ * `ticketTypeId` nullo **è un valore, non un'assenza**: significa «questo
+ * articolo non è un biglietto, ignoralo», ed è ciò che tiene fuori dalla
+ * quarantena l'ordine misto — pass più maglietta — che è il caso normale.
+ */
+export interface SalesChannelMapping extends Entity {
+  salesChannelId: number;
+  externalProductId: string;
+  /** `''` = qualunque variante del prodotto. */
+  externalVariantId: string;
+  ticketTypeId?: number | null;
+  ticketType?: TicketType | null;
+  /** Quanti posti vale un'unità: un «pacchetto coppia» ne vale due. */
+  seatsPerUnit: number;
+}
+
+/**
+ * Un codice sconto che, sul negozio, significa «acconto» (`14` §3.1).
+ *
+ * ── La percentuale non serve al calcolo, ed è il punto ──────────────────────
+ * Il codice **marca** la vendita come acconto; a dire quanto manca è l'importo
+ * che quel codice ha scontato, che il negozio consegna esatto. Il `30` in
+ * `ACCONTO_30` è un'etichetta per gli umani: il giorno in cui l'organizzatore
+ * cambiasse la percentuale senza rinominare il codice, un calcolo fondato sul
+ * nome sbaglierebbe in silenzio.
+ */
+export interface SalesChannelDepositCode extends Entity {
+  salesChannelId: number;
+  /** Normalizzato dal server: maiuscolo, senza spazi. */
+  code: string;
+  label: string;
+}
+
+/** Il residuo di una persona, con le sue righe di incasso (`RF-SAL-14`). */
+export interface RegistrationBalance {
+  registrationId: number;
+  eventId: number;
+  holderName: string;
+  holderSurname: string;
+  /** Quanto è nato con la vendita, in centesimi. Immutabile. */
+  dueAmount: number;
+  /** Quanto ne è stato incassato: la somma delle righe. */
+  settledAmount: number;
+  /** `dueAmount - settledAmount`. Negativo = incassato in eccesso: è un conflitto. */
+  openAmount: number;
+  settlements: BalanceSettlement[];
+}
+
+export type BalanceSettlementMethod = 'CASH' | 'POS' | 'SATISPAY' | 'BANK_TRANSFER' | 'OTHER';
+
+/**
+ * Un saldo incassato al botteghino — `14` §6.
+ *
+ * **Si registra, non si contabilizza** (`RB26`): non è un incasso della
+ * piattaforma e non produce alcuna riga di pagamento. Il metodo è una spunta,
+ * non un prestatore: Mirada non incassa nulla, prende nota.
+ */
+export interface BalanceSettlement extends Entity {
+  registrationId: number;
+  registration?: Registration | null;
+  /** Centesimi interi, sempre positivi. */
+  amount: number;
+  method: BalanceSettlementMethod;
+  operatorUserId: number;
+  /** Il momento della riscossione **sul dispositivo**: è quando i soldi sono passati di mano. */
+  collectedAt: string;
+  /** Nullo sugli incassi registrati online. */
+  syncedAt?: string | null;
+  /** La postazione. Nullo sul saldo registrato dal back-office. */
+  deviceId?: string | null;
+  offline: boolean;
+  deviceReference?: string | null;
+  /** Valorizzato quando la riga nasce in conflitto con un incasso già registrato. */
+  conflictWithId?: number | null;
+  note?: string | null;
+}

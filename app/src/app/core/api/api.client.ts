@@ -86,6 +86,19 @@ export class ApiClient {
     return this.run(firstValueFrom(this.http.patch<T>(this.url(`/${base}/${id}/${subs}`), rows)));
   }
 
+  /**
+   * `PUT /{plural}/:id/<subs>` con **l'array intero** — la stessa forma di
+   * `patchChildren`, con il verbo che quelle rotte dichiarano.
+   *
+   * I due verbi convivono perché il backend non è uniforme: i figli di
+   * `TicketType` si scrivono in `PATCH`, quelli di `SalesChannel` in `PUT`.
+   * Allinearli sarebbe una modifica di contratto, e sceglierne uno a caso qui
+   * produrrebbe un `404` che sembra un problema di rotta.
+   */
+  putChildren<T>(base: string, id: number, subs: string, rows: unknown[]): Promise<T> {
+    return this.run(firstValueFrom(this.http.put<T>(this.url(`/${base}/${id}/${subs}`), rows)));
+  }
+
   /** Endpoint non-CRUD del §3.7 — elenco chiuso, mai inferito. */
   post<T>(path: string, body: unknown = {}): Promise<T> {
     return this.run(firstValueFrom(this.http.post<T>(this.url(path), body)));

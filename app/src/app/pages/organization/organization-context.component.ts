@@ -7,7 +7,15 @@ import {
   SelectComponent,
   SelectOption,
 } from '@keijo/ui';
-import { chevronRight, description, domain, groups, payments, percent } from '@keijo/ui/icons';
+import {
+  chevronRight,
+  description,
+  domain,
+  groups,
+  payments,
+  percent,
+  storefront,
+} from '@keijo/ui/icons';
 import { Router } from '@angular/router';
 import { ORGANIZATION_STATUS_UI, PAYOUT_STATUS_UI } from '../../core/domain/enums';
 import { OrganizationStore } from '../../stores/organization.store';
@@ -200,6 +208,12 @@ export class OrganizationContextComponent {
       label: 'Policy di rimborso',
       icon: percent,
       path: '/organization/refund-policies',
+    },
+    {
+      id: 'sales-channels',
+      label: 'Negozi collegati',
+      icon: storefront,
+      path: '/organization/sales-channels',
     },
   ];
 

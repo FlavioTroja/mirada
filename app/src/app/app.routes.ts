@@ -235,6 +235,18 @@ export const routes: Routes = [
         (m) => m.OrganizationRefundPoliciesComponent,
       ),
   },
+  // I negozi esterni collegati, la traduzione dei loro prodotti e i codici di
+  // acconto (fase E e `14-acconto-e-saldo.md`). Sta sotto `/organization`
+  // perché un negozio è dell'organizzazione, non di un evento: lo stesso
+  // negozio vende le edizioni di tutti gli anni.
+  {
+    path: 'organization/sales-channels',
+    canActivate: [requireCapability('organization')],
+    loadComponent: () =>
+      import('./pages/organization/organization-sales-channels.component').then(
+        (m) => m.OrganizationSalesChannelsComponent,
+      ),
+  },
 
   // -------------------------------------------------------------- /platform
   {

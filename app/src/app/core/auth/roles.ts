@@ -6,12 +6,19 @@
  */
 
 /** Insieme chiuso dei ruoli del §3.8. */
-export type AppRole = 'GOD' | 'OWNER' | 'EVENT_MANAGER' | 'CHECKIN_OPERATOR' | 'DANCER';
+export type AppRole =
+  | 'GOD'
+  | 'OWNER'
+  | 'EVENT_MANAGER'
+  | 'BOX_OFFICE'
+  | 'CHECKIN_OPERATOR'
+  | 'DANCER';
 
 export const APP_ROLES: readonly AppRole[] = [
   'GOD',
   'OWNER',
   'EVENT_MANAGER',
+  'BOX_OFFICE',
   'CHECKIN_OPERATOR',
   'DANCER',
 ];
@@ -25,11 +32,12 @@ export function toAppRole(roleName: string): AppRole | null {
 }
 
 /** Ruolo del membro dell'organizzazione (`OrgMemberRole`, §3.5). */
-export type OrgMemberRole = 'OWNER' | 'EVENT_MANAGER' | 'CHECKIN_OPERATOR';
+export type OrgMemberRole = 'OWNER' | 'EVENT_MANAGER' | 'BOX_OFFICE' | 'CHECKIN_OPERATOR';
 
 export const ORG_MEMBER_ROLE_LABEL: Record<OrgMemberRole, string> = {
   OWNER: 'Titolare',
   EVENT_MANAGER: 'Responsabile eventi',
+  BOX_OFFICE: 'Cassa',
   CHECKIN_OPERATOR: 'Operatore check-in',
 };
 
@@ -69,6 +77,18 @@ export interface Capabilities {
   registrationsWrite: boolean;
   /** Rimborsi: riservati all'`OWNER` (decisione D-D). */
   refunds: boolean;
+  /**
+   * **Tenere la cassa** — vedere l'importo di un saldo e registrarne l'incasso
+   * (`14` §6.3, `RB27`).
+   *
+   * Esiste separata da `registrations` perché la distinzione che protegge non è
+   * fra chi lavora all'evento e chi no: è fra chi incassa e chi sta alla porta.
+   * L'operatore di check-in vede **che** un saldo esiste — glielo dice la
+   * verifica del biglietto — e non quanto vale, e la cifra non gli arriva
+   * proprio. Il costo dichiarato è organizzativo: due postazioni, e un passaggio
+   * in più per chi arriva con un residuo aperto.
+   */
+  boxOffice: boolean;
 }
 
 const NONE: Capabilities = {
@@ -85,6 +105,7 @@ const NONE: Capabilities = {
   registrations: false,
   registrationsWrite: false,
   refunds: false,
+  boxOffice: false,
 };
 
 export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
@@ -116,6 +137,7 @@ export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
       registrations: true,
       registrationsWrite: true,
       refunds: true,
+      boxOffice: true,
     };
   }
 
@@ -131,7 +153,15 @@ export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
       directoryWrite: true,
       registrations: true,
       registrationsWrite: true,
+      boxOffice: true,
     };
+  }
+
+  if (has('BOX_OFFICE')) {
+    // La cassa vede la porta **più** il registro dei saldi: gli iscritti in sola
+    // lettura, e il permesso di incassare. Non costruisce eventi, e non deve —
+    // è la ragione per cui il ruolo esiste separato dal responsabile eventi.
+    return { ...NONE, registrations: true, boxOffice: true };
   }
 
   if (has('CHECKIN_OPERATOR')) {
