@@ -23,7 +23,8 @@ export class RefundPolicyService {
     public async save(principalId: number, dto: RefundPolicyCreateDTO): Promise<RefundPolicy> {
         const scope = await this.organizationScopeService.resolve(principalId);
         // organizationId nullo = preset di piattaforma: riservato a GOD.
-        this.organizationScopeService.assertWritable(scope, dto.organizationId);
+        // L'organizzazione la DERIVA il server (§OrganizationScopeService).
+        const organizationId = this.organizationScopeService.resolveOwner(scope, dto.organizationId);
         this.assertTiersAreCoherent(dto.tiers);
         await this.assertDerivationIsNotMoreRestrictive({
             derivedFromPolicyId: dto.derivedFromPolicyId,
@@ -32,8 +33,8 @@ export class RefundPolicyService {
             feeRefundable: dto.feeRefundable,
         });
 
-        Log.info(`[RefundPolicy Service]: creating refund policy for organization (id ${dto.organizationId ?? "platform"})`);
-        const policy = await this.refundPolicyRepository.save(dto);
+        Log.info(`[RefundPolicy Service]: creating refund policy for organization (id ${organizationId ?? "platform"})`);
+        const policy = await this.refundPolicyRepository.save({ ...dto, organizationId });
         Log.info(`[RefundPolicy Service]: refund policy created (id ${policy.id})`);
         return policy;
     }

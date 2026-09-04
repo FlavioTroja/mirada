@@ -20,10 +20,12 @@ export class ArtistService {
 
     public async save(principalId: number, dto: ArtistCreateDTO): Promise<Artist> {
         const scope = await this.organizationScopeService.resolve(principalId);
-        this.organizationScopeService.assertWritable(scope, dto.organizationId);
+        // L'organizzazione la DERIVA il server: il client non deve dichiarare la
+        // propria, e non deve poter dichiarare quella di altri.
+        const organizationId = this.organizationScopeService.resolveOwner(scope, dto.organizationId);
 
         Log.info(`[Artist Service]: creating artist '${dto.name}' (${dto.kind})`);
-        const artist = await this.artistRepository.save(this.toPrismaData(dto));
+        const artist = await this.artistRepository.save(this.toPrismaData({ ...dto, organizationId }));
         Log.info(`[Artist Service]: artist created '${artist.name}' (id ${artist.id})`);
         return artist;
     }

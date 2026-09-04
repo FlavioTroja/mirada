@@ -45,15 +45,16 @@ export class FiscalDeclarationService {
         context: FiscalDeclarationServerContext,
     ): Promise<FiscalDeclaration> {
         const scope = await this.organizationScopeService.resolve(principalId);
-        this.organizationScopeService.assertWritable(scope, dto.organizationId);
+        // L'organizzazione la DERIVA il server (§OrganizationScopeService).
+        const organizationId = this.organizationScopeService.resolveRequiredOwner(scope, dto.organizationId);
 
         if (dto.kind === FiscalDeclarationKind.EVENT_ATTESTATION && !dto.eventId) {
-            Log.warn(`[FiscalDeclaration Service]: EVENT_ATTESTATION without an event for organization (id ${dto.organizationId})`);
+            Log.warn(`[FiscalDeclaration Service]: EVENT_ATTESTATION without an event for organization (id ${organizationId})`);
             throw new httpErrors.BadRequest("Un'attestazione di evento deve indicare l'evento a cui si riferisce.");
         }
 
-        Log.info(`[FiscalDeclaration Service]: creating ${dto.kind} declaration for organization (id ${dto.organizationId})`);
-        return this.create({ ...dto, eventId: dto.eventId ?? null }, context);
+        Log.info(`[FiscalDeclaration Service]: creating ${dto.kind} declaration for organization (id ${organizationId})`);
+        return this.create({ ...dto, organizationId, eventId: dto.eventId ?? null }, context);
     }
 
     /**

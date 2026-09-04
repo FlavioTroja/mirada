@@ -76,7 +76,8 @@ export class EventService {
      */
     public async save(principalId: number, dto: EventCreateDTO): Promise<Event> {
         const scope = await this.organizationScopeService.resolve(principalId);
-        this.organizationScopeService.assertWritable(scope, dto.organizationId);
+        // L'organizzazione la DERIVA il server (§OrganizationScopeService).
+        const organizationId = this.organizationScopeService.resolveRequiredOwner(scope, dto.organizationId);
 
         await this.assertSlugIsFree(dto.slug);
         this.assertDatesAreCoherent(dto.startAt, dto.endAt);

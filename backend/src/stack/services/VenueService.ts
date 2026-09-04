@@ -20,10 +20,12 @@ export class VenueService {
 
     public async save(principalId: number, dto: VenueCreateDTO): Promise<Venue> {
         const scope = await this.organizationScopeService.resolve(principalId);
-        this.organizationScopeService.assertWritable(scope, dto.organizationId);
+        // L'organizzazione la DERIVA il server: il client non deve dichiarare la
+        // propria, e non deve poter dichiarare quella di altri.
+        const organizationId = this.organizationScopeService.resolveOwner(scope, dto.organizationId);
 
-        Log.info(`[Venue Service]: creating venue '${dto.name}' for organization (id ${dto.organizationId ?? "platform"})`);
-        const venue = await this.venueRepository.save(dto);
+        Log.info(`[Venue Service]: creating venue '${dto.name}' for organization (id ${organizationId ?? "platform"})`);
+        const venue = await this.venueRepository.save({ ...dto, organizationId });
         Log.info(`[Venue Service]: venue created '${venue.name}' (id ${venue.id})`);
         return venue;
     }

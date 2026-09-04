@@ -87,7 +87,8 @@ export class SalesChannelService {
      */
     public async save(principalId: number, dto: SalesChannelCreateDTO): Promise<SalesChannel> {
         const scope = await this.organizationScopeService.resolve(principalId);
-        this.organizationScopeService.assertWritable(scope, dto.organizationId);
+        // L'organizzazione la DERIVA il server (§OrganizationScopeService).
+        const organizationId = this.organizationScopeService.resolveOwner(scope, dto.organizationId);
 
         const duplicate = await this.salesChannelRepository.findByShop(dto.provider, dto.externalShopId);
         if (duplicate) {
@@ -108,6 +109,7 @@ export class SalesChannelService {
 
         const channel = await this.salesChannelRepository.save({
             ...(dto as Prisma.SalesChannelUncheckedCreateInput),
+            organizationId: organizationId as number,
             publicId: generateRandomString(PUBLIC_ID_LENGTH),
             webhookSecret: seal(dto.webhookSecret),
             credentials: dto.credentials ? seal(JSON.stringify({ accessToken: dto.credentials })) : null,
