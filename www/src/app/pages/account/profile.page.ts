@@ -239,6 +239,31 @@ const ROLES: { value: PreferredDanceRole; label: string; hint: string }[] = [
             }
           </fieldset>
 
+          <fieldset class="visibility">
+            <legend class="www-label">Chi ti iscrive</legend>
+            <label class="visible" [class.on]="visibleToOrganizers()">
+              <input
+                type="checkbox"
+                [checked]="visibleToOrganizers()"
+                (change)="visibleToOrganizers.set(!visibleToOrganizers())"
+              />
+              Gli organizzatori che mi iscrivono possono vedere come ballo
+            </label>
+            <span class="www-hint">
+              Quando una scuola o un organizzatore ti iscrive cercando il tuo indirizzo, vede
+              nome, cognome e — se lasci acceso — <strong>ruolo, livello e città</strong>. Servono
+              a comporre la classe e a tenere in equilibrio leader e follower, ed evitano che tu
+              debba ridettarli ogni volta. Non vede a quali eventi sei andato, né dove ti sei
+              iscritto altrove.
+            </span>
+            @if (!visibleToOrganizers()) {
+              <span class="www-hint">
+                Con l’interruttore spento resti riconoscibile per nome ed email — quello serve a
+                non farti censire due volte — ma il ruolo dovrai dirlo a voce a ogni iscrizione.
+              </span>
+            }
+          </fieldset>
+
           @if (saveError(); as msg) {
             <div class="www-notice www-notice-error">
               <strong>Non è stato salvato</strong>
@@ -431,6 +456,28 @@ const ROLES: { value: PreferredDanceRole; label: string; hint: string }[] = [
       .role-label {
         font-weight: 600;
       }
+      .visibility {
+        border: 0;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+
+      .visible {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.55rem;
+        cursor: pointer;
+        line-height: 1.35;
+      }
+
+      .visible input {
+        margin-top: 0.15rem;
+        flex: 0 0 auto;
+      }
+
       .languages {
         display: flex;
         flex-wrap: wrap;
@@ -494,6 +541,8 @@ export class ProfilePage {
   protected readonly declaredLevel = signal('');
   protected readonly birthDate = signal('');
   protected readonly langs = signal<string[]>([]);
+  /** Acceso per difetto, come la colonna: chi non tocca nulla resta visibile. */
+  protected readonly visibleToOrganizers = signal(true);
 
   protected readonly saveError = signal<string | null>(null);
   protected readonly saveDone = signal(false);
@@ -564,6 +613,7 @@ export class ProfilePage {
       this.declaredLevel.set(p.declaredLevel ?? '');
       this.birthDate.set(p.birthDate ? p.birthDate.slice(0, 10) : '');
       this.langs.set([...(p.languages ?? [])]);
+      this.visibleToOrganizers.set(p.profileVisibleToOrganizers ?? true);
     });
 
     effect(() => {
@@ -616,6 +666,7 @@ export class ProfilePage {
         declaredLevel: this.declaredLevel(),
         languages: this.langs(),
         birthDate: this.birthDate() || null,
+        profileVisibleToOrganizers: this.visibleToOrganizers(),
       });
       await this.profiles.attachPendingAvatar();
       this.saveDone.set(true);

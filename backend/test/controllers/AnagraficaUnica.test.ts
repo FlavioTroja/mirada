@@ -312,6 +312,37 @@ describe("L'anagrafica unica del ballerino", () => {
             expect(res.statusCode).toBe(400);
         });
 
+        it("la spunta del ballerino arriva dalla SUA area, e la ricerca la rispetta (A10)", async () => {
+            const god = await login(app, "god", "god");
+            const dancer = await createDancer({ preferredRole: "LEADER" });
+            const session = await login(app, dancer.user.username, "secret");
+            const profilo = await prisma().dancerProfile.findUniqueOrThrow({ where: { userId: dancer.user.id } });
+            const contact = await prisma().contact.findFirstOrThrow({
+                where: { person: { user: { id: dancer.user.id } } },
+            });
+
+            // Acceso per difetto: chi non tocca nulla resta visibile.
+            expect((await cerca(god, contact.email)).json().dancerProfile).not.toBeNull();
+
+            // Il ballerino lo spegne dalla propria area, con la propria sessione.
+            const patch = await app.inject({
+                method: "PATCH",
+                url: `/api/dancer-profiles/${profilo.id}`,
+                headers: { authorization: session },
+                payload: { profileVisibleToOrganizers: false },
+            });
+            expect(patch.statusCode).toBe(200);
+
+            // ── Il giro completo ─────────────────────────────────────────────
+            // Non è la stessa prova di sopra: là la colonna la spegneva il test
+            // scrivendo in banca dati, qui la spegne la PERSONA dalla rotta che
+            // usa davvero. È il collegamento che, se manca, lascia un
+            // interruttore che si muove e non fa niente.
+            const dopo = (await cerca(god, contact.email)).json();
+            expect(dopo.found).toBe(true);
+            expect(dopo.dancerProfile).toBeNull();
+        });
+
         it("è chiusa a chi non può iscrivere nessuno", async () => {
             const dancer = await createDancer({});
             const session = await login(app, dancer.user.username, "secret");

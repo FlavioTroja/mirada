@@ -296,8 +296,8 @@ funziona.
 | 2 | Migrazione: `Registration.personId`, unico su `(eventId, personId)`, riempimento da `personUserId` | `prisma/migrations/` | ✅ |
 | 3 | Risoluzione dell'anagrafica: normalizza, cerca, **crea la provvisoria** | `services/PersonResolutionService.ts` | ✅ |
 | 4 | Ricerca per email esatta, con permesso e riga di `Log` | `controllers/PersonController.ts` | ✅ |
-| 5 | `enrol()` chiama il punto 3; `findMine()` e i due finder passano a `personId` | `services/RegistrationService.ts` | 🟡 finder e `findMine()` fatti; `enrol()` è del `15` |
-| 6 | La spunta di visibilità sul profilo — colonna nella migrazione del punto 2 | `DancerProfile` · area personale | 🟡 colonna in banca dati, manca l'interruttore in interfaccia |
+| 5 | `enrol()` chiama il punto 3; `findMine()` e i due finder passano a `personId` | `services/RegistrationService.ts` | ✅ per `16`; `enrol()` resta al `15` |
+| 6 | La spunta di visibilità sul profilo — colonna nella migrazione del punto 2 | `DancerProfile` · area personale | ✅ |
 
 ### Cosa è emerso realizzando i punti 1 e 2
 
@@ -335,6 +335,25 @@ funziona.
   ma non te lo dico», che è comunque un'informazione su chi ha chiesto di non darla.
 
 Suite completa verde: **21 suite, 213 prove**.
+
+### Cosa è emerso realizzando il punto 6
+
+- **Il backend non è stato toccato.** `DancerProfileUpdateSchema` deriva da
+  `DancerProfilePartialSchema`, generato dallo schema Prisma: la colonna del punto 2 era già
+  accettata in scrittura, e nessuno schema di risposta la filtrava in lettura. L'interruttore era
+  davvero solo interfaccia.
+- **La prova che serviva non era quella che c'era.** Esisteva già un test che spegneva la colonna
+  **scrivendo in banca dati** e verificava che la ricerca la rispettasse. Non copriva il tratto
+  che il ballerino usa davvero: la `PATCH` dalla propria area. Senza, sarebbe rimasto possibile
+  un interruttore che si muove e non fa niente — che è il modo più silenzioso di rompere questa
+  funzione. Ora il giro è provato per intero, dalla spunta alla ricerca.
+- **Il testo accanto alla spunta dice cosa NON succede.** Spegnere non ritira ciò che si è già
+  comunicato iscrivendosi a un evento: quel dato è dell'organizzatore da prima. Prometterlo
+  sarebbe una promessa che il sistema non può mantenere.
+
+Il documento `16` è **completo**: tutti e sei i passi sono realizzati e provati.
+
+Suite finale: **21 suite, 214 prove**.
 
 Il punto 2 non ha rischio di perdita: ogni `personUserId` valorizzato ha un `User`, e ogni
 `User` ha un `personId` obbligatorio. Il riempimento è una `UPDATE` con una sola giunzione, e

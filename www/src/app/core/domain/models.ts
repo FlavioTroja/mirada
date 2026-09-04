@@ -428,4 +428,15 @@ export interface DancerProfile {
   avatarFile?: PublicFile | null;
   nicknameChangedAt?: string | null;
   nicknameChangeCount?: number;
+  /**
+   * **Se gli organizzatori che ti iscrivono possono vedere come balli**
+   * (`16-anagrafica-unica.md` §5.2).
+   *
+   * Acceso per difetto. Governa i soli tre campi che servono a comporre una
+   * classe o un evento — ruolo preferito, livello, città — quando
+   * un'organizzazione cerca la tua email per non censirti due volte. Non
+   * riguarda ciò che hai già comunicato iscrivendoti a un evento: quel dato è
+   * dell'organizzatore da prima, e questo interruttore non lo ritira.
+   */
+  profileVisibleToOrganizers?: boolean;
 }

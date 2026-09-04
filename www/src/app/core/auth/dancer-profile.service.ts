@@ -11,6 +11,7 @@ export interface DancerProfileEdit {
   declaredLevel?: string | null;
   languages: string[];
   birthDate?: string | null;
+  profileVisibleToOrganizers?: boolean;
 }
 
 /**
@@ -100,6 +101,7 @@ export class DancerProfileService {
         declaredLevel: emptyToNull(edit.declaredLevel),
         languages: edit.languages,
         birthDate: edit.birthDate ? new Date(edit.birthDate).toISOString() : null,
+        profileVisibleToOrganizers: edit.profileVisibleToOrganizers ?? true,
       };
 
       const saved = current
