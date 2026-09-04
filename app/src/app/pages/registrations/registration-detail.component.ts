@@ -23,19 +23,27 @@ import {
   check,
   checkCircle,
   close,
+  cloudOff,
+  contentCopy,
   edit,
   eventSeat,
   handshake,
   heartBroken,
   howToReg,
+  payments,
   save,
+  schedule,
   swapHoriz,
+  warning,
 } from '@keijo/ui/icons';
 import { HeaderTitleService } from '../../services/header-title.service';
 import { PageAction, PageActionsService } from '../../services/page-actions.service';
 import { ToastService } from '../../services/toast.service';
 import { AuthService } from '../../core/auth/auth.service';
 import {
+  BALANCE_SETTLEMENT_METHOD_OPTIONS,
+  BALANCE_SETTLEMENT_METHOD_UI,
+  BalanceSettlementMethod,
   DANCE_ROLE_UI,
   DECLARED_DANCE_ROLE_OPTIONS,
   DECLARED_DANCE_ROLE_UI,
@@ -47,9 +55,17 @@ import {
   REGISTRATION_STATUS_UI,
   RegistrationChannel,
 } from '../../core/domain/enums';
-import { QuotaConsumption } from '../../core/domain/models';
-import { formatDateTime } from '../../core/i18n/format';
+import { QuotaConsumption, RegistrationBalance } from '../../core/domain/models';
+import {
+  centsToEuroInput,
+  euroInputToCents,
+  formatCents,
+  formatDateTime,
+} from '../../core/i18n/format';
 import { LocaleService, i18nPlain } from '../../core/i18n/i18n-text';
+import { ApiClient } from '../../core/api/api.client';
+import { ApiError } from '../../core/api/api-error';
+import { BalanceSettlementStore } from '../../stores/balance-settlement.store';
 import { CoupleStore } from '../../stores/couple.store';
 import { RegistrationStore } from '../../stores/registration.store';
 import { ConfirmService } from '../../shared/confirm.service';
@@ -250,6 +266,136 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
           </keijo-page-section-wrapper>
         }
 
+        @if (balance(); as bal) {
+          <keijo-page-section-wrapper
+            title="Saldo da versare"
+            [buttons]="settling() ? settleButtons : []"
+            (buttonClick)="onSettleAction($event)"
+          >
+            <div class="grid">
+              <div>
+                <p class="mirada-label">Residuo nato con la vendita</p>
+                <p class="mirada-value">{{ euro(bal.dueAmount) }}</p>
+                <p class="mirada-hint">
+                  È la parte non versata al negozio: l’acconto è stato incassato là, questo si
+                  incassa qui. Non è un pagamento della piattaforma e non compare fra gli incassi.
+                </p>
+              </div>
+              <div>
+                <p class="mirada-label">Già incassato</p>
+                <p class="mirada-value">{{ euro(bal.settledAmount) }}</p>
+              </div>
+              <div>
+                <p class="mirada-label">Ancora aperto</p>
+                <p class="mirada-value">{{ euro(bal.openAmount) }}</p>
+                @if (bal.openAmount > 0) {
+                  <keijo-pill variant="warning" [icon]="balanceIcon">da versare alla cassa</keijo-pill>
+                } @else if (bal.openAmount === 0) {
+                  <keijo-pill variant="success" [icon]="settledIcon">saldato</keijo-pill>
+                } @else {
+                  <keijo-pill variant="error" [icon]="conflictIcon">incassato in eccesso</keijo-pill>
+                }
+              </div>
+            </div>
+
+            @if (bal.openAmount < 0) {
+              <keijo-info-box [icon]="conflictIcon" title="Incassato più del dovuto" variant="error">
+                <span>
+                  Due postazioni hanno incassato lo stesso saldo senza vedersi. Le righe restano
+                  tutte: quei soldi qualcuno li ha davvero presi in mano, e cancellarne una farebbe
+                  quadrare i conti sullo schermo e non nel cassetto. La restituzione avviene fuori
+                  piattaforma.
+                </span>
+              </keijo-info-box>
+            }
+
+            @if (settling()) {
+              @if (settleErrors().length) {
+                <p class="mirada-error">{{ settleErrors().join(' ') }}</p>
+              }
+              <keijo-form-wrapper [formGroup]="settleForm">
+                <keijo-form-row [cols]="3">
+                  <keijo-input
+                    [formControl]="settleForm.controls.amount"
+                    label="importo incassato (€)"
+                    id="settleAmount"
+                    type="text"
+                  />
+                  <keijo-select
+                    [formControl]="settleForm.controls.method"
+                    [data]="methodOptions"
+                    label="metodo"
+                    placeholder="Contanti, POS, bonifico…"
+                  />
+                  <keijo-input
+                    [formControl]="settleForm.controls.note"
+                    label="nota"
+                    id="settleNote"
+                    type="text"
+                    placeholder="Contestava la cifra, pagato in due banconote…"
+                  />
+                </keijo-form-row>
+                <p class="mirada-hint">
+                  Il metodo è una spunta, non un incasso: Mirada non prende quei soldi, ne prende
+                  nota. Un bonifico arrivato prima dell’evento si registra da qui — è ciò che evita
+                  di chiedere alla porta soldi già mandati.
+                </p>
+              </keijo-form-wrapper>
+            }
+
+            <keijo-list-items-wrapper>
+              @for (row of bal.settlements; track row.id) {
+                <keijo-list-item-wrapper direction="row">
+                  <div class="settlement">
+                    <span class="mirada-value">{{ euro(row.amount) }}</span>
+                    <div class="row">
+                      <keijo-pill variant="default" [icon]="methodIcon(row.method)">
+                        {{ methodLabel(row.method) }}
+                      </keijo-pill>
+                      <keijo-pill variant="default" [icon]="clockIcon">
+                        {{ when(row.collectedAt) }}
+                      </keijo-pill>
+                      <keijo-pill variant="default" [icon]="operatorIcon">
+                        {{ operatorLabel(row.operatorUserId) }}
+                      </keijo-pill>
+                      @if (row.deviceId) {
+                        <keijo-pill [isID]="true" [icon]="copyIcon">{{ row.deviceId }}</keijo-pill>
+                      }
+                      @if (row.offline) {
+                        <keijo-pill variant="info" [icon]="offlineIcon">dalla coda offline</keijo-pill>
+                      }
+                      @if (row.conflictWithId) {
+                        <keijo-pill variant="error" [icon]="conflictIcon">
+                          in conflitto con l’incasso #{{ row.conflictWithId }}
+                        </keijo-pill>
+                      }
+                    </div>
+                  </div>
+                </keijo-list-item-wrapper>
+              } @empty {
+                <keijo-info-box [icon]="balanceIcon" title="Nessun incasso registrato" variant="info">
+                  <span>
+                    Il saldo si versa al check-in, alla cassa. Se è già arrivato per bonifico,
+                    registralo da qui: il residuo si chiude e alla porta non verrà chiesto.
+                  </span>
+                </keijo-info-box>
+              }
+            </keijo-list-items-wrapper>
+          </keijo-page-section-wrapper>
+        }
+
+        @if (balanceError(); as guasto) {
+          <keijo-page-section-wrapper title="Saldo da versare">
+            <keijo-info-box [icon]="conflictIcon" title="Saldo non leggibile" variant="error">
+              <span>
+                Non è stato possibile leggere il residuo di questa persona: {{ guasto }} Non
+                significa che non deve nulla — significa che non lo sappiamo. Prima di lasciar
+                passare qualcuno alla porta, ricarica la scheda.
+              </span>
+            </keijo-info-box>
+          </keijo-page-section-wrapper>
+        }
+
         <keijo-page-section-wrapper title="Capienza impegnata">
           <p class="mirada-hint">
             Ogni riga è un posto occupato da questa iscrizione su una quota di capienza. È il
@@ -313,6 +459,17 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
         gap: 0.75rem;
         width: 100%;
       }
+      .settlement {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        width: 100%;
+      }
+      .settlement .row {
+        flex-wrap: wrap;
+      }
     `,
   ],
 })
@@ -326,6 +483,8 @@ export class RegistrationDetailComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly locale = inject(LocaleService);
   private readonly couples = inject(CoupleStore);
+  private readonly api = inject(ApiClient);
+  private readonly settlements = inject(BalanceSettlementStore);
 
   readonly store = inject(RegistrationStore);
 
@@ -334,11 +493,42 @@ export class RegistrationDetailComponent implements OnInit {
   readonly dissolveIcon = heartBroken;
   readonly seatIcon = eventSeat;
   readonly pendingIcon = celebration;
+  readonly balanceIcon = payments;
+  readonly settledIcon = checkCircle;
+  readonly conflictIcon = warning;
+  readonly clockIcon = schedule;
+  readonly operatorIcon = howToReg;
+  /** La postazione è un codice da **copiare**: è ciò che si cita per contestare un incasso. */
+  readonly copyIcon = contentCopy;
+  /** L'origine offline è sincronizzazione, non tempo: l'orologio è già del `collectedAt`. */
+  readonly offlineIcon = cloudOff;
 
   private readonly registrationId = signal(0);
   readonly editing = signal(false);
   readonly reassigning = signal(false);
   readonly formErrors = signal<string[]>([]);
+
+  /**
+   * Il residuo di questa persona, letto dal server.
+   *
+   * `null` quando non c'è nulla da mostrare: nessun acconto, oppure chi guarda
+   * non tiene la cassa. Non è una sezione nascosta con un `*ngIf` su un dato che
+   * è comunque arrivato — la chiamata non si fa proprio, e la cifra non esce dal
+   * server (`RB27`).
+   */
+  readonly balance = signal<RegistrationBalance | null>(null);
+  /**
+   * Il guasto che ha impedito di leggere il residuo — **mai** il `403` di chi non
+   * tiene la cassa, che è già escluso prima della chiamata.
+   *
+   * Esiste perché `loadBalance()` non può propagare: è atteso in `ngOnInit`, e
+   * un'eccezione lì impedirebbe `registerActions()`, lasciando la scheda senza
+   * nemmeno i comandi che non c'entrano con il saldo.
+   */
+  readonly balanceError = signal<string | null>(null);
+  readonly settling = signal(false);
+  readonly settleErrors = signal<string[]>([]);
+  private readonly operatorNames = signal<Map<number, string>>(new Map());
 
   readonly declaredRoleOptions: SelectOption[] = DECLARED_DANCE_ROLE_OPTIONS.map((o) => ({
     label: o.label,
@@ -354,6 +544,8 @@ export class RegistrationDetailComponent implements OnInit {
   ];
 
   readonly canWrite = computed(() => this.auth.can().registrationsWrite);
+  /** Tenere la cassa: vedere l'importo di un saldo e registrarne l'incasso. */
+  readonly canSettle = computed(() => this.auth.can().boxOffice);
   readonly consumptions = computed(() => this.store.current()?.quotaConsumptions ?? []);
 
   readonly editButtons: SectionActionButton[] = [
@@ -364,6 +556,15 @@ export class RegistrationDetailComponent implements OnInit {
     { id: 'apply', icon: check, label: 'Riassegna', variant: 'accent' },
     { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
   ];
+  readonly settleButtons: SectionActionButton[] = [
+    { id: 'settle', icon: check, label: 'Registra incasso', variant: 'accent' },
+    { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
+  ];
+
+  readonly methodOptions: SelectOption[] = BALANCE_SETTLEMENT_METHOD_OPTIONS.map((o) => ({
+    label: o.label,
+    value: o.value,
+  }));
 
   readonly form = new FormGroup({
     holderName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
@@ -381,11 +582,18 @@ export class RegistrationDetailComponent implements OnInit {
     role: new FormControl<DanceRole>('LEADER', { nonNullable: true }),
   });
 
+  readonly settleForm = new FormGroup({
+    amount: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    method: new FormControl<BalanceSettlementMethod>('CASH', { nonNullable: true }),
+    note: new FormControl('', { nonNullable: true }),
+  });
+
   async ngOnInit(): Promise<void> {
     // Titolo dell'header = **nome dell'entità**, mai l'id né l'istanza.
     this.headerTitle.set('Iscrizione');
     this.registrationId.set(Number(this.route.snapshot.paramMap.get('id')));
     await this.store.loadOne(this.registrationId());
+    await this.loadBalance();
     this.registerActions();
   }
 
@@ -435,6 +643,21 @@ export class RegistrationDetailComponent implements OnInit {
         });
       }
     }
+
+    // «Incassa» compare solo a chi tiene la cassa **e** solo se c'è qualcosa da
+    // incassare: un comando che apre un modulo per registrare zero euro è un
+    // comando che tradisce chi lo preme.
+    const bal = this.balance();
+    if (this.canSettle() && bal && bal.openAmount > 0) {
+      actions.push({
+        id: 'settle',
+        icon: payments,
+        label: 'Incassa',
+        tooltip: 'Registra il saldo versato',
+        run: () => this.startSettle(),
+      });
+    }
+
     this.pageActions.set(actions);
   }
 
@@ -457,6 +680,138 @@ export class RegistrationDetailComponent implements OnInit {
   }
   channelUi(channel: RegistrationChannel) {
     return REGISTRATION_CHANNEL_UI[channel];
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // Il saldo del botteghino — `14` §6, `RF-SAL-14`
+  // ═════════════════════════════════════════════════════════════════════════
+
+  euro(cents: number): string {
+    return formatCents(cents);
+  }
+
+  methodLabel(method: BalanceSettlementMethod): string {
+    return BALANCE_SETTLEMENT_METHOD_UI[method].label;
+  }
+
+  methodIcon(method: BalanceSettlementMethod) {
+    return BALANCE_SETTLEMENT_METHOD_UI[method].icon;
+  }
+
+  /** Chi ha incassato. Con il nome, non con un numero: è a lui che si chiede. */
+  operatorLabel(operatorUserId: number): string {
+    return this.operatorNames().get(operatorUserId) ?? `operatore #${operatorUserId}`;
+  }
+
+  /**
+   * Legge il residuo — e **solo se ha senso chiederlo**.
+   *
+   * Chi non tiene la cassa riceverebbe un `403`: non si fa la chiamata per poi
+   * nascondere l'errore, non si fa la chiamata. E un `403` inatteso qui non deve
+   * far comparire un messaggio d'errore sulla scheda di un'iscrizione che per
+   * tutto il resto si legge benissimo: la sezione semplicemente non c'è.
+   */
+  private async loadBalance(): Promise<void> {
+    if (!this.canSettle()) {
+      this.balance.set(null);
+      return;
+    }
+
+    try {
+      const bal = await this.settlements.balanceOf(this.registrationId());
+      this.balanceError.set(null);
+      // Nessun acconto, nessuna sezione: la stragrande maggioranza delle
+      // iscrizioni non ha un residuo, e tre cifre a zero non sono un dato.
+      //
+      // ⚠️ `settlements.length` non è una ridondanza. `sync` accetta un incasso
+      // anche su chi non doveva nulla — `NO_BALANCE_DUE` è uno dei conflitti di
+      // `BalanceSettlementService`, e la riga **viene creata**, marcata, e
+      // lasciata allo staff perché quel contante qualcuno l'ha preso davvero.
+      // Questa sezione è il posto dove lo staff la risolve: senza la seconda
+      // condizione, l'unico caso in cui il conflitto esiste è l'unico in cui
+      // non si vede.
+      this.balance.set(bal.dueAmount > 0 || bal.settlements.length > 0 ? bal : null);
+      if (bal.settlements.length) {
+        await this.loadOperatorNames();
+      }
+    } catch (err) {
+      // Il `403` di chi non tiene la cassa è già escluso sopra: la chiamata non
+      // parte nemmeno. Quello che resta qui sono i guasti veri — 5xx, rete
+      // caduta, risposta malformata — e su questa pagina un pannello che
+      // sparisce si legge «non deve nulla». A un botteghino è la differenza fra
+      // chiedere il saldo e lasciar passare, quindi il guasto si dice.
+      this.balance.set(null);
+      this.balanceError.set(
+        err instanceof ApiError && err.kind === 'forbidden'
+          ? null
+          : (err as Error)?.message || 'Il saldo di questa iscrizione non è leggibile.',
+      );
+    }
+  }
+
+  /** Una lettura sola: gli operatori di cassa di un evento sono una manciata. */
+  private async loadOperatorNames(): Promise<void> {
+    if (this.operatorNames().size) return;
+    try {
+      const page = await this.api.list<{ id: number; username: string }>('users', {}, { limit: 200 });
+      this.operatorNames.set(new Map((page.docs ?? []).map((u) => [u.id, u.username])));
+    } catch {
+      // Senza i nomi restano i numeri: è meno leggibile, non è un guasto.
+    }
+  }
+
+  startSettle(): void {
+    const bal = this.balance();
+    if (!bal) return;
+    this.settleErrors.set([]);
+    this.settleForm.reset({
+      // Precompilato con ciò che resta aperto: alla porta si versa il saldo
+      // intero, e chi incassa non deve ricopiare una cifra che il server sa.
+      amount: centsToEuroInput(bal.openAmount),
+      method: 'CASH',
+      note: '',
+    });
+    this.settling.set(true);
+  }
+
+  async onSettleAction(button: SectionActionButton): Promise<void> {
+    if (button.id === 'cancel') {
+      this.settling.set(false);
+      return;
+    }
+
+    const bal = this.balance();
+    if (!bal) return;
+
+    this.settleErrors.set([]);
+    const amount = euroInputToCents(this.settleForm.controls.amount.value);
+    if (amount <= 0) {
+      this.settleErrors.set(['Scrivi l’importo che hai incassato.']);
+      return;
+    }
+
+    try {
+      const note = this.settleForm.controls.note.value.trim();
+      await this.settlements.create({
+        registrationId: this.registrationId(),
+        amount,
+        method: this.settleForm.controls.method.value,
+        ...(note ? { note } : {}),
+      });
+      this.toast.show('SUCCESS', 'Incasso registrato.');
+      this.settling.set(false);
+      await this.loadBalance();
+      this.registerActions();
+    } catch (err) {
+      // Il server rifiuta con un messaggio in italiano già pronto — «il saldo è
+      // già stato versato», «l'importo supera il residuo ancora aperto» — e
+      // sostituirlo con un «controlla i campi» generico toglierebbe a chi ha i
+      // soldi in mano l'unica informazione che gli serve.
+      const unmatched = applyZodIssues(this.settleForm, err);
+      this.settleErrors.set(
+        unmatched.length ? unmatched : [(err as Error).message || 'Incasso non registrato.'],
+      );
+    }
   }
 
   describeQuota(row: QuotaConsumption): string {

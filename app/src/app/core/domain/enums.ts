@@ -9,6 +9,7 @@ import {
   checkCircle,
   checklist,
   contentCopy,
+  creditCard,
   description,
   doneAll,
   draft,
@@ -32,6 +33,7 @@ import {
   person,
   playArrow,
   publish,
+  qrCode,
   restaurant,
   rule,
   scale,
@@ -383,6 +385,33 @@ export const REGISTRATION_CHANNEL_UI: Record<RegistrationChannel, StatusUi> = {
 export const REGISTRATION_CHANNEL_OPTIONS = (
   Object.keys(REGISTRATION_CHANNEL_UI) as RegistrationChannel[]
 ).map((key) => ({ label: REGISTRATION_CHANNEL_UI[key].label, value: key }));
+
+// ---------------------------------------------------------------------------
+// Il saldo incassato al botteghino — `14-acconto-e-saldo.md` §6
+// ---------------------------------------------------------------------------
+
+export type BalanceSettlementMethod = 'CASH' | 'POS' | 'SATISPAY' | 'BANK_TRANSFER' | 'OTHER';
+
+/**
+ * Come il saldo è stato materialmente incassato.
+ *
+ * È una **spunta, non un prestatore di pagamento**: Mirada non incassa nulla,
+ * prende nota di ciò che qualcuno ha preso in mano. Nessuna di queste voci apre
+ * un flusso, chiama un'API o produce una ricevuta — gli adempimenti fiscali su
+ * quel contante restano dell'organizzatore (`RB26`).
+ */
+export const BALANCE_SETTLEMENT_METHOD_UI: Record<BalanceSettlementMethod, StatusUi> = {
+  CASH: { label: 'Contanti', variant: 'default', icon: euro },
+  POS: { label: 'POS', variant: 'default', icon: creditCard },
+  SATISPAY: { label: 'Satispay', variant: 'default', icon: qrCode },
+  BANK_TRANSFER: { label: 'Bonifico', variant: 'default', icon: accountBalance },
+  // `payments` resta soltanto qui: un'icona generica per la voce generica.
+  OTHER: { label: 'Altro', variant: 'default', icon: payments },
+};
+
+export const BALANCE_SETTLEMENT_METHOD_OPTIONS = (
+  Object.keys(BALANCE_SETTLEMENT_METHOD_UI) as BalanceSettlementMethod[]
+).map((key) => ({ label: BALANCE_SETTLEMENT_METHOD_UI[key].label, value: key }));
 
 // ---------------------------------------------------------------------------
 // Icone di supporto riesportate: le pagine non ne inventano di nuove

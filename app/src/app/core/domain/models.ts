@@ -2,6 +2,7 @@ import { I18nText } from '../i18n/i18n-text';
 import { OrgMemberRole } from '../auth/roles';
 import {
   ArtistKind,
+  BalanceSettlementMethod,
   DanceRole,
   DeclaredDanceRole,
   EventStatus,
@@ -565,8 +566,6 @@ export interface RegistrationBalance {
   openAmount: number;
   settlements: BalanceSettlement[];
 }
-
-export type BalanceSettlementMethod = 'CASH' | 'POS' | 'SATISPAY' | 'BANK_TRANSFER' | 'OTHER';
 
 /**
  * Un saldo incassato al botteghino — `14` §6.
