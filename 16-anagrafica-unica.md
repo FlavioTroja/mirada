@@ -290,14 +290,30 @@ non le appartiene, e sporcherebbe l'anagrafica globale — cioè l'opposto dell'
 L'ordine non è negoziabile sul primo punto: è l'unico che, se manca, rompe qualcosa che oggi
 funziona.
 
-| # | cosa | dove |
-|---|---|---|
-| **1** | **La rivendicazione** — `SsoService` cerca la `Person` senza account, `createFromSso` la aggancia invece di creare un `Contact` | `services/SsoService.ts` · `services/UserService.ts` |
-| 2 | Migrazione: `Registration.personId`, unico su `(eventId, personId)`, riempimento da `personUserId` | `prisma/migrations/` |
-| 3 | Risoluzione dell'anagrafica: normalizza, cerca, crea la provvisoria | `services/` |
-| 4 | Ricerca per email esatta, con permesso e riga di `Log` | `controllers/PersonController.ts` |
-| 5 | `enrol()` chiama il punto 3; `findMine()` e i due finder passano a `personId` | `services/RegistrationService.ts` |
-| 6 | La spunta di visibilità sul profilo — colonna nella migrazione del punto 2 | `DancerProfile` · area personale |
+| # | cosa | dove | stato |
+|---|---|---|---|
+| **1** | **La rivendicazione** — si cerca la `Person` senza account e la si aggancia invece di creare un `Contact` | `services/UserService.ts` | ✅ |
+| 2 | Migrazione: `Registration.personId`, unico su `(eventId, personId)`, riempimento da `personUserId` | `prisma/migrations/` | ✅ |
+| 3 | Risoluzione dell'anagrafica: normalizza, cerca, **crea la provvisoria** | `services/` | ⬜ |
+| 4 | Ricerca per email esatta, con permesso e riga di `Log` | `controllers/PersonController.ts` | ⬜ |
+| 5 | `enrol()` chiama il punto 3; `findMine()` e i due finder passano a `personId` | `services/RegistrationService.ts` | 🟡 finder e `findMine()` fatti; `enrol()` è del `15` |
+| 6 | La spunta di visibilità sul profilo — colonna nella migrazione del punto 2 | `DancerProfile` · area personale | 🟡 colonna in banca dati, manca l'interruttore in interfaccia |
+
+### Cosa è emerso realizzando i punti 1 e 2
+
+- **La rivendicazione serviva in due posti, non in uno**, e il secondo era peggiore. Oltre a
+  `createFromSso`, l'autoregistrazione del ballerino (`UserService.register`) rifiutava con
+  `EMAIL_ALREADY_REGISTERED` chiunque fosse già censito: «questo indirizzo ha già un account,
+  accedi». La frase è **falsa** e manda ad accedere a qualcosa che non esiste. Non falliva —
+  *rispondeva* — ed era un vicolo cieco da cui non si esce da soli. Lì `RB33` vale per un'altra
+  strada: quel percorso non valorizza `emailVerifiedAt`, quindi l'utenza nasce incapace di
+  accedere finché non si preme il collegamento nella casella.
+- **`OrderService` cercava i partecipanti fra le sole utenze.** Ora cerca fra le anagrafiche,
+  così una vendita online aggancia chi una scuola ha censito. È una lettura, non un censimento.
+- **Il travaso è stato verificato riga per riga**, non soltanto contato: su tutte e quattro le
+  iscrizioni interessate l'`holderEmail` coincide con l'email dell'anagrafica agganciata.
+- **`AnagraficaUnica.test.ts`** prova le due facce — che la rivendicazione avvenga, e che
+  restituisca il passato. Suite completa verde: 21 suite, 203 prove.
 
 Il punto 2 non ha rischio di perdita: ogni `personUserId` valorizzato ha un `User`, e ogni
 `User` ha un `personId` obbligatorio. Il riempimento è una `UPDATE` con una sola giunzione, e
