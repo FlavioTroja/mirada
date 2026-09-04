@@ -35,6 +35,20 @@ export const DancerProfileSchema = z.object({
    * Spazio riservato agli attributi di ballo estensibili di fase 2 (§4.3).
    */
   attributes: JsonValueSchema,
+  /**
+   * **«Il mio profilo di ballo è visibile agli organizzatori che mi iscrivono»**
+   * (`16-anagrafica-unica.md` §5.2, `RF-ANA-7`, decisione A10).
+   * 
+   * Governa il solo `GET /persons/lookup`: con il valore falso la ricerca per
+   * email restituisce l'anagrafica di base e **non** ruolo preferito, livello e
+   * città. Non nasconde nulla di ciò che la persona ha comunicato a
+   * un'organizzazione iscrivendosi ai suoi eventi — quello è già suo.
+   * 
+   * **Default acceso**: il comportamento predefinito resta quello deciso, e chi
+   * non tocca nulla resta visibile. Un interruttore spento per difetto
+   * svuoterebbe la funzione senza che nessuno l'abbia chiesto.
+   */
+  profileVisibleToOrganizers: z.boolean(),
   deleted: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -69,6 +83,20 @@ export const DancerProfileOptionalDefaultsSchema = DancerProfileSchema.merge(z.o
    * Spazio riservato agli attributi di ballo estensibili di fase 2 (§4.3).
    */
   attributes: JsonValueSchema,
+  /**
+   * **«Il mio profilo di ballo è visibile agli organizzatori che mi iscrivono»**
+   * (`16-anagrafica-unica.md` §5.2, `RF-ANA-7`, decisione A10).
+   * 
+   * Governa il solo `GET /persons/lookup`: con il valore falso la ricerca per
+   * email restituisce l'anagrafica di base e **non** ruolo preferito, livello e
+   * città. Non nasconde nulla di ciò che la persona ha comunicato a
+   * un'organizzazione iscrivendosi ai suoi eventi — quello è già suo.
+   * 
+   * **Default acceso**: il comportamento predefinito resta quello deciso, e chi
+   * non tocca nulla resta visibile. Un interruttore spento per difetto
+   * svuoterebbe la funzione senza che nessuno l'abbia chiesto.
+   */
+  profileVisibleToOrganizers: z.boolean().optional(),
   deleted: z.boolean().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),

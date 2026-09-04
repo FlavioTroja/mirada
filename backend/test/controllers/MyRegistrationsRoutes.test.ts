@@ -29,7 +29,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
             role: DanceRole.FOLLOWER,
-            personUserId: dancer.user.id,
+            personId: dancer.user.personId,
             holderName: "Nadia",
             holderSurname: "Verdi",
         });
@@ -73,7 +73,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
             role: DanceRole.LEADER,
-            personUserId: owner.user.id,
+            personId: owner.user.personId,
         });
 
         const session = await login(app, stranger.user.username, PASSWORD);
@@ -98,7 +98,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
         const { registrationId } = await createTicketFor({
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
-            personUserId: dancer.user.id,
+            personId: dancer.user.personId,
         });
         await getPrismaClient().registration.update({
             where: { id: registrationId },
@@ -122,7 +122,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
         await createTicketFor({
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
-            personUserId: dancer.user.id,
+            personId: dancer.user.personId,
         });
 
         // Cominciato ieri, finisce domani: un festival in corso è ancora un
@@ -172,7 +172,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
         const { ticket } = await createTicketFor({
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
-            personUserId: dancer.user.id,
+            personId: dancer.user.personId,
         });
 
         const session = await login(app, dancer.user.username, PASSWORD);
@@ -198,7 +198,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
         const { ticket } = await createTicketFor({
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
-            personUserId: owner.user.id,
+            personId: owner.user.personId,
         });
 
         const session = await login(app, stranger.user.username, PASSWORD);
@@ -219,7 +219,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
         const { ticket } = await createTicketFor({
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
-            personUserId: dancer.user.id,
+            personId: dancer.user.personId,
             status: TicketStatus.REFUNDED,
         });
         await getPrismaClient().ticket.update({
@@ -245,7 +245,7 @@ describe("Le proprie iscrizioni (sito pubblico)", () => {
         const { ticket } = await createTicketFor({
             eventId: scenario.event.id,
             ticketTypeId: scenario.ticketTypeId,
-            personUserId: dancer.user.id,
+            personId: dancer.user.personId,
         });
         await getPrismaClient().ticket.update({
             where: { id: ticket.id },

@@ -124,7 +124,6 @@ export type UserRelations = {
   invitationsSent: OrganizationInvitationWithRelations[];
   invitationsAccepted: OrganizationInvitationWithRelations[];
   fiscalDeclarations: FiscalDeclarationWithRelations[];
-  registrations: RegistrationWithRelations[];
   guardedRegistrations: RegistrationWithRelations[];
   reviewedRequirementOutcomes: RequirementOutcomeWithRelations[];
   purchases: PurchaseWithRelations[];
@@ -148,7 +147,6 @@ export const UserWithRelationsSchema: z.ZodType<UserWithRelations> = UserSchema.
   invitationsSent: z.lazy(() => OrganizationInvitationWithRelationsSchema).array(),
   invitationsAccepted: z.lazy(() => OrganizationInvitationWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationWithRelationsSchema).array(),
-  registrations: z.lazy(() => RegistrationWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationWithRelationsSchema).array(),
   reviewedRequirementOutcomes: z.lazy(() => RequirementOutcomeWithRelationsSchema).array(),
   purchases: z.lazy(() => PurchaseWithRelationsSchema).array(),
@@ -174,7 +172,6 @@ export type UserOptionalDefaultsRelations = {
   invitationsSent: OrganizationInvitationOptionalDefaultsWithRelations[];
   invitationsAccepted: OrganizationInvitationOptionalDefaultsWithRelations[];
   fiscalDeclarations: FiscalDeclarationOptionalDefaultsWithRelations[];
-  registrations: RegistrationOptionalDefaultsWithRelations[];
   guardedRegistrations: RegistrationOptionalDefaultsWithRelations[];
   reviewedRequirementOutcomes: RequirementOutcomeOptionalDefaultsWithRelations[];
   purchases: PurchaseOptionalDefaultsWithRelations[];
@@ -198,7 +195,6 @@ export const UserOptionalDefaultsWithRelationsSchema: z.ZodType<UserOptionalDefa
   invitationsSent: z.lazy(() => OrganizationInvitationOptionalDefaultsWithRelationsSchema).array(),
   invitationsAccepted: z.lazy(() => OrganizationInvitationOptionalDefaultsWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationOptionalDefaultsWithRelationsSchema).array(),
-  registrations: z.lazy(() => RegistrationOptionalDefaultsWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationOptionalDefaultsWithRelationsSchema).array(),
   reviewedRequirementOutcomes: z.lazy(() => RequirementOutcomeOptionalDefaultsWithRelationsSchema).array(),
   purchases: z.lazy(() => PurchaseOptionalDefaultsWithRelationsSchema).array(),
@@ -224,7 +220,6 @@ export type UserPartialRelations = {
   invitationsSent?: OrganizationInvitationPartialWithRelations[];
   invitationsAccepted?: OrganizationInvitationPartialWithRelations[];
   fiscalDeclarations?: FiscalDeclarationPartialWithRelations[];
-  registrations?: RegistrationPartialWithRelations[];
   guardedRegistrations?: RegistrationPartialWithRelations[];
   reviewedRequirementOutcomes?: RequirementOutcomePartialWithRelations[];
   purchases?: PurchasePartialWithRelations[];
@@ -248,7 +243,6 @@ export const UserPartialWithRelationsSchema: z.ZodType<UserPartialWithRelations>
   invitationsSent: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   invitationsAccepted: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
-  registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   reviewedRequirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   purchases: z.lazy(() => PurchasePartialWithRelationsSchema).array(),
@@ -272,7 +266,6 @@ export const UserOptionalDefaultsWithPartialRelationsSchema: z.ZodType<UserOptio
   invitationsSent: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   invitationsAccepted: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
-  registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   reviewedRequirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   purchases: z.lazy(() => PurchasePartialWithRelationsSchema).array(),
@@ -296,7 +289,6 @@ export const UserWithPartialRelationsSchema: z.ZodType<UserWithPartialRelations>
   invitationsSent: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   invitationsAccepted: z.lazy(() => OrganizationInvitationPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
-  registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   guardedRegistrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
   reviewedRequirementOutcomes: z.lazy(() => RequirementOutcomePartialWithRelationsSchema).array(),
   purchases: z.lazy(() => PurchasePartialWithRelationsSchema).array(),

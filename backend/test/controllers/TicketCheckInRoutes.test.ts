@@ -321,7 +321,7 @@ describe("Rotte di biglietti e check-in (fase D1)", () => {
         expect(ticketAfter.holderSurname).toBe(before.ticket.holderSurname);
 
         const registrationAfter = await prisma.registration.findUniqueOrThrow({ where: { id: registrationId } });
-        expect(registrationAfter.personUserId).toBe(before.registration.personUserId);
+        expect(registrationAfter.personId).toBe(before.registration.personId);
         expect(registrationAfter.assignedRole).toBe(DanceRole.LEADER);
 
         // Nessuna riga di storico: il passaggio non è avvenuto.
@@ -380,7 +380,7 @@ describe("Rotte di biglietti e check-in (fase D1)", () => {
 
         // L'iscrizione si è spostata sul nuovo titolare.
         const registrationAfter = await prisma.registration.findUniqueOrThrow({ where: { id: registrationId } });
-        expect(registrationAfter.personUserId).toBe(recipient.user.id);
+        expect(registrationAfter.personId).toBe(recipient.user.personId);
 
         // E i requisiti sono tornati da provare: una liberatoria firmata da un
         // altro non vale.

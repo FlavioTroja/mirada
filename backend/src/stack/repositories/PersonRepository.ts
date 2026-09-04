@@ -56,6 +56,40 @@ export class PersonRepository extends BaseRepository<"person"> {
         );
     }
 
+    /**
+     * **L'anagrafica rivendicabile** — `16-anagrafica-unica.md` §4.
+     *
+     * La persona censita da un'organizzazione che **non ha ancora un'utenza**:
+     * esiste in piattaforma, con la sua email, e nessuno può ancora entrarci.
+     * È ciò che `createFromSso` deve agganciare invece di creare un `Contact`
+     * nuovo — `Contact.email` è unico, e crearlo violerebbe il vincolo proprio
+     * sul percorso di registrazione.
+     *
+     * ── Due differenze da `findByEmail`, entrambe volute ─────────────────────
+     * 1. **Restituisce `null`** invece di sollevare: qui il caso normale è non
+     *    trovare nulla, ed è la registrazione di chiunque non sia mai stato
+     *    censito da nessuno.
+     * 2. **Guarda `email` e non `pec`.** Una PEC che coincide con l'indirizzo
+     *    d'accesso di un'altra persona aggancerebbe l'utenza all'anagrafica
+     *    sbagliata — e l'anagrafica sbagliata qui significa le iscrizioni di un
+     *    altro.
+     *
+     * Il filtro `user: null` è la condizione che rende l'operazione sicura: chi
+     * ha già un'utenza non si rivendica, si autentica.
+     */
+    public async findClaimableByEmail(email: string, tx?: Prisma.TransactionClient): Promise<Person | null> {
+        return this.exec(() =>
+            this.getDelegate(tx).findFirst({
+                where: {
+                    deleted: false,
+                    user: { is: null },
+                    contact: { email: { equals: email, mode: "insensitive" } },
+                },
+                include: { contact: true },
+            })
+        );
+    }
+
     public override async paginate(query: Prisma.PersonWhereInput, options: PaginateOptions, tx?: Prisma.TransactionClient, personIds?: number[]): Promise<PaginateDatasourceDTO<Person>> {
         return this.exec(async () => {
             const opts = setPaginationAndPopulation(options);

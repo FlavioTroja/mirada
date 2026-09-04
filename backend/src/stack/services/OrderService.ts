@@ -7,12 +7,12 @@ import {
     OrderStatus,
     Organization,
     PayoutStatus,
+    Person,
     Prisma,
     Purchase,
     Registration,
     RegistrationChannel,
     RegistrationStatus,
-    User,
 } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
@@ -37,6 +37,7 @@ import { OrganizationRepository } from "@repositories/OrganizationRepository";
 import { TicketTypeRepository, TicketTypeWithSessions } from "@repositories/TicketTypeRepository";
 import { EventServiceRepository } from "@repositories/EventServiceRepository";
 import { UserRepository } from "@repositories/UserRepository";
+import { PersonRepository } from "@repositories/PersonRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { OrderPricingService, PricedLine } from "@services/OrderPricingService";
 import { OrderReservationService } from "@services/OrderReservationService";
@@ -55,10 +56,15 @@ type PlannedAttendee = {
     quantity: number;
     registrationId?: number;
     /**
-     * L'account del partecipante, se ne ha uno. Risolto dall'email in una
-     * lettura sola per l'intero carrello — non una per persona.
+     * L'anagrafica del partecipante, se la piattaforma già la conosce. Risolta
+     * dall'email in una lettura sola per l'intero carrello — non una per persona.
+     *
+     * ⚠️ È l'ANAGRAFICA, non l'utenza (`16-anagrafica-unica.md` §2): comprende
+     * chi è stato censito da un'organizzazione senza essersi mai registrato.
+     * Resta `null` per chi la piattaforma non conosce affatto — si compra
+     * legittimamente per un amico che non è mai passato di qui.
      */
-    personUserId?: number | null;
+    personId?: number | null;
 };
 
 /** Una riga del carrello dopo la risoluzione, prima della scrittura. */
@@ -126,6 +132,7 @@ export class OrderService {
         private readonly ticketTypeRepository: TicketTypeRepository,
         private readonly eventServiceRepository: EventServiceRepository,
         private readonly userRepository: UserRepository,
+        private readonly personRepository: PersonRepository,
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly orderPricingService: OrderPricingService,
         private readonly orderReservationService: OrderReservationService,
@@ -178,7 +185,7 @@ export class OrderService {
                         // si compra legittimamente per un amico che non è
                         // registrato — e in quel caso l'iscrizione vive sui soli
                         // dati anagrafici, come prima.
-                        personUserId: participant.personUserId ?? null,
+                        personId: participant.personId ?? null,
                         declaredRole: participant.attendee.declaredRole,
                         channel: RegistrationChannel.ONLINE_SALE,
                         // Stato coerente: l'iscrizione esiste ed è impegnata, ma
@@ -671,22 +678,28 @@ export class OrderService {
             participant.quantity = Math.max(1, participant.quantity);
         }
 
-        // Chi fra i partecipanti ha già un account: **una** query per l'intero
-        // carrello, non una per persona. Le email sono già normalizzate in
-        // `key`, che è l'identità della persona dentro l'ordine.
+        // Chi fra i partecipanti la piattaforma già lo conosce: **una** query per
+        // l'intero carrello, non una per persona. Le email sono già normalizzate
+        // in `key`, che è l'identità della persona dentro l'ordine.
+        //
+        // ⚠️ Si cercano ANAGRAFICHE e non utenze (`16` §2). Chi una scuola ha
+        // censito iscrivendolo a un corso esiste già qui: agganciarlo è la
+        // ragione per cui l'anagrafica è unica, e cercare fra le sole utenze lo
+        // lascerebbe fuori proprio dal percorso che lo riguarda di più.
+        // Non si CREA nulla: questa è una lettura, e il censimento è del §3.
         const emails = all.map(p => p.key).filter(Boolean);
         if (emails.length) {
-            const known = await this.userRepository.findMany(
-                { deleted: false, person: { contact: { email: { in: emails } } } },
-                { populate: "person person.contact" },
-            ) as (User & { person?: { contact?: { email?: string } } })[];
+            const known = await this.personRepository.findMany(
+                { deleted: false, contact: { email: { in: emails } } },
+                { populate: "contact" },
+            ) as (Person & { contact?: { email?: string } })[];
             const byEmail = new Map(
                 known
-                    .map(u => [u.person?.contact?.email?.toLowerCase(), u.id] as const)
+                    .map(p => [p.contact?.email?.toLowerCase(), p.id] as const)
                     .filter((e): e is readonly [string, number] => !!e[0]),
             );
             for (const participant of all) {
-                participant.personUserId = byEmail.get(participant.key) ?? null;
+                participant.personId = byEmail.get(participant.key) ?? null;
             }
         }
 

@@ -7,6 +7,7 @@ import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { createObjectWithoutThrow } from "@utils/helpers/query";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { RegistrationRepository } from "@repositories/RegistrationRepository";
+import { UserRepository } from "@repositories/UserRepository";
 import { EventRepository } from "@repositories/EventRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { CapacityEngineService, CommitOutcome } from "@services/CapacityEngineService";
@@ -61,6 +62,7 @@ type MyRegistrationRow = Registration & {
 export class RegistrationService {
     constructor(
         private readonly registrationRepository: RegistrationRepository,
+        private readonly userRepository: UserRepository,
         private readonly eventRepository: EventRepository,
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly capacityEngineService: CapacityEngineService,
@@ -74,11 +76,11 @@ export class RegistrationService {
     public async save(principalId: number, dto: RegistrationCreateDTO): Promise<Registration> {
         const event = await this.assertWritableEvent(principalId, dto.eventId);
 
-        if (dto.personUserId) {
-            const existing = await this.registrationRepository.findByEventAndPerson(dto.eventId, dto.personUserId);
+        if (dto.personId) {
+            const existing = await this.registrationRepository.findByEventAndPerson(dto.eventId, dto.personId);
             if (existing) {
                 Log.warn(
-                    `[Registration Service]: create refused on event (id ${dto.eventId}) — user (id ${dto.personUserId}) `
+                    `[Registration Service]: create refused on event (id ${dto.eventId}) — person (id ${dto.personId}) `
                     + `already has registration (id ${existing.id})`,
                 );
                 throw new httpErrors.BadRequest("Questa persona è già iscritta all'evento.");
@@ -131,14 +133,29 @@ export class RegistrationService {
      * che finisce domani è ancora un evento a cui stai andando.
      */
     public async findMine(principalId: number): Promise<MyRegistrationsDTO> {
+        // ── Si risolve prima l'ANAGRAFICA — `16-anagrafica-unica.md` §2.3 ────
+        // L'iscrizione punta alla persona, non all'utenza. Una lettura in più, e
+        // in cambio le iscrizioni fatte a mano PRIMA che questa persona avesse
+        // un account compaiono qui da sole: puntavano già alla sua anagrafica, e
+        // il giorno in cui l'ha rivendicata sono diventate sue senza che nessuna
+        // riconciliazione andasse a cercarle.
+        const me = await this.userRepository.findOne({ id: principalId, deleted: false });
+        if (!me) {
+            Log.warn(`[Registration Service]: user (id ${principalId}) not found while reading their registrations`);
+            return { upcoming: [], past: [] };
+        }
+
         // L'ordine non si chiede qui: i due elenchi vengono riordinati sotto
         // per data d'evento, che è l'unico ordine che significhi qualcosa a chi
         // guarda le proprie iscrizioni.
-        const rows = await this.registrationRepository.findByPersonUser(principalId, {
+        const rows = await this.registrationRepository.findByPerson(me.personId, {
             populate: "event event.venue event.venue.address event.posterVerticalFile tickets tickets.ticketType",
         });
 
-        Log.info(`[Registration Service]: user (id ${principalId}) is reading their own ${rows.length} registration(s)`);
+        Log.info(
+            `[Registration Service]: user (id ${principalId}) is reading their own ${rows.length} registration(s) `
+            + `through person (id ${me.personId})`,
+        );
 
         const now = new Date();
         const upcoming: MyRegistrationDTO[] = [];

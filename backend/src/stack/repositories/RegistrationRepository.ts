@@ -30,17 +30,23 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
      * chi balla un elenco vuoto (uno scope vuoto non vede nulla) e a un
      * titolare, che pure è una persona, solo le iscrizioni fatte a casa propria.
      *
-     * Il filtro è `personUserId`, che è il legame reale fra l'account e
+     * Il filtro è `personId`, che è il legame reale fra la persona e
      * l'iscrizione: l'indirizzo scritto in fase d'acquisto no, perché si compra
      * anche per altri e un omonimo di casella condivisa vedrebbe i biglietti di
      * qualcun altro.
+     *
+     * ⚠️ È l'ANAGRAFICA e non l'utenza (`16-anagrafica-unica.md` §2.3). Il
+     * chiamante risolve prima il `personId` di chi chiede. In cambio, le
+     * iscrizioni fatte a mano **prima** che la persona avesse un account
+     * compaiono da sole il giorno in cui se lo crea: puntavano già alla sua
+     * anagrafica, e nessuna riconciliazione deve andarle a cercare.
      */
-    async findByPersonUser(
-        personUserId: number,
+    async findByPerson(
+        personId: number,
         options?: FindOptions,
         tx?: Prisma.TransactionClient,
     ): Promise<Registration[]> {
-        return this.findMany({ personUserId, deleted: false }, options, tx);
+        return this.findMany({ personId, deleted: false }, options, tx);
     }
 
     async findByIds(ids: number[], tx?: Prisma.TransactionClient): Promise<Registration[]> {
@@ -55,7 +61,7 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
      * scaduto — `RF-PAY-24`, §4.11.
      *
      * ── Perché reale e non soft, che è l'eccezione di questo repository ──────
-     * `@@unique([eventId, personUserId])` è un indice **del database**, e il
+     * `@@unique([eventId, personId])` è un indice **del database**, e il
      * database non sa cosa sia `deleted`: una riga cancellata a metà continua a
      * occupare la coppia `(evento, persona)`. Un `safeDelete` qui produrrebbe
      * quindi il difetto peggiore del checkout — *chi abbandona il carrello non
@@ -84,13 +90,13 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
         return this.findMany({ coupleId, deleted: false }, { orderBy: { id: "asc" } }, tx);
     }
 
-    /** Una iscrizione per persona per evento (§3.6). */
+    /** Una iscrizione per **anagrafica** per evento (§3.6, `16` §2.2). */
     async findByEventAndPerson(
         eventId: number,
-        personUserId: number,
+        personId: number,
         tx?: Prisma.TransactionClient,
     ): Promise<Registration | null> {
-        return this.findOne({ eventId, personUserId, deleted: false }, undefined, tx);
+        return this.findOne({ eventId, personId, deleted: false }, undefined, tx);
     }
 
     /**

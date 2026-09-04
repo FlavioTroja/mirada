@@ -121,7 +121,10 @@ export class TicketRepository extends BaseRepository<"ticket"> {
      * non è un caso: il problema è lo stesso e merita la stessa soluzione.
      */
     static visibilityWhere(scope: OrganizationScope, userId: number): Prisma.TicketWhereInput {
-        const own: Prisma.TicketWhereInput = { registration: { personUserId: userId } };
+        // L'iscrizione punta all'ANAGRAFICA, non all'utenza (`16` §2): si scende
+        // di un livello invece di risolvere prima il `personId`, così questo
+        // filtro resta una sola condizione componibile con lo scope.
+        const own: Prisma.TicketWhereInput = { registration: { person: { user: { id: userId } } } };
         if (scope === null) {
             return {};
         }

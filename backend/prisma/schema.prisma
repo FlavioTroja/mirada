@@ -134,7 +134,8 @@ model User {
   invitationsSent         OrganizationInvitation[] @relation("OrganizationInvitationInvitedBy")
   invitationsAccepted     OrganizationInvitation[] @relation("OrganizationInvitationAcceptedBy")
   fiscalDeclarations      FiscalDeclaration[]      @relation("FiscalDeclarationDeclaredBy")
-  registrations           Registration[]           @relation("RegistrationPerson")
+  /// Il tutore resta un `User`: chi si assume la responsabilità di un minore
+  /// deve avere un'utenza, non una semplice anagrafica.
   guardedRegistrations    Registration[]           @relation("RegistrationGuardian")
 
   // Fase D1 — passi 17, 23→26 (più i gusci 18→22 del checkout).
@@ -261,6 +262,11 @@ model Person {
   contact   Contact      @relation(fields: [contactId], references: [id])
   addresses Address[]
   files     PersonFile[]
+
+  /// Le iscrizioni di questa persona, presso **qualunque** organizzazione
+  /// (`16` §1.1). `Person` non discende da `Organization` e non porta filtro di
+  /// tenancy: l'isolamento vive sull'iscrizione, che discende dall'evento.
+  registrations Registration[] @relation("RegistrationPerson")
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -563,6 +569,19 @@ model DancerProfile {
 
   /// Spazio riservato agli attributi di ballo estensibili di fase 2 (§4.3).
   attributes Json @default("{}")
+
+  /// **«Il mio profilo di ballo è visibile agli organizzatori che mi iscrivono»**
+  /// (`16-anagrafica-unica.md` §5.2, `RF-ANA-7`, decisione A10).
+  ///
+  /// Governa il solo `GET /persons/lookup`: con il valore falso la ricerca per
+  /// email restituisce l'anagrafica di base e **non** ruolo preferito, livello e
+  /// città. Non nasconde nulla di ciò che la persona ha comunicato a
+  /// un'organizzazione iscrivendosi ai suoi eventi — quello è già suo.
+  ///
+  /// **Default acceso**: il comportamento predefinito resta quello deciso, e chi
+  /// non tocca nulla resta visibile. Un interruttore spento per difetto
+  /// svuoterebbe la funzione senza che nessuno l'abbia chiesto.
+  profileVisibleToOrganizers Boolean @default(true)
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1342,8 +1361,19 @@ model Registration {
   eventId Int
   event   Event @relation(fields: [eventId], references: [id], onDelete: Restrict)
 
-  personUserId Int?
-  personUser   User? @relation("RegistrationPerson", fields: [personUserId], references: [id], onDelete: SetNull)
+  /// **L'anagrafica globale di questa persona** (`16-anagrafica-unica.md` §2).
+  ///
+  /// Punta a `Person` e non a `User` perché una persona può essere censita
+  /// **senza account**: la scuola che iscrive un allievo a un corso crea la sua
+  /// anagrafica, e quell'iscrizione deve poterla raggiungere. `User.personId` è
+  /// obbligatorio e unico, quindi da qui si arriva all'utenza quando esiste —
+  /// il contrario non era vero, ed è la ragione della sostituzione.
+  ///
+  /// `SetNull` e non `Cascade`: un'iscrizione non sparisce perché un'anagrafica
+  /// viene unificata o cancellata. Restano `holderName`, `holderSurname` e
+  /// `holderEmail`, che sono la fotografia del nominativo al momento.
+  personId Int?
+  person   Person? @relation("RegistrationPerson", fields: [personId], references: [id], onDelete: SetNull)
 
   holderName    String
   holderSurname String
@@ -1400,11 +1430,17 @@ model Registration {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  /// Unico su `(eventId, personUserId)` QUANDO `personUserId` non è nullo:
-  /// in PostgreSQL un unique index tratta ogni NULL come distinto, quindi le
-  /// iscrizioni senza account non si ostacolano fra loro (§3.6).
-  @@unique([eventId, personUserId])
+  /// Unico su `(eventId, personId)` QUANDO `personId` non è nullo: in PostgreSQL
+  /// un unique index tratta ogni NULL come distinto, quindi le iscrizioni non
+  /// censite non si ostacolano fra loro (§3.6).
+  ///
+  /// Spostato da `personUserId` (`16` §2.2): il vincolo vale ora **per persona**
+  /// e non per utenza, e copre un caso che prima sfuggiva — la stessa persona
+  /// iscritta due volte allo stesso evento, una volta con account e una volta a
+  /// mano, che consumava capienza due volte senza che nulla se ne accorgesse.
+  @@unique([eventId, personId])
   @@index([externalSaleId])
+  @@index([personId])
   @@index([eventId, assignedRole])
   @@index([eventId, status])
   @@index([coupleId])

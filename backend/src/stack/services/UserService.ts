@@ -131,29 +131,65 @@ export class UserService {
         }
 
         const email = dto.email.trim().toLowerCase();
-        const existingContact = await this.contactRepository.findOne({ email });
-        if (existingContact) {
-            Log.warn(`[User Service]: registration refused — '${email}' already belongs to an account`);
-            throw domainError(
-                DomainErrorCode.EMAIL_ALREADY_REGISTERED,
-                "Questo indirizzo ha già un account su Mirada. Accedi per iscriverti all'evento.",
-            );
+
+        // ── La rivendicazione — `16-anagrafica-unica.md` §4 ──────────────────
+        // Un contatto con questo indirizzo può esistere **senza** un'utenza
+        // dietro: è la persona che una scuola ha censito iscrivendola a un
+        // corso. Trattarla come «hai già un account» sarebbe due volte
+        // sbagliato — la frase è falsa, e manda ad accedere a un account che
+        // non esiste, cioè in un vicolo cieco da cui non si esce da soli.
+        //
+        // ⚠️ `RB33` è rispettata anche qui, per una strada diversa dall'SSO:
+        // questo percorso NON valorizza `emailVerifiedAt`, quindi l'utenza
+        // nasce incapace di accedere finché non si preme il collegamento nella
+        // casella. Chi rivendica deve comunque dimostrare l'indirizzo — solo
+        // che qui la prova arriva dopo la creazione invece che prima.
+        const rivendicabile = await this.personRepository.findClaimableByEmail(email);
+
+        if (!rivendicabile) {
+            const existingContact = await this.contactRepository.findOne({ email });
+            if (existingContact) {
+                Log.warn(`[User Service]: registration refused — '${email}' already belongs to an account`);
+                throw domainError(
+                    DomainErrorCode.EMAIL_ALREADY_REGISTERED,
+                    "Questo indirizzo ha già un account su Mirada. Accedi per iscriverti all'evento.",
+                );
+            }
         }
 
         const transformer = new UserRegistrationDTOTransformer();
         const split = transformer.transform(dto);
 
         const created = await getPrismaClient().$transaction(async prisma => {
-            const savedContact = await this.contactRepository.save(split.contact(), prisma);
-            const savedPerson = await this.personRepository.save(split.person(savedContact.id!), prisma);
+            let personId: number;
+            if (rivendicabile) {
+                // Si aggancia, non si riscrive (`RB32`): i propri dati li
+                // corregge la persona dall'area personale, non questo percorso.
+                Log.info(
+                    `[User Service]: '${email}' claims the existing anagraphic (person id ${rivendicabile.id}) `
+                    + "created without an account — attaching instead of creating a new one",
+                );
+                personId = rivendicabile.id;
+            } else {
+                const savedContact = await this.contactRepository.save(split.contact(), prisma);
+                const savedPerson = await this.personRepository.save(split.person(savedContact.id!), prisma);
+                personId = savedPerson.id!;
+            }
+
             const savedUser = await this.userRepository.save({
-                ...split.user(savedPerson.id!),
+                ...split.user(personId),
                 wsCode: generateRandomString(6),
             }, prisma);
 
             await this.roleToUserRepository.save({ roleName: RoleName.DANCER, userId: savedUser.id! }, prisma);
 
-            Log.info(`[User Service]: self-registered dancer '${savedUser.username}' (id ${savedUser.id}) — Contact, Person and User created in one transaction, role DANCER assigned (§3.7, AS2)`);
+            Log.info(
+                `[User Service]: self-registered dancer '${savedUser.username}' (id ${savedUser.id}) — `
+                + (rivendicabile
+                    ? `User created on the CLAIMED anagraphic (person id ${rivendicabile.id})`
+                    : "Contact, Person and User created in one transaction")
+                + ", role DANCER assigned (§3.7, AS2)",
+            );
 
             return this.userRepository.findById(savedUser.id!, {populate: "person person.contact"}, prisma);
         }) as UserWithRelations;
@@ -246,16 +282,42 @@ export class UserService {
         Log.info(`[User Service]: creating account from SSO identity for '${email}' as '${username}'`);
 
         const created = await getPrismaClient().$transaction(async prisma => {
-            const contact = await this.contactRepository.save({ email }, prisma);
-            const person = await this.personRepository.save(
-                {
-                    name: nome || email.split("@")[0] || "Organizzatore",
-                    surname: cognome || "",
-                    personType: "USER",
-                    contact: { connect: { id: contact.id } },
-                } as never,
-                prisma,
-            );
+            // ── La rivendicazione — `16-anagrafica-unica.md` §4 ──────────────
+            // Questa persona può essere già CENSITA senza avere un'utenza: una
+            // scuola l'ha iscritta a un corso digitandone l'indirizzo, e da
+            // allora esiste una `Person` con quel `Contact`. `Contact.email` è
+            // unico su tutta la piattaforma, quindi creare qui un contatto
+            // nuovo violerebbe il vincolo — e lo violerebbe sul percorso di
+            // REGISTRAZIONE, cioè la prima cosa che una persona fa.
+            //
+            // ⚠️ Si aggancia, **non si riscrive** (`RB32`). Il nome che arriva
+            // dal fornitore d'identità non è più autorevole di quello che
+            // qualcuno ha già scritto: sono entrambi ipotesi, e la persona
+            // corregge il proprio dall'area personale. Sovrascrivere qui
+            // significherebbe che l'ultimo arrivato ha sempre ragione.
+            const rivendicabile = await this.personRepository.findClaimableByEmail(email, prisma);
+
+            let personId: number;
+            if (rivendicabile) {
+                Log.info(
+                    `[User Service]: '${email}' claims the existing anagraphic (person id ${rivendicabile.id}) `
+                    + "created without an account — attaching instead of creating a new one",
+                );
+                personId = rivendicabile.id;
+            } else {
+                const contact = await this.contactRepository.save({ email }, prisma);
+                const person = await this.personRepository.save(
+                    {
+                        name: nome || email.split("@")[0] || "Organizzatore",
+                        surname: cognome || "",
+                        personType: "USER",
+                        contact: { connect: { id: contact.id } },
+                    } as never,
+                    prisma,
+                );
+                personId = person.id;
+            }
+
             return this.userRepository.save(
                 {
                     username,
@@ -266,7 +328,7 @@ export class UserService {
                     // chiedere in più il clic su un'email di conferma sarebbe
                     // pretendere due volte la stessa prova.
                     emailVerifiedAt: new Date(),
-                    person: { connect: { id: person.id } },
+                    person: { connect: { id: personId } },
                 } as never,
                 prisma,
             );

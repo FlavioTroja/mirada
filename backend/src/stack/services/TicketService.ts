@@ -354,10 +354,22 @@ export class TicketService {
 
         const recipient = await this.resolveRecipient(dto.emailOrNickname);
         const registration = ticket.registrationId
-            ? await this.registrationRepository.findOne({ id: ticket.registrationId, deleted: false })
+            ? await this.registrationRepository.findOne(
+                { id: ticket.registrationId, deleted: false },
+                // `person.user` serve perché `TicketTransfer` resta un passaggio
+                // fra UTENZE — «chi ha ceduto a chi» — mentre l'iscrizione punta
+                // ormai all'anagrafica (`16` §2). L'utenza del cedente può non
+                // esistere: si è censiti anche senza account, e allora il
+                // passaggio non ha un `fromUserId` da scrivere.
+                { populate: "person person.user" },
+            )
             : null;
 
-        if (registration?.personUserId === recipient.user.id) {
+        /** L'utenza del titolare precedente, se ne ha una. */
+        const fromUserId = (registration as unknown as
+            { person?: { user?: { id: number } | null } | null } | null)?.person?.user?.id ?? null;
+
+        if (registration?.personId === recipient.user.personId) {
             Log.warn(`[Ticket Service]: transfer refused for ticket (id ${ticketId}) — the recipient already holds it`);
             throw new httpErrors.BadRequest("Il biglietto è già intestato a questa persona.");
         }
@@ -367,7 +379,10 @@ export class TicketService {
         // unica e unire le due sarebbe una fusione di consumi, requisiti e
         // biglietti che nessuna regola del brief descrive. Si rifiuta, dicendolo.
         if (registration) {
-            const existing = await this.registrationRepository.findByEventAndPerson(ticket.eventId, recipient.user.id);
+            const existing = await this.registrationRepository.findByEventAndPerson(
+                ticket.eventId,
+                recipient.user.personId,
+            );
             if (existing && existing.id !== registration.id) {
                 Log.warn(
                     `[Ticket Service]: transfer refused for ticket (id ${ticketId}) — the recipient (id ${recipient.user.id}) `
@@ -412,7 +427,7 @@ export class TicketService {
             const transfer = await this.ticketTransferRepository.save(
                 {
                     ticketId,
-                    fromUserId: registration?.personUserId ?? null,
+                    fromUserId,
                     toUserId: recipient.user.id,
                     fromHolder: {
                         name: ticket.holderName,
@@ -437,7 +452,7 @@ export class TicketService {
                 await this.registrationRepository.update(
                     { id: registration.id },
                     {
-                        personUserId: recipient.user.id,
+                        personId: recipient.user.personId,
                         holderName: recipient.name,
                         holderSurname: recipient.surname,
                         holderEmail: recipient.email ?? registration.holderEmail,
@@ -462,7 +477,7 @@ export class TicketService {
 
         // §3.9 — il publish avviene DOPO il commit, mai dentro la transazione.
         await this.publishTransferred(ticket.eventId, ticketId, [
-            registration?.personUserId ?? null,
+            fromUserId,
             recipient.user.id,
         ]);
 

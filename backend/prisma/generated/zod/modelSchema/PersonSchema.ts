@@ -9,6 +9,8 @@ import { AddressWithRelationsSchema, AddressPartialWithRelationsSchema, AddressO
 import type { AddressWithRelations, AddressPartialWithRelations, AddressOptionalDefaultsWithRelations } from './AddressSchema'
 import { PersonFileWithRelationsSchema, PersonFilePartialWithRelationsSchema, PersonFileOptionalDefaultsWithRelationsSchema } from './PersonFileSchema'
 import type { PersonFileWithRelations, PersonFilePartialWithRelations, PersonFileOptionalDefaultsWithRelations } from './PersonFileSchema'
+import { RegistrationWithRelationsSchema, RegistrationPartialWithRelationsSchema, RegistrationOptionalDefaultsWithRelationsSchema } from './RegistrationSchema'
+import type { RegistrationWithRelations, RegistrationPartialWithRelations, RegistrationOptionalDefaultsWithRelations } from './RegistrationSchema'
 
 /////////////////////////////////////////
 // PERSON SCHEMA
@@ -65,6 +67,7 @@ export type PersonRelations = {
   contact: ContactWithRelations;
   addresses: AddressWithRelations[];
   files: PersonFileWithRelations[];
+  registrations: RegistrationWithRelations[];
 };
 
 export type PersonWithRelations = z.infer<typeof PersonSchema> & PersonRelations
@@ -74,6 +77,7 @@ export const PersonWithRelationsSchema: z.ZodType<PersonWithRelations> = PersonS
   contact: z.lazy(() => ContactWithRelationsSchema),
   addresses: z.lazy(() => AddressWithRelationsSchema).array(),
   files: z.lazy(() => PersonFileWithRelationsSchema).array(),
+  registrations: z.lazy(() => RegistrationWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -85,6 +89,7 @@ export type PersonOptionalDefaultsRelations = {
   contact: ContactOptionalDefaultsWithRelations;
   addresses: AddressOptionalDefaultsWithRelations[];
   files: PersonFileOptionalDefaultsWithRelations[];
+  registrations: RegistrationOptionalDefaultsWithRelations[];
 };
 
 export type PersonOptionalDefaultsWithRelations = z.infer<typeof PersonOptionalDefaultsSchema> & PersonOptionalDefaultsRelations
@@ -94,6 +99,7 @@ export const PersonOptionalDefaultsWithRelationsSchema: z.ZodType<PersonOptional
   contact: z.lazy(() => ContactOptionalDefaultsWithRelationsSchema),
   addresses: z.lazy(() => AddressOptionalDefaultsWithRelationsSchema).array(),
   files: z.lazy(() => PersonFileOptionalDefaultsWithRelationsSchema).array(),
+  registrations: z.lazy(() => RegistrationOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -105,6 +111,7 @@ export type PersonPartialRelations = {
   contact?: ContactPartialWithRelations;
   addresses?: AddressPartialWithRelations[];
   files?: PersonFilePartialWithRelations[];
+  registrations?: RegistrationPartialWithRelations[];
 };
 
 export type PersonPartialWithRelations = z.infer<typeof PersonPartialSchema> & PersonPartialRelations
@@ -114,6 +121,7 @@ export const PersonPartialWithRelationsSchema: z.ZodType<PersonPartialWithRelati
   contact: z.lazy(() => ContactPartialWithRelationsSchema),
   addresses: z.lazy(() => AddressPartialWithRelationsSchema).array(),
   files: z.lazy(() => PersonFilePartialWithRelationsSchema).array(),
+  registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
 })).partial()
 
 export type PersonOptionalDefaultsWithPartialRelations = z.infer<typeof PersonOptionalDefaultsSchema> & PersonPartialRelations
@@ -123,6 +131,7 @@ export const PersonOptionalDefaultsWithPartialRelationsSchema: z.ZodType<PersonO
   contact: z.lazy(() => ContactPartialWithRelationsSchema),
   addresses: z.lazy(() => AddressPartialWithRelationsSchema).array(),
   files: z.lazy(() => PersonFilePartialWithRelationsSchema).array(),
+  registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
 }).partial())
 
 export type PersonWithPartialRelations = z.infer<typeof PersonSchema> & PersonPartialRelations
@@ -132,6 +141,7 @@ export const PersonWithPartialRelationsSchema: z.ZodType<PersonWithPartialRelati
   contact: z.lazy(() => ContactPartialWithRelationsSchema),
   addresses: z.lazy(() => AddressPartialWithRelationsSchema).array(),
   files: z.lazy(() => PersonFilePartialWithRelationsSchema).array(),
+  registrations: z.lazy(() => RegistrationPartialWithRelationsSchema).array(),
 }).partial())
 
 export default PersonSchema;

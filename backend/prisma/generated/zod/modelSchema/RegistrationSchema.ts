@@ -5,10 +5,12 @@ import { RegistrationChannelSchema } from '../inputTypeSchemas/RegistrationChann
 import { RegistrationStatusSchema } from '../inputTypeSchemas/RegistrationStatusSchema'
 import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptionalDefaultsWithRelationsSchema } from './EventSchema'
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
-import { UserWithRelationsSchema, UserPartialWithRelationsSchema, UserOptionalDefaultsWithRelationsSchema } from './UserSchema'
-import type { UserWithRelations, UserPartialWithRelations, UserOptionalDefaultsWithRelations } from './UserSchema'
+import { PersonWithRelationsSchema, PersonPartialWithRelationsSchema, PersonOptionalDefaultsWithRelationsSchema } from './PersonSchema'
+import type { PersonWithRelations, PersonPartialWithRelations, PersonOptionalDefaultsWithRelations } from './PersonSchema'
 import { CoupleWithRelationsSchema, CouplePartialWithRelationsSchema, CoupleOptionalDefaultsWithRelationsSchema } from './CoupleSchema'
 import type { CoupleWithRelations, CouplePartialWithRelations, CoupleOptionalDefaultsWithRelations } from './CoupleSchema'
+import { UserWithRelationsSchema, UserPartialWithRelationsSchema, UserOptionalDefaultsWithRelationsSchema } from './UserSchema'
+import type { UserWithRelations, UserPartialWithRelations, UserOptionalDefaultsWithRelations } from './UserSchema'
 import { ExternalSaleWithRelationsSchema, ExternalSalePartialWithRelationsSchema, ExternalSaleOptionalDefaultsWithRelationsSchema } from './ExternalSaleSchema'
 import type { ExternalSaleWithRelations, ExternalSalePartialWithRelations, ExternalSaleOptionalDefaultsWithRelations } from './ExternalSaleSchema'
 import { QuotaConsumptionWithRelationsSchema, QuotaConsumptionPartialWithRelationsSchema, QuotaConsumptionOptionalDefaultsWithRelationsSchema } from './QuotaConsumptionSchema'
@@ -46,7 +48,20 @@ export const RegistrationSchema = z.object({
   status: RegistrationStatusSchema,
   id: z.number().int(),
   eventId: z.number().int(),
-  personUserId: z.number().int().nullish(),
+  /**
+   * **L'anagrafica globale di questa persona** (`16-anagrafica-unica.md` §2).
+   * 
+   * Punta a `Person` e non a `User` perché una persona può essere censita
+   * **senza account**: la scuola che iscrive un allievo a un corso crea la sua
+   * anagrafica, e quell'iscrizione deve poterla raggiungere. `User.personId` è
+   * obbligatorio e unico, quindi da qui si arriva all'utenza quando esiste —
+   * il contrario non era vero, ed è la ragione della sostituzione.
+   * 
+   * `SetNull` e non `Cascade`: un'iscrizione non sparisce perché un'anagrafica
+   * viene unificata o cancellata. Restano `holderName`, `holderSurname` e
+   * `holderEmail`, che sono la fotografia del nominativo al momento.
+   */
+  personId: z.number().int().nullish(),
   holderName: z.string(),
   holderSurname: z.string(),
   holderEmail: z.string(),
@@ -137,7 +152,7 @@ export type RegistrationOptionalDefaults = z.infer<typeof RegistrationOptionalDe
 
 export type RegistrationRelations = {
   event: EventWithRelations;
-  personUser?: UserWithRelations | null;
+  person?: PersonWithRelations | null;
   couple?: CoupleWithRelations | null;
   guardian?: UserWithRelations | null;
   externalSale?: ExternalSaleWithRelations | null;
@@ -152,7 +167,7 @@ export type RegistrationWithRelations = z.infer<typeof RegistrationSchema> & Reg
 
 export const RegistrationWithRelationsSchema: z.ZodType<RegistrationWithRelations> = RegistrationSchema.merge(z.object({
   event: z.lazy(() => EventWithRelationsSchema),
-  personUser: z.lazy(() => UserWithRelationsSchema).nullish(),
+  person: z.lazy(() => PersonWithRelationsSchema).nullish(),
   couple: z.lazy(() => CoupleWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserWithRelationsSchema).nullish(),
   externalSale: z.lazy(() => ExternalSaleWithRelationsSchema).nullish(),
@@ -169,7 +184,7 @@ export const RegistrationWithRelationsSchema: z.ZodType<RegistrationWithRelation
 
 export type RegistrationOptionalDefaultsRelations = {
   event: EventOptionalDefaultsWithRelations;
-  personUser?: UserOptionalDefaultsWithRelations | null;
+  person?: PersonOptionalDefaultsWithRelations | null;
   couple?: CoupleOptionalDefaultsWithRelations | null;
   guardian?: UserOptionalDefaultsWithRelations | null;
   externalSale?: ExternalSaleOptionalDefaultsWithRelations | null;
@@ -184,7 +199,7 @@ export type RegistrationOptionalDefaultsWithRelations = z.infer<typeof Registrat
 
 export const RegistrationOptionalDefaultsWithRelationsSchema: z.ZodType<RegistrationOptionalDefaultsWithRelations> = RegistrationOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventOptionalDefaultsWithRelationsSchema),
-  personUser: z.lazy(() => UserOptionalDefaultsWithRelationsSchema).nullish(),
+  person: z.lazy(() => PersonOptionalDefaultsWithRelationsSchema).nullish(),
   couple: z.lazy(() => CoupleOptionalDefaultsWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserOptionalDefaultsWithRelationsSchema).nullish(),
   externalSale: z.lazy(() => ExternalSaleOptionalDefaultsWithRelationsSchema).nullish(),
@@ -201,7 +216,7 @@ export const RegistrationOptionalDefaultsWithRelationsSchema: z.ZodType<Registra
 
 export type RegistrationPartialRelations = {
   event?: EventPartialWithRelations;
-  personUser?: UserPartialWithRelations | null;
+  person?: PersonPartialWithRelations | null;
   couple?: CouplePartialWithRelations | null;
   guardian?: UserPartialWithRelations | null;
   externalSale?: ExternalSalePartialWithRelations | null;
@@ -216,7 +231,7 @@ export type RegistrationPartialWithRelations = z.infer<typeof RegistrationPartia
 
 export const RegistrationPartialWithRelationsSchema: z.ZodType<RegistrationPartialWithRelations> = RegistrationPartialSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
-  personUser: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
+  person: z.lazy(() => PersonPartialWithRelationsSchema).nullish(),
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
@@ -231,7 +246,7 @@ export type RegistrationOptionalDefaultsWithPartialRelations = z.infer<typeof Re
 
 export const RegistrationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<RegistrationOptionalDefaultsWithPartialRelations> = RegistrationOptionalDefaultsSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
-  personUser: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
+  person: z.lazy(() => PersonPartialWithRelationsSchema).nullish(),
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),
@@ -246,7 +261,7 @@ export type RegistrationWithPartialRelations = z.infer<typeof RegistrationSchema
 
 export const RegistrationWithPartialRelationsSchema: z.ZodType<RegistrationWithPartialRelations> = RegistrationSchema.merge(z.object({
   event: z.lazy(() => EventPartialWithRelationsSchema),
-  personUser: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
+  person: z.lazy(() => PersonPartialWithRelationsSchema).nullish(),
   couple: z.lazy(() => CouplePartialWithRelationsSchema).nullish(),
   guardian: z.lazy(() => UserPartialWithRelationsSchema).nullish(),
   externalSale: z.lazy(() => ExternalSalePartialWithRelationsSchema).nullish(),

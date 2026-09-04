@@ -43,7 +43,7 @@ export async function createTicketFor(input: {
     bearer?: boolean;
     status?: TicketStatus;
     channel?: RegistrationChannel;
-    personUserId?: number | null;
+    personId?: number | null;
     prisma?: PrismaClient;
 }): Promise<{ ticket: Ticket; registrationId: number }> {
     const prisma = input.prisma ?? getPrismaClient();
@@ -52,7 +52,7 @@ export async function createTicketFor(input: {
     const registration = await prisma.registration.create({
         data: {
             eventId: input.eventId,
-            personUserId: input.personUserId ?? null,
+            personId: input.personId ?? null,
             holderName: input.holderName ?? "Nome",
             holderSurname: input.holderSurname ?? tag,
             holderEmail: input.holderEmail ?? `${tag}@test.it`,
