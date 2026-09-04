@@ -9,6 +9,7 @@ import { PermissionScope } from "@enums/PermissionScope";
 import { exz, FindOptions } from "@utils/helpers/exz";
 import { RegistrationService } from "@services/RegistrationService";
 import { RegistrationCreateDTO, RegistrationCreateSchema } from "@DTOs/registration/RegistrationCreateDTO";
+import { RegistrationEnrolDTO, RegistrationEnrolSchema } from "@DTOs/registration/RegistrationEnrolDTO";
 import { RegistrationUpdateDTO, RegistrationUpdateSchema } from "@DTOs/registration/RegistrationUpdateDTO";
 import {
     RegistrationPaginateBodyInputSchema,
@@ -33,6 +34,39 @@ import {
 })
 export class RegistrationController {
     constructor(private readonly registrationService: RegistrationService) {}
+
+    /**
+     * **L'iscrizione a listino dal back-office** — `15-corsi.md` §3.
+     *
+     * La via della segreteria: nome, cognome, email e titolo. Il **prezzo lo
+     * risolve il server** dal listino — questo corpo non porta un importo, e non
+     * deve portarlo (`RegistrationEnrolDTO`).
+     *
+     * Sta **prima** di `POST /create` per la stessa ragione per cui `/mine` sta
+     * prima di `/:id`: l'ordine nel file rispecchia quello che Fastify sceglie.
+     */
+    @POST("/enrol", {
+        schema: {
+            operationId: "enrolRegistration",
+            summary: "Enrols a person against a price-list ticket type",
+            description:
+                "Back-office enrolment for courses and counter sales. Resolves the amount due from the ticket type's "
+                + "price list SERVER-SIDE (the body carries no amount: a price coming from the client is a security "
+                + "defect), censuses the person into the platform-wide anagraphic, creates a CONFIRMED registration "
+                + "carrying that amount as its open balance, and commits capacity WITHOUT blocking (RB30) — a full "
+                + "class warns, it does not refuse. Issues no Ticket: course check-in is out of scope. The ticket "
+                + "type must belong to the given event.",
+            body: RegistrationEnrolSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.CREATE, PermissionResource.REGISTRATION, PermissionScope.ALL),
+        ],
+    })
+    async enrol(req: FastifyRequest<{ Body: RegistrationEnrolDTO }>, reply: FastifyReply) {
+        reply.status(200).send(await this.registrationService.enrol(+req.user.id, req.body));
+    }
 
     @POST("/create", {
         schema: {

@@ -1,8 +1,23 @@
 import { Injectable, computed } from '@angular/core';
 import { BaseQuery } from '../core/api/paginate';
-import { DanceRole, RegistrationChannel, RegistrationStatus } from '../core/domain/enums';
+import {
+  DanceRole,
+  DeclaredDanceRole,
+  RegistrationChannel,
+  RegistrationStatus,
+} from '../core/domain/enums';
 import { Registration } from '../core/domain/models';
 import { EntityStore } from './entity.store';
+
+/** Ciò che l'iscrizione a listino restituisce: la riga e **quanto quella persona deve**. */
+export interface EnrolOutcome {
+  registration: Registration;
+  /** Centesimi, risolti dal listino dal server. */
+  dueAmount: number;
+  priceTierId: number | null;
+  /** Avvisi di capienza: una classe piena avvisa e lascia passare (`RB30`). */
+  warnings: unknown[];
+}
 
 export interface RegistrationQuery extends BaseQuery {
   eventId?: number;
@@ -24,14 +39,34 @@ export interface RegistrationQuery extends BaseQuery {
 export class RegistrationStore extends EntityStore<Registration, RegistrationQuery> {
   protected override readonly base = 'registrations';
   /**
-   * `personUser` serve al ritratto accanto al nome, e si ferma al file del
+   * `person.user` serve al ritratto accanto al nome, e si ferma al file del
    * profilo: la scheda anagrafica completa — codice fiscale, data di nascita,
    * indirizzi — non ha ragione di viaggiare dentro un elenco, e ciò che non si
    * carica non si può nemmeno lasciare in giro per sbaglio.
    */
-  protected override readonly listPopulate = 'couple personUser personUser.logoFile';
+  protected override readonly listPopulate =
+    'couple person person.user person.user.logoFile';
   protected override readonly detailPopulate = 'couple event quotaConsumptions';
   protected override readonly defaultSort = { id: 'desc' as const };
+
+  /**
+   * `POST /registrations/enrol` — **l'iscrizione a listino** (`15-corsi.md` §3).
+   *
+   * Non è `create()` con un campo in più: il server risolve il prezzo dal titolo
+   * e ne fa il **residuo dovuto** dalla persona, censisce l'anagrafica e impegna
+   * la capienza. Il corpo **non porta un importo**, e non deve portarlo — un
+   * prezzo che arriva dal client è un difetto di sicurezza (§4.11).
+   */
+  enrol(dto: {
+    eventId: number;
+    ticketTypeId: number;
+    holderName: string;
+    holderSurname: string;
+    holderEmail: string;
+    declaredRole: DeclaredDanceRole;
+  }): Promise<EnrolOutcome> {
+    return this.api.post<EnrolOutcome>('/registrations/enrol', dto);
+  }
 
   readonly leaders = computed(() => this.items().filter((r) => r.assignedRole === 'LEADER').length);
   readonly followers = computed(

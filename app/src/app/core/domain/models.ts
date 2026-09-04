@@ -407,18 +407,38 @@ export interface RegistrationAccount extends Entity {
   username: string;
   /** La fotografia caricata nel profilo personale. */
   logoFileId?: number | null;
-  /** Popolabile con `populate=personUser.logoFile`. */
+  /** Popolabile con `populate=person.user.logoFile`. */
   logoFile?: StoredFile | null;
   /** Ritratto indicato come indirizzo, invece che caricato come file. */
   avatarUrl?: string | null;
 }
 
+/**
+ * **L'anagrafica di piattaforma** a cui l'iscrizione è agganciata
+ * (`16-anagrafica-unica.md`).
+ *
+ * Esiste anche **senza account**: una scuola censisce un allievo iscrivendolo, e
+ * quella persona è nota alla piattaforma prima ancora di essersi registrata. Per
+ * questo `user` è opzionale — ed è la ragione per cui l'iscrizione punta qui e
+ * non direttamente all'utenza.
+ */
+export interface RegistrationPerson extends Entity {
+  name: string;
+  surname: string;
+  /** Popolabile con `populate=person.user`. Nullo per chi è censito senza account. */
+  user?: RegistrationAccount | null;
+}
+
 export interface Registration extends Entity {
   eventId: number;
   event?: MiradaEvent | null;
-  personUserId?: number | null;
-  /** Popolabile con `populate=personUser`. Nullo per chi si iscrive senza account. */
-  personUser?: RegistrationAccount | null;
+  /**
+   * L'anagrafica di piattaforma di questa persona (`16` §2). Nulla sulle
+   * iscrizioni «sciolte»: chi non ha un'email propria non entra in anagrafica.
+   */
+  personId?: number | null;
+  /** Popolabile con `populate=person`. */
+  person?: RegistrationPerson | null;
   holderName: string;
   holderSurname: string;
   holderEmail: string;

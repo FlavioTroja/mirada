@@ -55,6 +55,8 @@ import {
 } from '../../core/domain/enums';
 import { Registration } from '../../core/domain/models';
 import { LocaleService, i18nPlain } from '../../core/i18n/i18n-text';
+import { formatCents } from '../../core/i18n/format';
+import { TicketTypeStore } from '../../stores/ticket-type.store';
 import { CoupleStore } from '../../stores/couple.store';
 import { EventStore } from '../../stores/event.store';
 import { RegistrationStore } from '../../stores/registration.store';
@@ -117,6 +119,8 @@ import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
           <p class="mirada-hint">
             L’aggiunta manuale serve agli ingressi che non passano dalla vendita online: canale
             esterno, accrediti, iscrizioni raccolte fuori piattaforma.
+            <strong>Scegliendo un titolo a listino</strong> l’iscrizione nasce invece con il suo
+            importo dovuto, che si incassa poi dalla scheda della persona.
           </p>
           @if (formErrors().length) {
             <p class="mirada-error">{{ formErrors().join(' ') }}</p>
@@ -131,12 +135,36 @@ import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
                 placeholder="Scegli l’evento"
               />
               <keijo-select
-                [formControl]="form.controls.channel"
-                [data]="channelOptions"
-                label="canale"
-                placeholder="Provenienza dell’iscrizione"
+                [formControl]="form.controls.ticketTypeId"
+                [data]="ticketTypeOptions()"
+                label="titolo a listino"
+                placeholder="Nessuno — iscrizione senza importo"
               />
             </keijo-form-row>
+
+            <!--
+              Il canale compare solo SENZA titolo. Con un titolo a listino
+              l'iscrizione è una vendita fatta di persona e il canale lo decide il
+              server: lasciare il campo aperto offrirebbe una scelta che non viene
+              rispettata, che è peggio di non offrirla.
+              NB: niente apici inversi qui dentro — chiudono il template literal
+              e il compilatore riporta un errore che parla di tipi (app/CLAUDE.md).
+            -->
+            @if (!enrolling()) {
+              <keijo-form-row [cols]="1">
+                <keijo-select
+                  [formControl]="form.controls.channel"
+                  [data]="channelOptions"
+                  label="canale"
+                  placeholder="Provenienza dell’iscrizione"
+                />
+              </keijo-form-row>
+            } @else {
+              <p class="mirada-hint">
+                Iscrizione a listino: il canale è <strong>vendita di persona</strong> e l’importo
+                lo calcola il sistema dal titolo scelto.
+              </p>
+            }
             @if (err('eventId'); as msg) {
               <p class="mirada-error">{{ msg }}</p>
             }
@@ -354,6 +382,7 @@ import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
 export class RegistrationsListComponent implements OnInit {
   private readonly headerTitle = inject(HeaderTitleService);
   private readonly pageActions = inject(PageActionsService);
+  private readonly ticketTypes = inject(TicketTypeStore);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
@@ -376,6 +405,10 @@ export class RegistrationsListComponent implements OnInit {
   readonly reassigning = signal<Registration | null>(null);
   readonly formErrors = signal<string[]>([]);
   readonly eventOptions = signal<SelectOption[]>([]);
+  readonly ticketTypeOptions = signal<SelectOption[]>([]);
+
+  /** Si sta iscrivendo A LISTINO, cioè con un importo dovuto. */
+  readonly enrolling = computed(() => !!this.form.controls.ticketTypeId.value);
   private readonly eventFilterOptions = signal<KeijoFilterOption[]>([]);
 
   readonly channelOptions: SelectOption[] = REGISTRATION_CHANNEL_OPTIONS.map((o) => ({
@@ -454,6 +487,14 @@ export class RegistrationsListComponent implements OnInit {
       validators: [Validators.required, Validators.email],
     }),
     declaredRole: new FormControl<DeclaredDanceRole>('FLEXIBLE', { nonNullable: true }),
+    /**
+     * **Il titolo a listino, ed è ciò che sceglie fra due operazioni diverse.**
+     *
+     * Valorizzato → `enrol()`: il server risolve il prezzo e l'iscrizione nasce
+     * con il suo residuo dovuto. Nullo → `create()`: iscrizione senza importo,
+     * che è ciò che serve ad accrediti e canali esterni.
+     */
+    ticketTypeId: new FormControl<number | null>(null),
     channel: new FormControl<RegistrationChannel>('EXTERNAL_CHANNEL', { nonNullable: true }),
     isMinor: new FormControl(false, { nonNullable: true }),
   });
@@ -474,6 +515,33 @@ export class RegistrationsListComponent implements OnInit {
     this.search.valueChanges
       .pipe(debounceTime(300), takeUntilDestroyed())
       .subscribe((value) => void this.store.setQuery({ value: value || undefined }));
+
+    this.form.controls.eventId.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((eventId) => void this.loadTicketTypes(eventId));
+  }
+
+  /**
+   * I titoli dell'evento scelto, ricaricati a ogni cambio.
+   *
+   * ⚠️ E il titolo si azzera insieme: un titolo dell'evento precedente rimasto
+   * selezionato verrebbe rifiutato dal server con «non appartiene a questo
+   * evento» — un errore giusto per una scelta che l'operatore non ha fatto.
+   */
+  private async loadTicketTypes(eventId: number | null): Promise<void> {
+    this.form.controls.ticketTypeId.setValue(null);
+    if (!eventId) {
+      this.ticketTypeOptions.set([]);
+      return;
+    }
+    const lang = this.locale.lang();
+    const docs = await this.ticketTypes.loadAll({ eventId }, 100, '');
+    this.ticketTypeOptions.set(
+      docs.map((t) => ({
+        label: `${i18nPlain(t.name, lang)} — ${formatCents(t.basePrice)}`,
+        value: t.id,
+      })),
+    );
   }
 
   async ngOnInit(): Promise<void> {
@@ -551,7 +619,8 @@ export class RegistrationsListComponent implements OnInit {
    * fisica un account non ce l'ha affatto: resta senza, ed è normale.
    */
   avatar(reg: Registration): string | null {
-    return reg.personUser?.logoFile?.url ?? reg.personUser?.avatarUrl ?? null;
+    const account = reg.person?.user;
+    return account?.logoFile?.url ?? account?.avatarUrl ?? null;
   }
 
   statusUi(status: RegistrationStatus) {
@@ -601,17 +670,32 @@ export class RegistrationsListComponent implements OnInit {
     }
 
     const value = this.form.getRawValue();
+    const anagrafica = {
+      eventId: Number(value.eventId),
+      holderName: value.holderName.trim(),
+      holderSurname: value.holderSurname.trim(),
+      holderEmail: value.holderEmail.trim(),
+      declaredRole: value.declaredRole,
+    };
+
     try {
-      await this.store.create({
-        eventId: Number(value.eventId),
-        holderName: value.holderName.trim(),
-        holderSurname: value.holderSurname.trim(),
-        holderEmail: value.holderEmail.trim(),
-        declaredRole: value.declaredRole,
-        channel: value.channel,
-        isMinor: value.isMinor,
-      });
-      this.toast.show('SUCCESS', 'Iscritto aggiunto.');
+      if (value.ticketTypeId) {
+        // ── A listino ──────────────────────────────────────────────────────
+        // Il prezzo non si manda: lo risolve il server dal titolo. Qui arriva
+        // solo di ritorno, per poterlo dire a voce alla persona che è lì davanti.
+        const esito = await this.store.enrol({
+          ...anagrafica,
+          ticketTypeId: Number(value.ticketTypeId),
+        });
+        this.toast.show('SUCCESS', `Iscritto. Da versare: ${formatCents(esito.dueAmount)}.`);
+        // Una classe piena non rifiuta (`RB30`) — ma chi ha iscritto deve saperlo.
+        if (esito.warnings.length) {
+          this.toast.show('WARNING', 'Iscritto oltre la capienza dichiarata: verifica la sala.');
+        }
+      } else {
+        await this.store.create({ ...anagrafica, channel: value.channel, isMinor: value.isMinor });
+        this.toast.show('SUCCESS', 'Iscritto aggiunto.');
+      }
       this.editing.set(false);
       await this.store.load();
     } catch (err) {

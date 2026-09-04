@@ -1,5 +1,5 @@
 import { Service } from "fastify-decorators";
-import { Event, Prisma, Registration, RegistrationStatus } from "@prisma/client";
+import { Event, Prisma, Registration, RegistrationChannel, RegistrationStatus } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { getPrismaClient } from "@utils/adapters/prisma";
@@ -9,6 +9,9 @@ import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { RegistrationRepository } from "@repositories/RegistrationRepository";
 import { UserRepository } from "@repositories/UserRepository";
 import { PersonResolutionService } from "@services/PersonResolutionService";
+import { TicketTypeService } from "@services/TicketTypeService";
+import { TicketTypeRepository } from "@repositories/TicketTypeRepository";
+import { RegistrationEnrolDTO } from "@DTOs/registration/RegistrationEnrolDTO";
 import { EventRepository } from "@repositories/EventRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { CapacityEngineService, CommitOutcome } from "@services/CapacityEngineService";
@@ -59,6 +62,21 @@ type MyRegistrationRow = Registration & {
  *    biglietto è valido, restano inattivi il profilo e le comunicazioni non
  *    essenziali. Nessun controllo di questo servizio può derivarne un divieto.
  */
+/**
+ * L'esito di un'iscrizione a listino: la riga, **quanto quella persona deve**, e
+ * gli avvisi di capienza che non l'hanno bloccata (`RB30`).
+ *
+ * `dueAmount` torna al chiamante perché la segreteria lo dice a voce all'allievo
+ * un istante dopo — rileggerlo con una seconda chiamata sarebbe una domanda a cui
+ * questa risposta ha già risposto.
+ */
+export type EnrolOutcome = {
+    registration: Registration;
+    dueAmount: number;
+    priceTierId: number | null;
+    warnings: unknown[];
+};
+
 @Service()
 export class RegistrationService {
     constructor(
@@ -68,6 +86,8 @@ export class RegistrationService {
         private readonly eventRepository: EventRepository,
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly capacityEngineService: CapacityEngineService,
+        private readonly ticketTypeRepository: TicketTypeRepository,
+        private readonly ticketTypeService: TicketTypeService,
         private readonly registrationNotifierService: RegistrationNotifierService,
     ) {}
 
@@ -119,6 +139,137 @@ export class RegistrationService {
         await this.registrationNotifierService.registrationsCreated(event, [registration.id]);
 
         return registration;
+    }
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // `POST /registrations/enrol` — l'iscrizione a listino, `15-corsi.md` §3
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /**
+     * **La segreteria iscrive un allievo a listino.**
+     *
+     * Ricalca `PassIssuanceService.issue()`, che fa già questa forma: in **una**
+     * transazione si crea l'iscrizione e poi si impegna la capienza.
+     *
+     * ── Le tre chiamate, e perché in quest'ordine ───────────────────────────
+     * 1. **Il prezzo lo risolve il server** da `resolvePrice`, mai il client
+     *    (`RegistrationEnrolDTO`). Il dovuto nasce dal listino, quindi
+     *    l'invariante di `RegistrationCreateDTO` — «un debito che nessuna vendita
+     *    ha prodotto» — è soddisfatta, non aggirata.
+     * 2. **L'anagrafica si censisce** (`16` §3): se la piattaforma conosce già
+     *    questa email la collega, altrimenti crea la persona senza account. La
+     *    prossima organizzazione che la iscrive non la ridigiterà.
+     * 3. **La capienza si impegna sempre, e non blocca mai** (`RB30`). Vedi sotto.
+     *
+     * ── ⚠️ L'impegno di capienza non è opzionale ────────────────────────────
+     * `RegistrationService.save()` **non** impegna: la commit vive in
+     * `OrderFulfilmentService`, cioè sulla strada del checkout. Un'iscrizione
+     * creata qui senza chiamare il motore non comparirebbe in **nessun**
+     * contatore: le quote per ruolo resterebbero a zero, il cruscotto mostrerebbe
+     * una classe vuota, e lo sbilancio — che è la ragione per cui le quote
+     * esistono in una scuola di tango — sarebbe una cifra falsa proprio dove
+     * serve. Compila, non fallisce, e non c'è.
+     *
+     * Si usa `commitWithoutBlocking` e non `commit`, per la ragione di `RB20`:
+     * un'iscrizione fatta allo sportello non deve essere **rifiutata** perché la
+     * classe è piena. Si registra, si avvisa, e decide l'insegnante — che è
+     * l'unico a sapere se in sala ci sta un'altra coppia.
+     *
+     * ── Niente biglietto ────────────────────────────────────────────────────
+     * `CommitItem` porta `ticketTypeId` senza pretendere una riga `Ticket`, e il
+     * check-in di un corso è fuori dal taglio: un QR firmato che nessuno scansiona
+     * è lavoro speso per niente. Il giorno in cui servirà si emette il titolo e
+     * nulla a valle cambia (`15` §3.4).
+     */
+    public async enrol(principalId: number, dto: RegistrationEnrolDTO): Promise<EnrolOutcome> {
+        const event = await this.assertWritableEvent(principalId, dto.eventId);
+
+        // ⚠️ Il titolo deve essere DI QUESTO EVENTO. Senza questo controllo un
+        // `ticketTypeId` altrui darebbe un prezzo plausibile e sbagliato, e
+        // `commitWithoutBlocking` impegnerebbe quote che non c'entrano nulla —
+        // due errori che nessuna schermata mostra.
+        const ticketType = await this.ticketTypeRepository.findOne({
+            id: dto.ticketTypeId,
+            eventId: dto.eventId,
+            deleted: false,
+        });
+        if (!ticketType) {
+            Log.warn(
+                `[Registration Service]: enrol refused — ticket type (id ${dto.ticketTypeId}) does not belong to `
+                + `event (id ${dto.eventId})`,
+            );
+            throw new httpErrors.BadRequest("Il titolo scelto non appartiene a questo evento.");
+        }
+
+        const person = await this.personResolutionService.resolveOrCreate({
+            email: dto.holderEmail,
+            name: dto.holderName,
+            surname: dto.holderSurname,
+        });
+
+        if (person) {
+            const existing = await this.registrationRepository.findByEventAndPerson(dto.eventId, person.id);
+            if (existing) {
+                Log.warn(
+                    `[Registration Service]: enrol refused on event (id ${dto.eventId}) — person (id ${person.id}) `
+                    + `already has registration (id ${existing.id})`,
+                );
+                throw new httpErrors.Conflict("Questa persona è già iscritta.");
+            }
+        }
+
+        const outcome = await getPrismaClient().$transaction(async prisma => {
+            const priced = await this.ticketTypeService.resolvePrice(dto.ticketTypeId, {}, prisma);
+
+            const registration = await this.registrationRepository.save(
+                {
+                    eventId: dto.eventId,
+                    personId: person?.id ?? null,
+                    holderName: dto.holderName,
+                    holderSurname: dto.holderSurname,
+                    holderEmail: dto.holderEmail,
+                    declaredRole: dto.declaredRole,
+                    // Iscritto in presenza, non online. `DOOR_SALE` è il canale
+                    // delle vendite fatte di persona: quella dello sportello è la
+                    // stessa cosa della cassa la sera dell'evento, e inventarne
+                    // un quarto valore spezzerebbe i riepiloghi per canale in due
+                    // categorie che nessuno sa più sommare.
+                    channel: RegistrationChannel.DOOR_SALE,
+                    // L'allievo è iscritto: ciò che manca sono i soldi, non la
+                    // decisione. Il residuo lo dice `balanceDueAmount`.
+                    status: RegistrationStatus.CONFIRMED,
+                    confirmedAt: new Date(),
+                    // Il dovuto NASCE QUI, dal listino risolto dal server.
+                    balanceDueAmount: priced.price,
+                } as never,
+                prisma,
+            );
+
+            const capacity = await this.capacityEngineService.commitWithoutBlocking(
+                dto.eventId,
+                [{ registrationId: registration.id, ticketTypeId: dto.ticketTypeId, quantity: 1 }],
+                prisma,
+            );
+
+            return { registration, priced, warnings: capacity.warnings };
+        });
+
+        Log.info(
+            `[Registration Service]: enrolled '${dto.holderEmail}' on event (id ${dto.eventId}) — `
+            + `registration (id ${outcome.registration.id}), ${outcome.priced.price} cents due, `
+            + `${outcome.warnings.length} capacity warning(s), nothing blocked (RB30)`,
+        );
+
+        // §3.9 — la notifica DOPO il commit, mai dentro la transazione.
+        await this.registrationNotifierService.registrationsCreated(event, [outcome.registration.id]);
+
+        return {
+            registration: outcome.registration,
+            dueAmount: outcome.priced.price,
+            priceTierId: outcome.priced.priceTierId,
+            warnings: outcome.warnings,
+        };
     }
 
     public async findById(principalId: number, id: number, options?: FindOptions): Promise<Registration | null> {

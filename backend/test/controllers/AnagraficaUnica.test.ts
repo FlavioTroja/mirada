@@ -350,4 +350,39 @@ describe("L'anagrafica unica del ballerino", () => {
             expect(res.statusCode).toBe(403);
         });
     });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Il populate della lista — la regressione del 4 settembre 2026
+    // ═════════════════════════════════════════════════════════════════════════
+
+    it("la lista iscritti si popola con la catena dell'anagrafica, non con quella vecchia", async () => {
+        const god = await login(app, "god", "god");
+
+        // ⚠️ Questa prova esiste per un difetto REALE arrivato in produzione.
+        // La migrazione che ha sostituito `personUserId` con `personId` ha
+        // rinominato anche la relazione, e il front-office continuava a chiedere
+        // `populate=personUser`: Prisma rifiuta una relazione che non esiste, e
+        // l'intera lista rispondeva 500. Niente falliva in compilazione, e
+        // nessun test guardava QUESTA rotta con QUELLA stringa.
+        //
+        // La stringa qui sotto è quella che il front-office manda davvero
+        // (`RegistrationStore.listPopulate`): se le due divergono di nuovo, è
+        // qui che si vede.
+        const res = await app.inject({
+            method: "POST",
+            url: "/api/registrations/",
+            headers: { authorization: god },
+            payload: {
+                query: {},
+                options: {
+                    limit: 10,
+                    page: 1,
+                    populate: "couple person person.user person.user.logoFile",
+                },
+            },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(Array.isArray(res.json().docs)).toBe(true);
+    });
 });
