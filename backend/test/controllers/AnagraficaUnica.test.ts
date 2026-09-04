@@ -2,7 +2,7 @@ import { DanceRole } from "@prisma/client";
 import { getPrismaClient } from "@utils/adapters/prisma";
 import { login, markEmailConfirmed } from "../helpers";
 import { createEventScenario } from "../fixtures/capacity";
-import { createTicketFor } from "../fixtures/tickets";
+import { createTicketFor, createDancer } from "../fixtures/tickets";
 
 const app = (globalThis as any).__TEST_APP__;
 
@@ -141,5 +141,182 @@ describe("L'anagrafica unica del ballerino", () => {
         const tutte = [...body.upcoming, ...body.past];
         expect(tutte).toHaveLength(1);
         expect(tutte[0].event.id).toBe(scenario.event.id);
+    });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Il censimento — `16` §3
+    // ═════════════════════════════════════════════════════════════════════════
+
+    describe("Il censimento dalla via manuale", () => {
+        async function iscrivi(god: string, eventId: number, email: string, name = "Carla", surname = "Neri") {
+            return app.inject({
+                method: "POST",
+                url: "/api/registrations/create",
+                headers: { authorization: god },
+                payload: {
+                    eventId,
+                    holderName: name,
+                    holderSurname: surname,
+                    holderEmail: email,
+                    declaredRole: "FOLLOWER",
+                },
+            });
+        }
+
+        it("iscrivere qualcuno di sconosciuto lo CENSISCE, senza dargli un account", async () => {
+            const god = await login(app, "god", "god");
+            const scenario = await createEventScenario();
+            const email = `${unique("cens")}@test.it`;
+
+            const res = await iscrivi(god, scenario.event.id, email);
+            expect(res.statusCode).toBe(200);
+            expect(res.json().personId).toEqual(expect.any(Number));
+
+            const persona = await prisma().person.findFirstOrThrow({
+                where: { contact: { email } },
+                include: { user: true },
+            });
+            expect(persona.name).toBe("Carla");
+            // Censita, non registrata: nessuna utenza, e nessun modo di entrare.
+            expect(persona.user).toBeNull();
+            expect(res.json().personId).toBe(persona.id);
+        });
+
+        it("la stessa email su due eventi è UNA persona sola, non due", async () => {
+            const god = await login(app, "god", "god");
+            const primo = await createEventScenario();
+            const secondo = await createEventScenario();
+            const email = `${unique("stessa")}@test.it`;
+
+            const a = await iscrivi(god, primo.event.id, email);
+            const b = await iscrivi(god, secondo.event.id, email);
+            expect(a.statusCode).toBe(200);
+            expect(b.statusCode).toBe(200);
+
+            // È il punto di tutto il documento: un ballerino, una riga.
+            expect(b.json().personId).toBe(a.json().personId);
+            expect(await prisma().person.count({ where: { contact: { email } } })).toBe(1);
+        });
+
+        it("il censimento COLLEGA e non riscrive (`RB32`)", async () => {
+            const god = await login(app, "god", "god");
+            const primo = await createEventScenario();
+            const secondo = await createEventScenario();
+            const email = `${unique("rb32")}@test.it`;
+
+            await iscrivi(god, primo.event.id, email, "Carla", "Neri");
+            // Una seconda organizzazione la iscrive scrivendo il nome più in fretta.
+            await iscrivi(god, secondo.event.id, email, "C.", "N.");
+
+            const persona = await prisma().person.findFirstOrThrow({ where: { contact: { email } } });
+            expect(persona.name).toBe("Carla");
+            expect(persona.surname).toBe("Neri");
+        });
+
+        it("due iscrizioni della stessa persona allo stesso evento sono rifiutate (`RB31`)", async () => {
+            const god = await login(app, "god", "god");
+            const scenario = await createEventScenario();
+            const email = `${unique("rb31")}@test.it`;
+
+            expect((await iscrivi(god, scenario.event.id, email)).statusCode).toBe(200);
+
+            // Prima passava: senza anagrafica le due righe non si vedevano fra
+            // loro, e consumavano capienza due volte.
+            const seconda = await iscrivi(god, scenario.event.id, email);
+            expect(seconda.statusCode).toBe(400);
+        });
+    });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // La ricerca dell'organizzatore — `16` §5
+    // ═════════════════════════════════════════════════════════════════════════
+
+    describe("La ricerca per email", () => {
+        function cerca(session: string, email: string) {
+            return app.inject({
+                method: "GET",
+                url: `/api/people/lookup?email=${encodeURIComponent(email)}`,
+                headers: { authorization: session },
+            });
+        }
+
+        it("chi non è mai passato di qui risponde «non trovato», non 404", async () => {
+            const god = await login(app, "god", "god");
+            const res = await cerca(god, `${unique("mai")}@test.it`);
+
+            // Non trovare è il caso NORMALE: un 404 costringerebbe il chiamante a
+            // trattare come eccezione la regola.
+            expect(res.statusCode).toBe(200);
+            expect(res.json().found).toBe(false);
+            expect(res.json().personId).toBeNull();
+        });
+
+        it("trova chi è censito senza account, e lo dice", async () => {
+            const god = await login(app, "god", "god");
+            const email = `${unique("cerca")}@test.it`;
+            const censita = await censisci(email, "Ada", "Bruni");
+
+            const body = (await cerca(god, email)).json();
+            expect(body.found).toBe(true);
+            expect(body.personId).toBe(censita.id);
+            expect(body.name).toBe("Ada");
+            expect(body.surname).toBe("Bruni");
+            expect(body.hasAccount).toBe(false);
+            // Nessun account, nessun profilo di ballo da mostrare.
+            expect(body.dancerProfile).toBeNull();
+        });
+
+        it("mostra il profilo di ballo di chi non l'ha nascosto (A7)", async () => {
+            const god = await login(app, "god", "god");
+            const dancer = await createDancer({ preferredRole: "FOLLOWER" });
+            const contact = await prisma().contact.findFirstOrThrow({
+                where: { person: { user: { id: dancer.user.id } } },
+            });
+
+            const body = (await cerca(god, contact.email)).json();
+            expect(body.found).toBe(true);
+            expect(body.hasAccount).toBe(true);
+            // I tre campi che alimentano le quote di ruolo: è la ragione per cui
+            // il profilo si mostra.
+            expect(body.dancerProfile).not.toBeNull();
+            expect(body.dancerProfile.preferredRole).toBe("FOLLOWER");
+        });
+
+        it("NON mostra il profilo di chi ha spento l'interruttore (A10)", async () => {
+            const god = await login(app, "god", "god");
+            const dancer = await createDancer({ preferredRole: "LEADER" });
+            const contact = await prisma().contact.findFirstOrThrow({
+                where: { person: { user: { id: dancer.user.id } } },
+            });
+
+            await prisma().dancerProfile.update({
+                where: { userId: dancer.user.id },
+                data: { profileVisibleToOrganizers: false },
+            });
+
+            const body = (await cerca(god, contact.email)).json();
+            // L'anagrafica resta — serve a non censire due volte — ma il profilo no.
+            expect(body.found).toBe(true);
+            expect(body.name).not.toBeNull();
+            expect(body.dancerProfile).toBeNull();
+        });
+
+        it("non ammette una ricerca parziale: è il presidio che regge (§5.1)", async () => {
+            const god = await login(app, "god", "god");
+            const email = `${unique("parz")}@test.it`;
+            await censisci(email);
+
+            // Un prefisso non è un indirizzo, e lo schema lo rifiuta prima del
+            // servizio: senza questo la rotta enumererebbe la piattaforma.
+            const res = await cerca(god, email.split("@")[0]!);
+            expect(res.statusCode).toBe(400);
+        });
+
+        it("è chiusa a chi non può iscrivere nessuno", async () => {
+            const dancer = await createDancer({});
+            const session = await login(app, dancer.user.username, "secret");
+            const res = await cerca(session, `${unique("vietato")}@test.it`);
+            expect(res.statusCode).toBe(403);
+        });
     });
 });

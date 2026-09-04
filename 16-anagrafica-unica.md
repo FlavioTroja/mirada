@@ -239,7 +239,7 @@ non le appartiene, e sporcherebbe l'anagrafica globale — cioè l'opposto dell'
 | `Registration` | `personId → Person` **al posto di** `personUserId`; unico su `(eventId, personId)` |
 | **nuovo** | risoluzione dell'email → anagrafica, con creazione provvisoria |
 | `SsoService` · `UserService` | **la rivendicazione**: aggancio alla `Person` esistente, con email verificata |
-| **nuovo** | ricerca per email esatta che restituisce anagrafica e profilo di ballo |
+| **nuovo** | `GET /people/lookup` — ricerca per email esatta, anagrafica e profilo di ballo |
 | `RegistrationService` | `enrol()` censisce; `findMine()` passa da `id` a `personId` |
 | `DancerProfile` | visibilità del profilo agli organizzatori, default acceso |
 | Informativa | il trattamento dei dati di chi è censito senza account, e cosa vede chi lo iscrive |
@@ -294,8 +294,8 @@ funziona.
 |---|---|---|---|
 | **1** | **La rivendicazione** — si cerca la `Person` senza account e la si aggancia invece di creare un `Contact` | `services/UserService.ts` | ✅ |
 | 2 | Migrazione: `Registration.personId`, unico su `(eventId, personId)`, riempimento da `personUserId` | `prisma/migrations/` | ✅ |
-| 3 | Risoluzione dell'anagrafica: normalizza, cerca, **crea la provvisoria** | `services/` | ⬜ |
-| 4 | Ricerca per email esatta, con permesso e riga di `Log` | `controllers/PersonController.ts` | ⬜ |
+| 3 | Risoluzione dell'anagrafica: normalizza, cerca, **crea la provvisoria** | `services/PersonResolutionService.ts` | ✅ |
+| 4 | Ricerca per email esatta, con permesso e riga di `Log` | `controllers/PersonController.ts` | ✅ |
 | 5 | `enrol()` chiama il punto 3; `findMine()` e i due finder passano a `personId` | `services/RegistrationService.ts` | 🟡 finder e `findMine()` fatti; `enrol()` è del `15` |
 | 6 | La spunta di visibilità sul profilo — colonna nella migrazione del punto 2 | `DancerProfile` · area personale | 🟡 colonna in banca dati, manca l'interruttore in interfaccia |
 
@@ -313,7 +313,28 @@ funziona.
 - **Il travaso è stato verificato riga per riga**, non soltanto contato: su tutte e quattro le
   iscrizioni interessate l'`holderEmail` coincide con l'email dell'anagrafica agganciata.
 - **`AnagraficaUnica.test.ts`** prova le due facce — che la rivendicazione avvenga, e che
-  restituisca il passato. Suite completa verde: 21 suite, 203 prove.
+  restituisca il passato.
+
+### Cosa è emerso realizzando i punti 3 e 4
+
+- **La vendita esterna non deve censire, e per poco non lo faceva.** È una via non-online come
+  quelle che censiscono, ma su `ExternalSale` l'`holderEmail` è **dell'acquirente anche sui posti
+  intestati ad altri** — è l'unico indirizzo che il negozio ha visto. Censire lì darebbe lo
+  stesso `personId` a tre iscrizioni dello stesso evento, e la seconda violerebbe `RB31`: una
+  vendita **già incassata** verrebbe rifiutata, che è la sola cosa che l'ingestione non deve mai
+  fare. Il percorso resta senza anagrafica, e ora porta scritto perché.
+- **Il checkout invece è sicuro**, e non per fortuna: `OrderService` deduplica già i partecipanti
+  per indirizzo, quindi una email produce un partecipante e un'iscrizione. È la stessa decisione
+  A9 vista dall'altro lato.
+- **La rotta è `/people/lookup`, non `/persons/lookup`**: il controller esiste già con quel
+  prefisso. Il §11 diceva l'altro nome, e il codice ha ragione.
+- **Il permesso della ricerca è `CREATE REGISTRATION`, non `READ PERSON`.** Il secondo è il
+  permesso amministrativo di piattaforma: aprirebbe la rotta a chi non deve iscrivere nessuno, e
+  il §5.1 chiede l'opposto — si guarda **mentre** si iscrive qualcuno.
+- **Un profilo nascosto e un profilo inesistente escono identici.** Distinguerli direbbe «esiste
+  ma non te lo dico», che è comunque un'informazione su chi ha chiesto di non darla.
+
+Suite completa verde: **21 suite, 213 prove**.
 
 Il punto 2 non ha rischio di perdita: ogni `personUserId` valorizzato ha un `User`, e ogni
 `User` ha un `personId` obbligatorio. Il riempimento è una `UPDATE` con una sola giunzione, e

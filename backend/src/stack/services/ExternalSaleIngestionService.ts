@@ -422,6 +422,16 @@ export class ExternalSaleIngestionService {
                     // L'indirizzo resta quello dell'acquirente anche sui posti
                     // intestati ad altri: è l'unico che il negozio ha visto, ed
                     // è a lui che i biglietti sono stati mandati.
+                    //
+                    // ⚠️ **E per questo qui NON si censisce** (`16` §3), benché
+                    // sia una via non-online come quelle che censiscono. Su una
+                    // vendita di tre pass `holderEmail` è la stessa per tutti e
+                    // tre: risolverla in anagrafica darebbe lo stesso `personId`
+                    // a tre iscrizioni dello stesso evento, e la seconda
+                    // violerebbe `@@unique([eventId, personId])` — cioè una
+                    // vendita già incassata verrebbe rifiutata, che è la sola
+                    // cosa che l'ingestione non deve mai fare. L'anagrafica di
+                    // chi occupa davvero quel posto si saprà alla porta, non qui.
                     const registration = await this.registrationRepository.save(
                         {
                             eventId: event.id,

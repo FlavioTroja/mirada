@@ -8,6 +8,7 @@ import { createObjectWithoutThrow } from "@utils/helpers/query";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
 import { RegistrationRepository } from "@repositories/RegistrationRepository";
 import { UserRepository } from "@repositories/UserRepository";
+import { PersonResolutionService } from "@services/PersonResolutionService";
 import { EventRepository } from "@repositories/EventRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { CapacityEngineService, CommitOutcome } from "@services/CapacityEngineService";
@@ -63,6 +64,7 @@ export class RegistrationService {
     constructor(
         private readonly registrationRepository: RegistrationRepository,
         private readonly userRepository: UserRepository,
+        private readonly personResolutionService: PersonResolutionService,
         private readonly eventRepository: EventRepository,
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly capacityEngineService: CapacityEngineService,
@@ -76,19 +78,40 @@ export class RegistrationService {
     public async save(principalId: number, dto: RegistrationCreateDTO): Promise<Registration> {
         const event = await this.assertWritableEvent(principalId, dto.eventId);
 
-        if (dto.personId) {
-            const existing = await this.registrationRepository.findByEventAndPerson(dto.eventId, dto.personId);
+        // ── Il censimento — `16-anagrafica-unica.md` §3 ──────────────────────
+        // È la via manuale per eccellenza: qualcuno del back-office digita nome,
+        // cognome ed email di una persona. Se la piattaforma la conosce già la
+        // si aggancia; se non la conosce la si censisce, e la prossima
+        // organizzazione che la iscrive non dovrà ridigitarla.
+        //
+        // Un `personId` esplicito nel DTO vince: chi lo manda ha già risolto
+        // l'anagrafica per conto suo, e cercarne un'altra sull'email sarebbe
+        // ignorare ciò che il chiamante ha detto.
+        const person = dto.personId
+            ? null
+            : await this.personResolutionService.resolveOrCreate({
+                email: dto.holderEmail,
+                name: dto.holderName,
+                surname: dto.holderSurname,
+            });
+        const personId = dto.personId ?? person?.id ?? null;
+
+        if (personId) {
+            const existing = await this.registrationRepository.findByEventAndPerson(dto.eventId, personId);
             if (existing) {
                 Log.warn(
-                    `[Registration Service]: create refused on event (id ${dto.eventId}) — person (id ${dto.personId}) `
+                    `[Registration Service]: create refused on event (id ${dto.eventId}) — person (id ${personId}) `
                     + `already has registration (id ${existing.id})`,
                 );
                 throw new httpErrors.BadRequest("Questa persona è già iscritta all'evento.");
             }
         }
 
-        Log.info(`[Registration Service]: creating registration on event (id ${dto.eventId}) for '${dto.holderEmail}'`);
-        const registration = await this.registrationRepository.save(dto as any);
+        Log.info(
+            `[Registration Service]: creating registration on event (id ${dto.eventId}) for '${dto.holderEmail}'`
+            + (personId ? ` — person (id ${personId})` : " — no anagraphic, registration stays loose"),
+        );
+        const registration = await this.registrationRepository.save({ ...dto, personId } as any);
         Log.info(`[Registration Service]: registration created (id ${registration.id})`);
 
         // §3.9 — dopo la scrittura, mai dentro: `registration/created` ai membri

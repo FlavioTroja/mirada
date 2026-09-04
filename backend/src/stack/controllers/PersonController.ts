@@ -15,6 +15,8 @@ import { PermissionResource } from "@enums/PermissionResource";
 import { PersonPaginateDTO, PersonPaginateDTOSchema } from "@DTOs/person/PersonPaginateDTO";
 import { PersonUpdateDTO, PersonUpdateSchema } from "@DTOs/person/PersonUpdateDTO";
 import { AddressSubResourceUpdateDTO, AddressSubResourceUpdateSchema } from "@DTOs/address/AddressSubResourceUpdateDTO";
+import { PersonLookupDTO, PersonLookupSchema, PersonLookupResultSchema } from "@DTOs/person/PersonLookupDTO";
+import { PersonResolutionService } from "@services/PersonResolutionService";
 
 @Controller({
     route: "/people",
@@ -25,7 +27,52 @@ export class PersonController {
     constructor (
         private readonly personService: PersonService,
         private readonly fileService: FileService,
+        private readonly personResolutionService: PersonResolutionService,
     ) {}
+
+    /**
+     * **«Questa email la conosciamo già?»** — `16-anagrafica-unica.md` §5.
+     *
+     * Evita il doppio censimento: chi iscrive una persona che la piattaforma
+     * conosce già si vede precompilare nome, cognome e profilo di ballo invece
+     * di ridigitarli. L'anagrafica del ballerino è **di piattaforma** e non di
+     * organizzazione (§1.1) — l'isolamento vive sull'iscrizione, non sulla
+     * persona — ed è ciò che rende questa rotta legittima.
+     *
+     * ── I tre presidi (§5.1) ────────────────────────────────────────────────
+     * 1. **Indirizzo esatto**: sta in `PersonLookupSchema`, che non ammette
+     *    frammenti. È il presidio che regge davvero — toglie la possibilità
+     *    invece di negarla.
+     * 2. **`CREATE REGISTRATION`**, lo stesso permesso che serve a iscrivere:
+     *    si guarda mentre si iscrive qualcuno, non si consulta un elenco. Non è
+     *    `READ PERSON`, che è il permesso amministrativo della piattaforma e
+     *    aprirebbe la rotta a chi non deve iscrivere nessuno.
+     * 3. **Riga di registro** a ogni chiamata, dal `@AuditLog` sul servizio.
+     *
+     * Non restituisce mai `404`: non trovare è il caso normale (§lookup).
+     */
+    @GET("/lookup", {
+        schema: {
+            operationId: "lookupPersonByEmail",
+            summary: "Looks a person up by their exact email address",
+            description:
+                "Answers whether the platform already knows this email, so an organizer enrolling someone does not "
+                + "census them twice. EXACT address only — no partial search, by design: a prefix search would turn "
+                + "this into an oracle enumerating who is on the platform. Returns `found: false` rather than 404, "
+                + "because not knowing someone is the normal case. Never returns the person's history with other "
+                + "organizations. The dance profile is withheld when the dancer switched it off.",
+            querystring: PersonLookupSchema,
+            response: { 200: PersonLookupResultSchema },
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.CREATE, PermissionResource.REGISTRATION, PermissionScope.ALL),
+        ],
+    })
+    async lookup(req: FastifyRequest<{ Querystring: PersonLookupDTO }>, reply: FastifyReply) {
+        reply.status(200).send(await this.personResolutionService.lookup(req.query.email));
+    }
 
     @POST("/paginate", {
         schema: {
