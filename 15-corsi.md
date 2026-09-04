@@ -339,10 +339,10 @@ esistenti. Se un giorno la scuola chiederà «chi ha già fatto principianti?»,
 |---|---|---|---|
 | 0 | **La separazione nel back-office** — voce «Corsi», rotte `/courses`, lessico dal catalogo (§11) | vari | ✅ |
 | 1 | Seme dell'`EventType` «Corso» — `capMultiSession`, `capRoleQuotas`, `capLevels` | `prisma/seed-data/` | ✅ |
-| 2 | `RegistrationEnrolDTO` — evento, titolo, anagrafica, ruolo dichiarato. **Nessun importo** | `DTOs/registration/` |
-| 3 | `RegistrationService.enrol()` — le tre chiamate del §3, in una transazione | `services/RegistrationService.ts` |
-| 4 | `POST /registrations/enrol` | `controllers/RegistrationController.ts` | ⬜ |
-| 5 | Azione «Iscrivi allievo» con scelta del titolo e avviso di capienza | `pages/registrations/` |
+| 2 | `RegistrationEnrolDTO` — evento, titolo, anagrafica, ruolo dichiarato. **Nessun importo** | `DTOs/registration/` | ✅ |
+| 3 | `RegistrationService.enrol()` — le tre chiamate del §3, in una transazione | `services/RegistrationService.ts` | ✅ |
+| 4 | `POST /registrations/enrol` | `controllers/RegistrationController.ts` | ✅ |
+| 5 | Il **titolo a listino** dentro il modulo «Nuovo iscritto» (§12.1) | `pages/registrations/` | ✅ |
 
 Il riferimento da leggere prima di scrivere il punto 3 è `PassIssuanceService.issue()`: stessa
 transazione, stessa sequenza, stesso impegno non bloccante. Cambia che al posto del biglietto
@@ -422,3 +422,50 @@ filtro applicato solo al primo lascerebbe il corso raggiungibile a chi ne conosc
 
 Il **percorso** invece è suo. `/events/123` per un corso contraddirebbe la voce di menù da cui si
 è arrivati, e l'indirizzo è la prima cosa che una persona copia e manda a un collega.
+
+---
+
+## 12. Com'è venuta l'iscrizione
+
+`15-corsi.md` è **completo**. Quattro note su come si è realizzata, perché non erano nel piano.
+
+### 12.1 Il titolo è il bivio, non un bottone in più
+
+Il §10 prevedeva un'azione «Iscrivi allievo» accanto a «Nuovo iscritto». Realizzandola sarebbero
+nati **due moduli identici all'80%**, che in sei mesi divergono.
+
+Il modulo è quindi **uno**, e il campo **titolo a listino** sceglie fra due operazioni diverse:
+valorizzato chiama `enrol()` e l'iscrizione nasce con il suo residuo dovuto; vuoto chiama
+`create()` e nasce senza importo, che è ciò che serve ad accrediti e canali esterni.
+
+Il campo *canale* compare **solo senza titolo**: a listino lo decide il server, e offrire una
+scelta che non viene rispettata è peggio che non offrirla.
+
+### 12.2 `DOOR_SALE`, e perché non un canale nuovo
+
+L'iscrizione allo sportello è una **vendita fatta di persona**, che è esattamente ciò che
+`DOOR_SALE` significa qui — l'alternativa a online, canale esterno e accredito. Un quarto valore
+avrebbe spezzato i riepiloghi per canale in due categorie che nessuno sa più sommare, per una
+distinzione che non risponde a nessuna domanda.
+
+### 12.3 Il titolo dev'essere dell'evento — `RF-COR-14`
+
+Non era nel piano ed è **il controllo più importante del metodo**. Un `ticketTypeId` di un altro
+evento darebbe un prezzo *vero di un listino sbagliato*, e `commitWithoutBlocking` impegnerebbe
+quote che non c'entrano nulla: due errori che nessuna schermata mostra, su un'iscrizione che
+sembra riuscita.
+
+Nel front-office il campo si azzera a ogni cambio di evento, per la stessa ragione vista da
+sopra: un titolo rimasto selezionato produrrebbe un rifiuto giusto per una scelta che l'operatore
+non ha fatto.
+
+### 12.4 Le prove, e l'ultima che chiude il cerchio
+
+`IscrizioneAListino.test.ts` prova che il dovuto venga dal listino, che un importo mandato dal
+client sia **ignorato**, che la capienza venga impegnata (la trappola del §3.3), che una classe
+piena avvisi senza rifiutare, che non si emettano biglietti, che l'allievo sia censito, che un
+titolo altrui sia respinto, e che la seconda iscrizione della stessa persona sia rifiutata.
+
+L'ultima è il §4 di questo documento verificato per intero: iscrizione a listino da 90 €, prima
+rata di 40 € registrata dalla cassa di `14`, residuo che scende a 50 € — **senza una riga di
+codice scritta per il pagamento**.
