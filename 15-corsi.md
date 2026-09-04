@@ -335,14 +335,90 @@ esistenti. Se un giorno la scuola chiederà «chi ha già fatto principianti?»,
 
 ## 10. Il lavoro
 
-| # | cosa | dove |
-|---|---|---|
-| 1 | Seme dell'`EventType` «Corso» — `capMultiSession`, `capRoleQuotas`, `capLevels` | `prisma/seed-data/` |
+| # | cosa | dove | stato |
+|---|---|---|---|
+| 0 | **La separazione nel back-office** — voce «Corsi», rotte `/courses`, lessico dal catalogo (§11) | vari | ✅ |
+| 1 | Seme dell'`EventType` «Corso» — `capMultiSession`, `capRoleQuotas`, `capLevels` | `prisma/seed-data/` | ✅ |
 | 2 | `RegistrationEnrolDTO` — evento, titolo, anagrafica, ruolo dichiarato. **Nessun importo** | `DTOs/registration/` |
 | 3 | `RegistrationService.enrol()` — le tre chiamate del §3, in una transazione | `services/RegistrationService.ts` |
-| 4 | `POST /registrations/enrol` | `controllers/RegistrationController.ts` |
+| 4 | `POST /registrations/enrol` | `controllers/RegistrationController.ts` | ⬜ |
 | 5 | Azione «Iscrivi allievo» con scelta del titolo e avviso di capienza | `pages/registrations/` |
 
 Il riferimento da leggere prima di scrivere il punto 3 è `PassIssuanceService.issue()`: stessa
 transazione, stessa sequenza, stesso impegno non bloccante. Cambia che al posto del biglietto
 c'è un importo dovuto.
+
+---
+
+## 11. La separazione nel back-office
+
+**Decisione del 4 settembre 2026.** I corsi hanno una voce di menù propria, accanto agli
+eventi. La ragione non è che «sono cose diverse» — un corso **è** un `Event` e resta tale — ma
+che **il lavoro è diverso**: costruire un festival e far girare un trimestre sono due mestieri
+con campi diversi, e una lista sola li mescolerebbe.
+
+### 11.1 Il discriminante è la famiglia, non lo slug — `RF-COR-10`
+
+`EventType.family` vale `EVENT` o `COURSE`. Non è una sesta capacità accanto alle cinque
+esistenti: quelle dicono **cosa il tipo sa fare** e generano il wizard, questa dice **dove il
+tipo vive**. Sono due nature diverse di informazione.
+
+⚠️ E non è lo slug. Il giorno in cui nasce un secondo tipo di corso — «Corso serale»,
+«Intensivo» — un filtro sullo slug lo lascerebbe in `/events` e fuori da `/courses`, **senza che
+nulla fallisca**. È la stessa famiglia di trappole elencate in `CLAUDE.md`.
+
+### 11.2 La separazione è completa — `RF-COR-11`
+
+`/events` mostra la famiglia `EVENT`, **non «tutto»**. Se i corsi comparissero anche lì, le due
+voci si contraddirebbero e la confusione che questa divisione esiste per togliere rientrerebbe
+dalla porta principale.
+
+Il filtro vive nella **query** (`EventQueryDTO.eventTypeFamily`), non in un `filter()` sul
+risultato: filtrare a valle darebbe pagine di lunghezza variabile e un conteggio che mente.
+
+Ne discende anche che il filtro per tipo, dentro ciascuna lista, offre solo i tipi di quella
+famiglia — e che la creazione da `/courses/new` propone solo tipi di corso. Offrire «Festival»
+lì non produrrebbe un errore: produrrebbe **un corso che non è un corso**, e che non compare più
+nella lista da cui lo si è creato.
+
+### 11.3 Le parole vengono dal catalogo — `RF-COR-12`
+
+`EventType.sessionsLabel` (I18nText, nullo = «Sessioni»).
+
+Questa è la parte che vale più della voce di menù. La stessa riga `Session` è **«Lezione 3»**
+dentro un corso e **«Seminario del sabato»** dentro un festival. La tabella deve restare **una**
+— check-in, quote e titoli ci girano tutti sopra, e sdoppiarla romperebbe il motore di capienza —
+ma la parola no.
+
+> Aggiungere la voce «Corsi» e lasciare che dentro il corso le lezioni si chiamino «Sessioni»
+> significa spostare la confusione di un livello, non toglierla.
+
+La parola era cablata in **sei punti**. Ora c'è un solo posto in cui la differenza è scritta —
+`pages/events/event-family.ts` — perché sparpagliarla in un `@if` per componente significa, al
+terzo tipo evento, sei punti da tenere allineati a mano.
+
+⚠️ Si legge dal **tipo dell'evento**, non dalla famiglia: due tipi della stessa famiglia possono
+chiamarle diversamente, ed è il motivo per cui è un campo e non un `if`.
+
+### 11.4 I corsi non stanno sul sito pubblico — `RF-COR-13`
+
+`PublicEventSearchService` esclude la famiglia `COURSE`.
+
+Al corso ci si iscrive in segreteria e si paga con una spunta (§4), non dal checkout. Una scheda
+pubblica inviterebbe a comprare qualcosa che non è in vendita, e lo si scoprirebbe **provandoci**
+— cioè nel punto peggiore.
+
+L'esclusione copre **entrambi** i rami della ricerca, quello filtrato e quello testuale: un
+filtro applicato solo al primo lascerebbe il corso raggiungibile a chi ne conosce il titolo.
+`CorsiFuoriDalPubblico.test.ts` prova tutti e tre i casi.
+
+### 11.5 Che cosa NON si è sdoppiato
+
+| | |
+|---|---|
+| `Event`, `Session`, `TicketType`, `CapacityQuota` | Una tabella ciascuna. Un corso è un evento |
+| I componenti delle pagine | `/courses` monta gli **stessi** componenti di `/events`: due copie divergerebbero in sei mesi |
+| Le capacità del ruolo | `events` ed `eventsWrite` valgono per entrambe le liste: chi organizza, organizza |
+
+Il **percorso** invece è suo. `/events/123` per un corso contraddirebbe la voce di menù da cui si
+è arrivati, e l'indirizzo è la prima cosa che una persona copia e manda a un collega.

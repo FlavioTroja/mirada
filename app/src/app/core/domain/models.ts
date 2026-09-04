@@ -162,9 +162,31 @@ export interface RefundPolicy extends Entity {
   derivedFromPolicy?: RefundPolicy | null;
 }
 
+/**
+ * **Dove vive un tipo evento nel back-office**, non cosa sa fare.
+ *
+ * Le cinque capacità dicono le facoltà del tipo e generano il wizard; questa
+ * dice in quale delle due liste compare — `/events` o `/courses` — e se le sue
+ * istanze finiscono sul sito pubblico (`COURSE` no).
+ *
+ * ⚠️ Non è lo slug: il giorno in cui nasce un secondo tipo di corso, un filtro
+ * sullo slug lo lascerebbe nella lista sbagliata senza che nulla fallisca.
+ */
+export type EventTypeFamily = 'EVENT' | 'COURSE';
+
 export interface EventType extends Entity {
   name: I18nText;
   slug: string;
+  family: EventTypeFamily;
+  /**
+   * **Come si chiamano le `Session` di questo tipo**, al plurale.
+   * Nullo = «Sessioni».
+   *
+   * La stessa riga è «Lezione 3» in un corso e «Seminario del sabato» in un
+   * festival: una tabella sola — ci girano check-in, quote e titoli — e due
+   * parole diverse.
+   */
+  sessionsLabel?: I18nText | null;
   /** Le cinque capacità **generano il wizard** di creazione evento. */
   capMultiSession: boolean;
   capRoleQuotas: boolean;

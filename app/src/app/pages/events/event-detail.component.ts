@@ -33,10 +33,15 @@ import { PageAction, PageActionsService } from '../../services/page-actions.serv
 import { ToastService } from '../../services/toast.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { SALES_CLOSE_CRITERION_OPTIONS, SalesCloseCriterion } from '../../core/domain/enums';
-import { MiradaEvent, StoredFile } from '../../core/domain/models';
+import {
+  EventTypeFamily,
+  MiradaEvent,
+  StoredFile,
+} from '../../core/domain/models';
 import { toIso } from '../../core/i18n/format';
 import { LocaleService, buildI18n, i18nPlain } from '../../core/i18n/i18n-text';
 import { EventStore } from '../../stores/event.store';
+import { basePathFor, entityLabelFor, familyFromUrl } from './event-family';
 import { EventTypeStore } from '../../stores/event-type.store';
 import { OrganizationStore } from '../../stores/organization.store';
 import { RefundPolicyStore } from '../../stores/refund-policy.store';
@@ -397,6 +402,17 @@ export class EventDetailComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly locale = inject(LocaleService);
   private readonly eventTypes = inject(EventTypeStore);
+
+  /**
+   * **La porta da cui si è entrati**, e quindi cosa si sta costruendo.
+   *
+   * Decide i tipi offerti nel modulo, le parole della pagina e dove si torna
+   * dopo aver salvato. Si legge dall'URL perché è ciò che la persona ha scelto:
+   * su un evento esistente il tipo è già nella riga, ma in creazione la riga
+   * non c'è ancora.
+   */
+  readonly family: EventTypeFamily = familyFromUrl(this.router.url);
+  private readonly base = basePathFor(this.family);
   private readonly venues = inject(VenueStore);
   private readonly organizations = inject(OrganizationStore);
   private readonly refundPolicies = inject(RefundPolicyStore);
@@ -489,7 +505,14 @@ export class EventDetailComponent implements OnInit {
       this.refundPolicies.loadAll({}, 100, ''),
     ]);
     const lang = this.locale.lang();
-    this.eventTypeOptions.set(types.map((t) => ({ label: i18nPlain(t.name, lang), value: t.id })));
+    // ⚠️ Solo i tipi della famiglia da cui si è entrati. Offrire «Festival» nella
+    // creazione di un corso non produrrebbe un errore: produrrebbe un corso che
+    // non è un corso, che poi non compare più nella lista da cui lo si è creato.
+    this.eventTypeOptions.set(
+      types
+        .filter((t) => t.family === this.family)
+        .map((t) => ({ label: i18nPlain(t.name, lang), value: t.id })),
+    );
     this.venueOptions.set(venues.map((v) => ({ label: v.name, value: v.id })));
     this.organizationOptions.set(orgs.map((o) => ({ label: o.name, value: o.id })));
     this.refundPolicyOptions.set([
@@ -703,8 +726,8 @@ export class EventDetailComponent implements OnInit {
       const id = this.eventId();
       if (id === null) {
         const created = await this.store.create(payload);
-        this.toast.show('SUCCESS', 'Evento creato in bozza.');
-        await this.router.navigateByUrl(`/events/${created.id}`);
+        this.toast.show('SUCCESS', `${entityLabelFor(this.family)} creato in bozza.`);
+        await this.router.navigateByUrl(`${this.base}/${created.id}`);
         this.eventId.set(created.id);
         this.registerActions();
       } else {
@@ -772,7 +795,7 @@ export class EventDetailComponent implements OnInit {
     if (!ok) return;
     const created = await this.store.duplicate(id);
     this.toast.show('SUCCESS', 'Nuova edizione creata in bozza.');
-    void this.router.navigateByUrl(`/events/${created.id}`);
+    void this.router.navigateByUrl(`${this.base}/${created.id}`);
   }
 
   async onCancelAction(button: SectionActionButton): Promise<void> {

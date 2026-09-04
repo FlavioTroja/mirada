@@ -53,6 +53,7 @@ import { TicketType } from '../../core/domain/models';
 import { centsToEuroInput, euroInputToCents, formatCents, toIso } from '../../core/i18n/format';
 import { LocaleService, buildI18n, i18nPlain } from '../../core/i18n/i18n-text';
 import { EventStore } from '../../stores/event.store';
+import { sessionsLabelOf } from './event-family';
 import { TicketTypeStore } from '../../stores/ticket-type.store';
 import { ConfirmService } from '../../shared/confirm.service';
 import { I18nTextComponent } from '../../shared/i18n-text.component';
@@ -316,7 +317,7 @@ import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
                   <keijo-button
                     variant="default"
                     [icon]="sessionsIcon"
-                    tooltip="Sessioni incluse nel titolo"
+                    [tooltip]="sessionsLabel() + ' incluse nel titolo'"
                     (action)="openSessions(tt)"
                   />
                   <keijo-button
@@ -373,6 +374,11 @@ export class EventTicketTypesComponent implements OnInit {
 
   readonly store = inject(TicketTypeStore);
   readonly eventStore = inject(EventStore);
+
+  /** «Lezioni» in un corso, «Sessioni» in un festival: la parola è del tipo. */
+  readonly sessionsLabel = computed(() =>
+    sessionsLabelOf(this.eventStore.current()?.eventType, this.locale.lang()),
+  );
 
   readonly ticketIcon = sell;
   readonly editIcon = edit;

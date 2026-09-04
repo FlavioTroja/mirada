@@ -1,13 +1,14 @@
 import { Injectable, computed } from '@angular/core';
 import { BaseQuery } from '../core/api/paginate';
 import { EventStatus } from '../core/domain/enums';
-import { MiradaEvent, OrphanSessionResolution } from '../core/domain/models';
+import { EventTypeFamily, MiradaEvent, OrphanSessionResolution } from '../core/domain/models';
 import { EntityStore } from './entity.store';
 
 export interface EventQuery extends BaseQuery {
   status?: EventStatus[];
   organizationId?: number;
   eventTypeId?: number;
+  eventTypeFamily?: EventTypeFamily;
   venueId?: number;
 }
 

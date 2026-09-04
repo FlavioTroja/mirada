@@ -101,6 +101,7 @@ export { OrgMemberRoleSchema } from './OrgMemberRoleSchema';
 export { PreferredDanceRoleSchema } from './PreferredDanceRoleSchema';
 export { ArtistKindSchema } from './ArtistKindSchema';
 export { RequirementKindSchema } from './RequirementKindSchema';
+export { EventTypeFamilySchema } from './EventTypeFamilySchema';
 export { DanceRoleSchema } from './DanceRoleSchema';
 export { EventStatusSchema } from './EventStatusSchema';
 export { SalesCloseCriterionSchema } from './SalesCloseCriterionSchema';

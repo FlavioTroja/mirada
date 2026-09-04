@@ -667,6 +667,7 @@ export class EventService {
             createObjectWithoutThrow(payload.status?.length, { status: { in: payload.status } }),
             createObjectWithoutThrow(payload.organizationId, { organizationId: payload.organizationId }),
             createObjectWithoutThrow(payload.eventTypeId, { eventTypeId: payload.eventTypeId }),
+            createObjectWithoutThrow(payload.eventTypeFamily, { eventType: { family: payload.eventTypeFamily } }),
             createObjectWithoutThrow(payload.venueId, { venueId: payload.venueId }),
         ].filter(o => Object.values(o).length > 0);
 

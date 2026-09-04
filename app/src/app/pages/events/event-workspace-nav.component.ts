@@ -21,6 +21,8 @@ import {
 import { EVENT_STATUS_UI } from '../../core/domain/enums';
 import { formatRange } from '../../core/i18n/format';
 import { MiradaEvent } from '../../core/domain/models';
+import { LocaleService } from '../../core/i18n/i18n-text';
+import { basePathFor, sessionsLabelOf } from './event-family';
 import { I18nTextComponent } from '../../shared/i18n-text.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 
@@ -116,6 +118,7 @@ interface WorkspaceLink {
 })
 export class EventWorkspaceNavComponent {
   private readonly router = inject(Router);
+  private readonly locale = inject(LocaleService);
 
   readonly event = input<MiradaEvent | null>(null);
   /** Identificativo della scheda corrente: viene mostrata come non cliccabile. */
@@ -139,12 +142,17 @@ export class EventWorkspaceNavComponent {
     const ev = this.event();
     if (!ev) return [];
     const type = ev.eventType;
-    const base = `/events/${ev.id}`;
+    // Il percorso segue la FAMIGLIA del tipo, non la porta da cui si è arrivati:
+    // così un collegamento profondo a un corso resta dentro `/courses` anche se
+    // qualcuno lo ha raggiunto da altrove.
+    const base = `${basePathFor(type?.family ?? 'EVENT')}/${ev.id}`;
     const all: WorkspaceLink[] = [
       { id: 'detail', label: 'Dati base', icon: description, path: base },
       {
         id: 'sessions',
-        label: 'Sessioni',
+        // La parola viene dal catalogo: «Lezioni» in un corso, «Sessioni» in un
+        // festival. Stessa tabella, stessa scheda, parola del tipo.
+        label: sessionsLabelOf(type, this.locale.lang()),
         icon: nightlife,
         path: `${base}/sessions`,
         requires: 'multiSession',

@@ -1,5 +1,5 @@
 import { Service } from "fastify-decorators";
-import { CapacityQuota, DanceRole, EventStatus, Prisma, QuotaScope, TicketTypeVisibility } from "@prisma/client";
+import { CapacityQuota, DanceRole, EventStatus, EventTypeFamily, Prisma, QuotaScope, TicketTypeVisibility } from "@prisma/client";
 import { Log } from "@utils/adapters/log";
 import { PaginateOptions } from "@utils/helpers/exz";
 import { selectActiveTier } from "@utils/helpers/priceTier";
@@ -133,6 +133,17 @@ export class PublicEventSearchService {
             { status: EventStatus.PUBLISHED },
             { OR: [{ salesCloseAt: null }, { salesCloseAt: { gt: now } }] },
             { endAt: { gte: now } },
+            // ── I corsi non stanno sul sito pubblico ─────────────────────────
+            // Decisione del 4 settembre 2026: un corso trimestrale si compila in
+            // segreteria, e la sua iscrizione non passa dal checkout. Una scheda
+            // pubblica prometterebbe un acquisto che non esiste — e la promessa
+            // si scopre rotta nel punto peggiore, cioè quando qualcuno ci prova.
+            //
+            // Il filtro sta QUI e non su una capacità del tipo perché la
+            // famiglia è il dato che dice dove una cosa vive; se domani un corso
+            // dovrà comparire, si cambia la famiglia di quel tipo e non questa
+            // riga.
+            { eventType: { family: EventTypeFamily.EVENT } },
         ];
 
         // Il filtro testuale non è un `OR` di `where`: i campi `title`,

@@ -80,6 +80,54 @@ export const routes: Routes = [
       import('./pages/reports/report-exports.component').then((m) => m.ReportExportsComponent),
   },
 
+  // --------------------------------------------------------------- /courses
+  //
+  // **Gli stessi componenti di `/events`, sotto un percorso proprio.** Un corso è
+  // un `Event` con un `EventType` di famiglia `COURSE` (`15-corsi.md` §2.1), e
+  // sdoppiare le pagine significherebbe due copie della stessa schermata che fra
+  // sei mesi divergono.
+  //
+  // Il percorso però è suo: `/events/123` per un corso contraddirebbe la voce di
+  // menù da cui si è arrivati, e l'indirizzo è la prima cosa che una persona
+  // copia e manda a un collega.
+  {
+    path: 'courses',
+    canActivate: [requireCapability('events')],
+    loadComponent: () =>
+      import('./pages/events/events-list.component').then((m) => m.EventsListComponent),
+  },
+  {
+    path: 'courses/new',
+    canActivate: [requireCapability('eventsWrite')],
+    loadComponent: () =>
+      import('./pages/events/event-detail.component').then((m) => m.EventDetailComponent),
+  },
+  {
+    path: 'courses/:id',
+    canActivate: [requireCapability('events')],
+    loadComponent: () =>
+      import('./pages/events/event-detail.component').then((m) => m.EventDetailComponent),
+  },
+  {
+    path: 'courses/:id/sessions',
+    canActivate: [requireCapability('events')],
+    loadComponent: () =>
+      import('./pages/events/event-sessions.component').then((m) => m.EventSessionsComponent),
+  },
+  {
+    path: 'courses/:id/ticket-types',
+    canActivate: [requireCapability('events')],
+    loadComponent: () =>
+      import('./pages/events/event-ticket-types.component').then((m) => m.EventTicketTypesComponent),
+  },
+  {
+    path: 'courses/:id/ticket-types/:ttId/sessions',
+    canActivate: [requireCapability('events')],
+    loadComponent: () =>
+      import('./pages/events/ticket-type-sessions.component').then(
+        (m) => m.TicketTypeSessionsComponent,
+      ),
+  },
   // ---------------------------------------------------------------- /events
   {
     path: 'events',

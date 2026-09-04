@@ -24,7 +24,7 @@ export class EventTypeService {
             throw new httpErrors.BadRequest("Esiste già un tipo di evento con questo slug.");
         }
 
-        const eventType = await this.eventTypeRepository.save(dto);
+        const eventType = await this.eventTypeRepository.save(this.toPrismaData(dto));
         Log.info(`[EventType Service]: event type created '${eventType.slug}' (id ${eventType.id})`);
         return eventType;
     }
@@ -47,12 +47,28 @@ export class EventTypeService {
 
     public async updateById(id: number, dto: EventTypeUpdateDTO): Promise<EventType> {
         Log.info(`[EventType Service]: updating event type (id ${id})`);
-        return this.eventTypeRepository.update({ id }, dto);
+        return this.eventTypeRepository.update({ id }, this.toPrismaData(dto));
     }
 
     public async safeDeleteById(id: number): Promise<EventType> {
         Log.info(`[EventType Service]: soft deleting event type (id ${id})`);
         return this.eventTypeRepository.safeDeleteById(id);
+    }
+
+    /**
+     * `sessionsLabel` è un `Json` nullable: Prisma vuole `Prisma.DbNull` per
+     * azzerarlo, non `null`. La conversione sta qui perché il DTO deve restare il
+     * contratto del §3.6 — stessa forma di `ArtistService.toPrismaData` per `bio`.
+     *
+     * Azzerarlo significa «questo tipo chiama le sue sessioni come tutti gli
+     * altri», ed è un'operazione legittima: non si può quindi trattare il `null`
+     * come «campo non inviato».
+     */
+    private toPrismaData<T extends { sessionsLabel?: unknown }>(dto: T) {
+        return {
+            ...dto,
+            ...(dto.sessionsLabel === null ? { sessionsLabel: Prisma.DbNull } : {}),
+        } as T & { sessionsLabel?: never };
     }
 
     private createQueryFromPayload(payload: EventTypeQueryDTO): Prisma.EventTypeWhereInput {

@@ -7,6 +7,7 @@ import {
   dashboard,
   domain,
   howToReg,
+  school,
   summarize,
 } from '@keijo/ui/icons';
 import { Capabilities } from '../core/auth/roles';
@@ -67,7 +68,18 @@ export function sidebarRoutesFor(can: Capabilities): KeijoSidebarRoute[] {
   }
 
   if (can.events) {
+    // ── Due voci, una tabella ─────────────────────────────────────────────
+    // Un corso È un evento (`15-corsi.md` §2.1): stesso `Event`, stesse
+    // `Session`, stesso motore di capienza. Ma **il lavoro è diverso** —
+    // costruire un festival e far girare un trimestre sono due mestieri con
+    // campi diversi — e una lista sola li mescolerebbe.
+    //
+    // ⚠️ La separazione è COMPLETA: `/events` mostra la famiglia `EVENT`, non
+    // «tutto». Se i corsi comparissero anche lì, le due voci si
+    // contraddirebbero e la confusione che questa divisione esiste per
+    // togliere rientrerebbe dalla porta principale.
     routes.push({ icon: celebration, label: 'Eventi', path: '/events' });
+    routes.push({ icon: school, label: 'Corsi', path: '/courses' });
   }
 
   if (can.registrations) {

@@ -1,14 +1,4 @@
-import {
-    CapacityQuota,
-    DanceRole,
-    DeclaredDanceRole,
-    Event,
-    PrismaClient,
-    QuotaReservedFor,
-    QuotaScope,
-    RegistrationChannel,
-    RegistrationStatus,
-} from "@prisma/client";
+import { CapacityQuota, DanceRole, DeclaredDanceRole, Event, EventTypeFamily, PrismaClient, QuotaReservedFor, QuotaScope, RegistrationChannel, RegistrationStatus } from "@prisma/client";
 import { getPrismaClient } from "@utils/adapters/prisma";
 
 /**
@@ -35,6 +25,8 @@ export type CapacityScenario = {
 /** Un evento completo: organizzazione, sala, tipo, sessioni, titolo, servizio. */
 export async function createEventScenario(options: {
     sessions?: number;
+    /** La famiglia del tipo evento. `COURSE` serve a provare che i corsi non escano in pubblico. */
+    family?: EventTypeFamily;
     prisma?: PrismaClient;
 } = {}): Promise<CapacityScenario> {
     const prisma = options.prisma ?? getPrismaClient();
@@ -61,6 +53,7 @@ export async function createEventScenario(options: {
         data: {
             name: { it: "Marathon" },
             slug: unique("marathon"),
+            family: options.family ?? EventTypeFamily.EVENT,
             capMultiSession: true,
             capRoleQuotas: true,
             capCouple: true,

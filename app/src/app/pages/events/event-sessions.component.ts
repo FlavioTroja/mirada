@@ -37,6 +37,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { OrphanSessionResolution, Session } from '../../core/domain/models';
 import { formatRange, toIso } from '../../core/i18n/format';
 import { LocaleService, buildI18n, i18nPlain } from '../../core/i18n/i18n-text';
+import { sessionsLabelOf } from './event-family';
 import { EventStore } from '../../stores/event.store';
 import { SessionStore } from '../../stores/session.store';
 import { TicketTypeStore } from '../../stores/ticket-type.store';
@@ -364,6 +365,8 @@ export class EventSessionsComponent implements OnInit {
   });
 
   async ngOnInit(): Promise<void> {
+    // Il ripiego prima del caricamento: la testata non deve restare vuota nel
+    // frattempo, e «Sessioni» è ciò che il sistema ha sempre detto.
     this.headerTitle.set('Sessioni');
     this.eventId.set(Number(this.route.snapshot.paramMap.get('id')));
     this.registerActions();
@@ -371,7 +374,14 @@ export class EventSessionsComponent implements OnInit {
       this.eventStore.loadOne(this.eventId()),
       this.store.replaceQuery({ eventId: this.eventId(), includeCancelled: true }),
     ]);
+    // E la parola vera quando il tipo è noto: «Lezioni» dentro un corso.
+    this.headerTitle.set(this.sessionsLabel());
   }
+
+  /** Come si chiamano qui le sessioni — la parola viene dal catalogo. */
+  readonly sessionsLabel = computed(() =>
+    sessionsLabelOf(this.eventStore.current()?.eventType, this.locale.lang()),
+  );
 
   private registerActions(): void {
     const actions: PageAction[] = [];

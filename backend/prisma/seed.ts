@@ -4,6 +4,7 @@ import { LOGGER } from "@utils/adapters/winston";
 import { seed_users } from "./seed-data/seed_users";
 import { seed_permissions } from "./seed-data/seed_permissions";
 import { seed_configs } from "./seed-data/seed_configs";
+import { seed_event_types } from "./seed-data/seed_event_types";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
 import { mapPrismaErrorToConsoleError } from "@utils/adapters/prisma";
 import {
@@ -117,6 +118,26 @@ export async function seed(prisma: PrismaClient) {
         LOGGER.info("Seeding configs completed");
     } catch (err) {
         LOGGER.error("Error while seeding configs: ")
+        mapPrismaErrorToConsoleError(err as PrismaClientKnownRequestError);
+    }
+
+    // Come ruoli, permessi e config: upsert riga per riga, MAI condizionato a
+    // `count === 0`. Aggiungere un tipo evento deve seminarlo al giro seguente, e
+    // rieseguire dev'essere un no-op. `update: {}` perché il catalogo, una volta
+    // in esercizio, lo governa `GOD` dal back-office: risemunarlo sovrascriverebbe
+    // le sue modifiche a ogni riavvio.
+    try {
+        LOGGER.info("Seeding event types");
+        for (const eventType of seed_event_types) {
+            await prisma.eventType.upsert({
+                where: { slug: eventType.slug },
+                update: {},
+                create: eventType,
+            });
+        }
+        LOGGER.info("Seeding event types completed");
+    } catch (err) {
+        LOGGER.error("Error while seeding event types: ")
         mapPrismaErrorToConsoleError(err as PrismaClientKnownRequestError);
     }
 

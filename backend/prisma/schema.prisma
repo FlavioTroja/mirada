@@ -414,12 +414,45 @@ enum RequirementKind {
 // Passo 1 — cataloghi di piattaforma (§4.1). Scrittura riservata a GOD.
 // -----------------------------------------------------------------------------
 
+/// **Dove vive un tipo evento nel back-office**, e non cosa sa fare.
+///
+/// Le cinque capacità (`capMultiSession`, `capLevels`, …) descrivono le facoltà
+/// del tipo e generano il wizard; questa dice in quale delle due liste compare.
+/// Sono due nature diverse di informazione, ed è la ragione per cui non è una
+/// sesta capacità booleana.
+///
+/// ⚠️ Non è lo slug. Il giorno in cui nasce un secondo tipo di corso — «Corso
+/// serale», «Intensivo» — un filtro sullo slug lo lascerebbe in `/events` e
+/// fuori da `/courses`, **senza che nulla fallisca**: è la stessa famiglia di
+/// trappole elencate in `CLAUDE.md`.
+enum EventTypeFamily {
+  /// Festival, marathon, encuentro, milonga, stage: si costruiscono, si
+  /// pubblicano, si vendono online.
+  EVENT
+  /// Corsi ricorrenti: si compilano in segreteria, e non compaiono sul sito
+  /// pubblico (`16` — decisione presa il 4 settembre 2026).
+  COURSE
+}
+
 model EventType {
   id Int @id @default(autoincrement())
 
   /// I18nText { it, en? }
   name Json
   slug String @unique
+
+  /// In quale lista del back-office compare. Vedi `EventTypeFamily`.
+  family EventTypeFamily @default(EVENT)
+
+  /// **Come si chiamano le `Session` di questo tipo**, al plurale.
+  /// I18nText { it, en? }. Nullo = «Sessioni».
+  ///
+  /// La stessa riga `Session` è «Lezione 3» dentro un corso e «Seminario del
+  /// sabato» dentro un festival: è giusto che la tabella sia una — check-in,
+  /// quote e titoli ci girano tutti sopra — ed è sbagliato che lo sia la parola.
+  /// Cablarla nel codice significa, al terzo tipo evento, sei `@if` da tenere
+  /// allineati a mano.
+  sessionsLabel Json?
 
   /// Le cinque capacità generano il wizard di creazione evento (§4.1).
   capMultiSession Boolean @default(false)

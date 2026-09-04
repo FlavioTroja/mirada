@@ -40,11 +40,21 @@ import { PageAction, PageActionsService } from '../../services/page-actions.serv
 import { ToastService } from '../../services/toast.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { EVENT_STATUS_OPTIONS, EVENT_STATUS_UI, EventStatus, StatusUi } from '../../core/domain/enums';
-import { CapacityQuota, MiradaEvent } from '../../core/domain/models';
+import {
+  CapacityQuota,
+  EventTypeFamily,
+  MiradaEvent,
+} from '../../core/domain/models';
 import { formatImbalance, formatRange } from '../../core/i18n/format';
 import { LocaleService, i18nPlain } from '../../core/i18n/i18n-text';
 import { CapacityQuotaStore } from '../../stores/capacity-quota.store';
 import { EventStore } from '../../stores/event.store';
+import {
+  basePathFor,
+  collectionLabelFor,
+  entityLabelFor,
+  familyFromUrl,
+} from './event-family';
 import { EventTypeStore } from '../../stores/event-type.store';
 import { VenueStore } from '../../stores/venue.store';
 import { ConfirmService } from '../../shared/confirm.service';
@@ -287,6 +297,16 @@ export class EventsListComponent implements OnInit {
 
   readonly store = inject(EventStore);
 
+  /**
+   * **Da quale porta si è entrati**, e quindi cosa questa pagina elenca.
+   *
+   * `/events` e `/courses` sono lo stesso componente su famiglie diverse
+   * (`event-family.ts`): la lista, il titolo, l'azione di creazione e il percorso
+   * di apertura seguono tutti da qui.
+   */
+  readonly family: EventTypeFamily = familyFromUrl(this.router.url);
+  private readonly base = basePathFor(this.family);
+
   readonly search = new FormControl('', { nonNullable: true });
   private readonly capacities = signal<Record<number, EventCapacity>>({});
   private readonly typeOptions = signal<KeijoFilterOption[]>([]);
@@ -302,7 +322,7 @@ export class EventsListComponent implements OnInit {
   readonly emptyIcon = celebration;
 
   readonly emptyActions: SectionActionButton[] = [
-    { id: 'create', icon: add, label: 'Crea evento', variant: 'accent' },
+    { id: 'create', icon: add, label: 'Crea ' + entityLabelFor(this.family).toLowerCase(), variant: 'accent' },
   ];
 
   readonly canWrite = computed(() => this.auth.can().eventsWrite);
@@ -345,9 +365,12 @@ export class EventsListComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    this.headerTitle.set('Eventi');
+    this.headerTitle.set(collectionLabelFor(this.family));
     this.registerActions();
-    await this.store.replaceQuery({});
+    // ⚠️ Il filtro di famiglia è nella query, non un `filter()` sul risultato:
+    // la separazione dev'essere COMPLETA e paginata. Filtrare a valle darebbe
+    // pagine di lunghezza variabile e un conteggio che mente.
+    await this.store.replaceQuery({ eventTypeFamily: this.family });
     await this.loadCapacities();
     await this.loadTypeOptions();
   }
@@ -362,7 +385,7 @@ export class EventsListComponent implements OnInit {
         id: 'create',
         icon: add,
         label: 'Crea',
-        tooltip: 'Crea un nuovo evento',
+        tooltip: `Crea un nuovo ${entityLabelFor(this.family).toLowerCase()}`,
         run: () => this.create(),
       });
     }
@@ -377,11 +400,11 @@ export class EventsListComponent implements OnInit {
   }
 
   create(): void {
-    void this.router.navigateByUrl('/events/new');
+    void this.router.navigateByUrl(`${this.base}/new`);
   }
 
   open(ev: MiradaEvent): void {
-    void this.router.navigateByUrl(`/events/${ev.id}`);
+    void this.router.navigateByUrl(`${this.base}/${ev.id}`);
   }
 
   private async reload(): Promise<void> {
@@ -429,7 +452,11 @@ export class EventsListComponent implements OnInit {
   }
 
   private async loadTypeOptions(): Promise<void> {
-    const docs = await this.eventTypes.loadAll({ active: true }, 100, '');
+    // Solo i tipi di QUESTA famiglia: offrire «Festival» fra i filtri della
+    // lista dei corsi darebbe un filtro che non può mai trovare nulla.
+    const docs = (await this.eventTypes.loadAll({ active: true }, 100, '')).filter(
+      (t) => t.family === this.family,
+    );
     this.typeOptions.set(
       docs.map((t) => ({ id: t.id, name: i18nPlain(t.name, this.locale.lang()), checked: false })),
     );

@@ -22,6 +22,7 @@ import { Session, TicketTypeSession } from '../../core/domain/models';
 import { formatDayLabel, formatRange } from '../../core/i18n/format';
 import { LocaleService, i18nPlain } from '../../core/i18n/i18n-text';
 import { EventStore } from '../../stores/event.store';
+import { sessionsLabelOf } from './event-family';
 import { SessionStore } from '../../stores/session.store';
 import { TicketTypeStore } from '../../stores/ticket-type.store';
 import { I18nTextComponent } from '../../shared/i18n-text.component';
@@ -66,7 +67,7 @@ interface QuickSelector {
     <keijo-page-wrapper>
       <app-event-workspace-nav [event]="eventStore.current()" current="ticket-types" />
 
-      <keijo-page-section-wrapper [title]="'Sessioni incluse in ' + ticketTypeName()">
+      <keijo-page-section-wrapper [title]="sessionsLabel() + ' incluse in ' + ticketTypeName()">
         <p class="mirada-hint">
           L’elenco è esplicito: ogni sessione inclusa è una riga. I selettori rapidi qui sotto
           compilano l’elenco, non lo sostituiscono con una regola — dopo averli usati puoi
@@ -136,7 +137,8 @@ interface QuickSelector {
             } @empty {
               <keijo-info-box [icon]="sessionIcon" title="Nessuna sessione" variant="info">
                 <span>
-                  L’evento non ha ancora sessioni da includere: aggiungile dalla scheda Sessioni
+                  L’evento non ha ancora sessioni da includere: aggiungile dalla scheda
+                  {{ sessionsLabel() }}
                   del workspace.
                 </span>
               </keijo-info-box>
@@ -188,6 +190,11 @@ export class TicketTypeSessionsComponent implements OnInit {
 
   readonly eventStore = inject(EventStore);
 
+  /** «Lezioni» in un corso, «Sessioni» in un festival: la parola è del tipo. */
+  readonly sessionsLabel = computed(() =>
+    sessionsLabelOf(this.eventStore.current()?.eventType, this.locale.lang()),
+  );
+
   readonly sessionIcon = nightlife;
   readonly quickIcon = playlistAdd;
   readonly clearIcon = close;
@@ -238,10 +245,11 @@ export class TicketTypeSessionsComponent implements OnInit {
       label: 'Tutta la domenica',
       match: (s) => formatDayLabel(s.startAt).toLowerCase().startsWith('domenica'),
     },
-    { id: 'all', label: 'Tutte le sessioni', match: () => true },
+    { id: 'all', label: 'Tutte', match: () => true },
   ];
 
   async ngOnInit(): Promise<void> {
+    // Ripiego finché il tipo non è noto; la parola vera si mette dopo il carico.
     this.headerTitle.set('Sessioni incluse');
     this.eventId.set(Number(this.route.snapshot.paramMap.get('id')));
     this.ticketTypeId.set(Number(this.route.snapshot.paramMap.get('ttId')));
@@ -252,6 +260,9 @@ export class TicketTypeSessionsComponent implements OnInit {
       this.ticketTypes.loadOne(this.ticketTypeId(), 'sessions'),
       this.sessions.loadAll({ eventId: this.eventId() }, 300, ''),
     ]);
+
+    // La parola vera adesso che il tipo è noto: «Lezioni incluse» in un corso.
+    this.headerTitle.set(`${this.sessionsLabel()} incluse`);
 
     this.allSessions.set(sessions);
     const rows = ticketType.sessions ?? [];
