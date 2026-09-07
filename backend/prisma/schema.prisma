@@ -2519,9 +2519,11 @@ enum BalanceSettlementMethod {
 /// `Registration.balanceSettledAmount` (la somma delle righe, `14` §5.2) e di
 /// `CapacityQuota.consumed`.
 ///
-/// E toglie di mezzo una domanda senza risposta: se si versano 50 € su una rata
-/// da 60, quella rata è «pagata»? Col confronto la domanda non si pone — alla
-/// data di quella rata mancano dieci euro, ed è tutto ciò che serve sapere.
+/// ⚠️ Un versamento copre **rate intere** (`RB36`): una rata è già l'unità in cui
+/// il pagamento è stato spezzato, e non si rateizza una rata. Chi ne ha
+/// concordate tre da 60 € versa 60, 120 o 180. Il controllo è in
+/// `BalanceSettlementService.assertLandsOnInstalment`, e vale prima che il
+/// denaro passi di mano — mai sulla coda offline, dove il contante è già preso.
 ///
 /// ── Nessun legame con il singolo versamento (§3.3) ──────────────────────────
 /// `BalanceSettlement` non punta a una rata. Chiedere all'operatore, con i soldi

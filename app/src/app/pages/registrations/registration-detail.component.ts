@@ -466,6 +466,8 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
                 Le rate sono ciò che era <strong>atteso</strong>; gli incassi qui sopra sono ciò
                 che è stato <strong>versato</strong>. Nessuna rata porta una spunta «pagata»:
                 sarebbe un terzo numero, e prima o poi direbbe una cosa diversa dagli altri due.
+                <strong>Le rate si versano intere</strong> — una rata è già l’unità in cui il
+                pagamento è stato spezzato, e non si rateizza ulteriormente.
               </p>
             }
           </keijo-page-section-wrapper>

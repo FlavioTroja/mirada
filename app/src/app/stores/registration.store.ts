@@ -20,6 +20,8 @@ export interface EnrolOutcome {
 }
 
 export interface RegistrationQuery extends BaseQuery {
+  /** Solo chi ha rate scadute e scoperte (`18-rate.md`). */
+  overdueOnly?: boolean;
   eventId?: number;
   assignedRole?: DanceRole;
   status?: RegistrationStatus;

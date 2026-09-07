@@ -457,6 +457,16 @@ export class RegistrationsListComponent implements OnInit {
       })),
     },
     {
+      // ── Chi è indietro con le rate — `18-rate.md` ──────────────────────
+      // Una scelta sola, e non due: «in pari» non è una domanda che qualcuno si
+      // pone, e offrirla riempirebbe la barra di un filtro che nessuno usa.
+      field: 'overdueOnly',
+      name: 'Rate',
+      kind: 'single',
+      selectIds: [],
+      options: [{ id: 'overdue', name: 'In ritardo', checked: false }],
+    },
+    {
       field: 'channel',
       name: 'Canale',
       kind: 'single',
@@ -595,6 +605,11 @@ export class RegistrationsListComponent implements OnInit {
         break;
       case 'channel':
         void this.store.setQuery({ channel: (first as RegistrationChannel) ?? undefined });
+        break;
+      case 'overdueOnly':
+        // `undefined` e non `false`: un filtro tolto non deve diventare «mostrami
+        // chi NON è in ritardo», che è un'altra domanda.
+        void this.store.setQuery({ overdueOnly: first ? true : undefined });
         break;
     }
   }

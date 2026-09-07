@@ -137,6 +137,12 @@ export class BalanceSettlementService {
             );
         }
 
+        // ── `RB36` — un versamento copre RATE INTERE ────────────────────────
+        // Una rata è già l'unità in cui il pagamento è stato spezzato: non si
+        // rateizza una rata. Chi ne ha concordate tre da 60 versa 60, o 120, o
+        // 180 — non 50.
+        await this.assertLandsOnInstalment(registration, dto.amount);
+
         const { settlement } = await this.persist(principalId, registration, {
             registrationId: registration.id,
             amount: dto.amount,
@@ -387,6 +393,66 @@ export class BalanceSettlementService {
             instalments,
             ...this.readPlan(instalments, registration.balanceSettledAmount),
         };
+    }
+
+    /**
+     * **Un versamento copre rate intere** — `RB36`.
+     *
+     * Una rata *è già* l'unità in cui il pagamento è stato spezzato: non si
+     * rateizza una rata. Chi ne ha concordate tre da 60 € versa 60, 120 o 180 —
+     * mai 50.
+     *
+     * La verifica è che il versato **atterri su un confine**: dopo questa riga
+     * `balanceSettledAmount` dev'essere la somma di un prefisso del piano. Così
+     * si può pagare una rata, oppure due insieme, ma non mezza — e la regola
+     * regge anche su un piano riscritto, perché guarda le cifre e non quale
+     * versamento appartenga a quale rata (§3.3).
+     *
+     * ⚠️ Vale **solo su `record`**, non su `sync`: è la stessa asimmetria di
+     * tutto questo servizio. Qui il denaro non è ancora passato di mano e dire
+     * all'operatore la cifra giusta è gratis; là il contante è nel cassetto, e
+     * rifiutare una riga significherebbe cancellare denaro esistente.
+     *
+     * Senza un piano non c'è confine, e si versa quel che si vuole: è il
+     * comportamento di prima, ed è quello di chi un piano non l'ha concordato.
+     */
+    private async assertLandsOnInstalment(
+        registration: Registration,
+        amount: number,
+        tx?: Prisma.TransactionClient,
+    ): Promise<void> {
+        const instalments = await this.paymentInstalmentRepository.findByRegistration(registration.id, tx);
+        if (!instalments.length) {
+            return;
+        }
+
+        const after = registration.balanceSettledAmount + amount;
+        const ordered = [...instalments].sort(
+            (a, b) => a.dueAt.getTime() - b.dueAt.getTime() || a.sortOrder - b.sortOrder,
+        );
+
+        let cumulative = 0;
+        const confini: number[] = [];
+        for (const row of ordered) {
+            cumulative += row.amount;
+            confini.push(cumulative);
+        }
+
+        if (confini.includes(after)) {
+            return;
+        }
+
+        // Si dice **quale cifra** è quella giusta, non solo che questa è
+        // sbagliata: allo sportello c'è qualcuno con il portafoglio in mano.
+        const prossimo = confini.find(c => c > registration.balanceSettledAmount);
+        const dovuto = (prossimo ?? 0) - registration.balanceSettledAmount;
+        Log.warn(
+            `[BalanceSettlement Service]: settlement refused — ${amount} cents do not land on an instalment `
+            + `boundary of registration (id ${registration.id}); next boundary needs ${dovuto} cents`,
+        );
+        throw new httpErrors.BadRequest(
+            `Le rate si versano intere: la prossima è di ${(dovuto / 100).toFixed(2)} €.`,
+        );
     }
 
     /**

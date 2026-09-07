@@ -11,6 +11,7 @@ import { UserRepository } from "@repositories/UserRepository";
 import { PersonResolutionService } from "@services/PersonResolutionService";
 import { TicketTypeService } from "@services/TicketTypeService";
 import { TicketTypeRepository } from "@repositories/TicketTypeRepository";
+import { PaymentInstalmentRepository } from "@repositories/PaymentInstalmentRepository";
 import { RegistrationEnrolDTO } from "@DTOs/registration/RegistrationEnrolDTO";
 import { EventRepository } from "@repositories/EventRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
@@ -88,6 +89,7 @@ export class RegistrationService {
         private readonly capacityEngineService: CapacityEngineService,
         private readonly ticketTypeRepository: TicketTypeRepository,
         private readonly ticketTypeService: TicketTypeService,
+        private readonly paymentInstalmentRepository: PaymentInstalmentRepository,
         private readonly registrationNotifierService: RegistrationNotifierService,
     ) {}
 
@@ -283,7 +285,59 @@ export class RegistrationService {
         options: PaginateOptions,
     ): Promise<PaginateDatasourceDTO<Registration>> {
         const scope = await this.organizationScopeService.resolve(principalId);
-        return this.registrationRepository.paginateInScope(scope, this.createQueryFromPayload(query), options);
+        const where = this.createQueryFromPayload(query);
+
+        if (query.overdueOnly) {
+            const ids = await this.overdueRegistrationIds();
+            if (!ids.length) {
+                // Nessuno è in ritardo. Si restituisce la pagina vuota **nella
+                // forma che il resto dell'applicazione si aspetta**: una risposta
+                // di comodo con campi mancanti farebbe rompere l'impaginatore
+                // del front-office proprio nel caso più frequente, cioè quando
+                // va tutto bene.
+                Log.info("[Registration Service]: overdue filter matched no registration");
+                return {
+                    docs: [],
+                    totalDocs: 0,
+                    totalPages: 0,
+                    hasPrevPage: false,
+                    hasNextPage: false,
+                    page: options.page,
+                    limit: options.limit,
+                    prevPage: options.page,
+                    nextPage: options.page,
+                };
+            }
+            where.AND = [...(where.AND as Prisma.RegistrationWhereInput[]), { id: { in: ids } }];
+        }
+
+        return this.registrationRepository.paginateInScope(scope, where, options);
+    }
+
+    /**
+     * **Chi è indietro con le rate** — `18-rate.md`.
+     *
+     * `somma delle rate scadute > totale versato`: un confronto fra
+     * un'aggregazione e una colonna di un'altra tabella, che nessuna `where` di
+     * Prisma esprime. Si fa in due letture e un filtro, ed è il posto giusto
+     * perché qui si vedono insieme le rate e le iscrizioni.
+     *
+     * ⚠️ Non c'è, e non deve esserci, una colonna «in ritardo»: sarebbe il terzo
+     * posto in cui vive la stessa verità (`RB34`), e per giunta scadrebbe da sola
+     * — una rata diventa scaduta al passare del tempo, senza che nessuno scriva
+     * nulla, quindi quella colonna sarebbe sbagliata ogni notte a mezzanotte.
+     */
+    private async overdueRegistrationIds(): Promise<number[]> {
+        const atteso = await this.paymentInstalmentRepository.sumDueByRegistration();
+        if (!atteso.size) {
+            return [];
+        }
+        const rows = await this.registrationRepository.findMany(
+            { id: { in: [...atteso.keys()] }, deleted: false },
+        );
+        return rows
+            .filter(row => (atteso.get(row.id) ?? 0) > row.balanceSettledAmount)
+            .map(row => row.id);
     }
 
     /**

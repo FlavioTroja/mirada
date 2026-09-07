@@ -73,9 +73,15 @@ decisioni identiche:
   servizio che le scrive;
 - `05` — `CapacityQuota.consumed` idem, con `QuotaConsumption` a fare da registro.
 
-Una spunta su una rata inviterebbe inoltre a una domanda senza risposta: se un allievo versa 50 €
-su una rata da 60, quella rata è pagata? Con il confronto la domanda non si pone — mancano dieci
-euro alla data di quella rata, e questo è tutto ciò che serve sapere.
+⚠️ **Quell'esempio non regge, e va corretto qui perché era scritto qui.** In una prima stesura
+questa sezione giustificava il confronto con «se un allievo versa 50 € su una rata da 60, quella
+rata è pagata?». La domanda non si pone, ma non per la ragione che dicevo: si pone il fatto che
+**quel versamento non è ammesso**. Una rata *è già* l'unità in cui il pagamento è stato spezzato,
+e non si rateizza una rata (`RB36`, §3.4). Giustificare un progetto con uno scenario che il
+dominio vieta è un ragionamento che regge per caso.
+
+La ragione vera resta quella sopra, e non ha bisogno di esempi: **una spunta sarebbe un terzo
+posto in cui vive la stessa verità.**
 
 ### 3.2 La somma delle rate è il dovuto — `RB35`
 
@@ -86,12 +92,34 @@ quanto è dovuto, o pretende più del prezzo. Il servizio lo rifiuta.
 cambia. Non è un vincolo del database — `Registration` non conosce le sue rate — ma del servizio,
 perché è lì che le due grandezze si vedono insieme.
 
+### 3.4 Un versamento copre rate **intere** — `RB36`
+
+Correzione del committente, 7 settembre 2026:
+
+> *Non puoi pagare 50 euro su una rata di 60, perché 60 è già di per sé una rata. Non è
+> possibile rateizzare ulteriormente la rata.*
+
+Chi ha concordato tre rate da 60 € versa **60, 120 o 180** — mai 50. La verifica è che il
+versato **atterri su un confine**: dopo ogni riga, il totale versato dev'essere la somma di un
+prefisso del piano. Si può pagare una rata, o due insieme, non mezza.
+
+Ne discende che il rifiuto **dice la cifra giusta** — «le rate si versano intere: la prossima è
+di 60,00 €» — perché allo sportello c'è qualcuno con il portafoglio in mano.
+
+⚠️ La regola vale su `record` e **non** su `sync`, con la stessa asimmetria del resto del
+servizio (`14` §6.5): prima che il denaro passi di mano dire la cifra giusta è gratis; dopo,
+rifiutare una riga significherebbe cancellare contante che qualcuno ha già preso.
+
+Senza un piano non esiste un confine, e si versa quel che si vuole: è il comportamento di chi un
+piano non l'ha concordato, e resta invariato.
+
 ### 3.3 Un versamento non «paga una rata»
 
 Non c'è chiave esterna fra `BalanceSettlement` e la rata. Chi versa versa denaro, e il denaro
 copre il piano nell'ordine delle scadenze. Legarli significherebbe chiedere all'operatore, con i
-soldi in mano, **a quale rata** attribuire i 50 € che sta ricevendo — una domanda che non ha
-una risposta giusta e che rallenta uno sportello.
+soldi in mano, **a quale rata** attribuire ciò che sta ricevendo — e con `RB36` la domanda non
+serve nemmeno: un versamento copre rate intere, quindi copre le prime scoperte in ordine di
+scadenza, e non c'è nulla da attribuire a mano.
 
 ---
 
@@ -104,7 +132,7 @@ una risposta giusta e che rallenta uno sportello.
 | Sotto-risorsa | `PATCH /registrations/:id/instalments` con **l'array intero**, come le sessioni di un titolo (regola 12 di `controllers.md`) |
 | `RegistrationBalance` | le rate, quanto è **scaduto e non coperto**, e la prossima scadenza |
 | Scheda dell'iscrizione | il piano accanto al residuo, con la riga in ritardo evidenziata |
-| Elenco iscritti | un filtro «in ritardo con le rate» |
+| Elenco iscritti | un filtro «in ritardo con le rate» — calcolato, non una colonna (§4.2) |
 | `BalanceSettlement` | **nessun cambiamento**: incassare resta ciò che era |
 
 ---
@@ -132,6 +160,21 @@ Il `PATCH` con l'array intero resta, per correggere una data o spostare un impor
 generato. E un array vuoto toglie il piano: si torna al residuo aperto, che è come funzionava
 prima.
 
+### 4.2 «In ritardo» si calcola, non si memorizza — `RF-RAT-2`
+
+Il filtro della lista iscritti confronta *somma delle rate scadute* con *totale versato*: un
+confronto fra un'**aggregazione** e una colonna di un'altra tabella, che nessuna `where` di
+Prisma esprime. Si risolve in due letture e un filtro, nel servizio — che è dove rate e
+iscrizioni si vedono insieme.
+
+⚠️ **Non esiste una colonna «in ritardo», e non deve esistere.** Sarebbe il terzo posto in cui
+vive la stessa verità (`RB34`), ma soprattutto **scadrebbe da sola**: una rata diventa scaduta al
+passare del tempo, senza che nessuno scriva nulla. Una colonna del genere è sbagliata ogni notte
+a mezzanotte finché qualcosa non la aggiorna — e quel qualcosa sarebbe un lavoro schedulato che
+esiste solo per tenere in piedi una denormalizzazione che non serviva.
+
+Il filtro è **una scelta sola**: «in ritardo». «In pari» non è una domanda che qualcuno si pone.
+
 ---
 
 ## 5. Fuori da questo taglio
@@ -152,3 +195,4 @@ prima.
 |---|---|
 | **RB34** | **Una rata non ha uno stato «pagata».** Il piano è una previsione, i versamenti sono i fatti, e il ritardo è il confronto fra i due |
 | **RB35** | **La somma delle rate è esattamente il dovuto dell'iscrizione.** Un piano che non torna viene rifiutato, non corretto in silenzio |
+| **RB36** | **Un versamento copre rate intere.** Una rata è già l'unità in cui il pagamento è stato spezzato: non si rateizza una rata. Vale su `record`, mai su `sync` |

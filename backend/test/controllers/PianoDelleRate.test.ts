@@ -121,18 +121,57 @@ describe("Il piano delle rate", () => {
         let b = (await leggi(god, id)).json();
         expect(b.overdueAmount).toBe(6_000);
 
-        // Versa 50 €: restano 10 € di ritardo, e nessuna rata è «pagata» —
-        // il numero viene dalla sottrazione, non da uno stato.
-        await incassa(god, id, 5_000);
+        // Versa la prima rata intera: resta scoperta la seconda.
+        expect((await incassa(god, id, 3_000)).statusCode).toBe(200);
         b = (await leggi(god, id)).json();
-        expect(b.overdueAmount).toBe(1_000);
-        expect(b.settledAmount).toBe(5_000);
+        expect(b.overdueAmount).toBe(3_000);
+        expect(b.settledAmount).toBe(3_000);
 
-        // Versa altri 10 €: in pari, pur avendo ancora 90 € aperti in totale.
-        await incassa(god, id, 1_000);
+        // E la seconda: in pari, pur avendo ancora 30 € aperti in totale.
+        await incassa(god, id, 3_000);
         b = (await leggi(god, id)).json();
         expect(b.overdueAmount).toBe(0);
         expect(b.openAmount).toBe(3_000);
+    });
+
+    it("RIFIUTA mezza rata, e dice la cifra giusta (`RB36`)", async () => {
+        const god = await login(app, "god", "god");
+        const id = await iscrittoCon180(god);
+        await scrivi(god, id, [
+            { amount: 3_000, dueAt: fa(2) },
+            { amount: 3_000, dueAt: fra(28) },
+            { amount: 3_000, dueAt: fra(58) },
+        ]);
+
+        // 60 è già di per sé una rata: non si rateizza ulteriormente.
+        const res = await incassa(god, id, 5_000);
+        expect(res.statusCode).toBe(400);
+        // Allo sportello c'è qualcuno col portafoglio in mano: si dice quanto.
+        expect(res.json().message).toContain("30.00");
+    });
+
+    it("ammette DUE rate insieme, che è un confine come un altro", async () => {
+        const god = await login(app, "god", "god");
+        const id = await iscrittoCon180(god);
+        await scrivi(god, id, [
+            { amount: 3_000, dueAt: fa(2) },
+            { amount: 3_000, dueAt: fra(28) },
+            { amount: 3_000, dueAt: fra(58) },
+        ]);
+
+        expect((await incassa(god, id, 6_000)).statusCode).toBe(200);
+        const b = (await leggi(god, id)).json();
+        expect(b.settledAmount).toBe(6_000);
+        expect(b.overdueAmount).toBe(0);
+    });
+
+    it("SENZA un piano si versa quel che si vuole, come prima", async () => {
+        const god = await login(app, "god", "god");
+        const id = await iscrittoCon180(god);
+
+        // Nessun piano, nessun confine: è il comportamento di chi non ha
+        // concordato rate, e non deve cambiare.
+        expect((await incassa(god, id, 1_234)).statusCode).toBe(200);
     });
 
     it("chi è in ANTICIPO risulta in pari, non in ritardo negativo", async () => {
@@ -144,9 +183,10 @@ describe("Il piano delle rate", () => {
             { amount: 3_000, dueAt: fra(58) },
         ]);
 
-        // Scaduti 30 €, ne versa 90: un numero negativo si sommerebbe altrove e
-        // farebbe coprire un allievo indietro da uno avanti.
-        await incassa(god, id, 9_000);
+        // Scaduti 30 €, ne versa 90 — le tre rate insieme, che è un confine. Un
+        // numero negativo si sommerebbe altrove e farebbe coprire un allievo
+        // indietro da uno avanti.
+        expect((await incassa(god, id, 9_000)).statusCode).toBe(200);
         const b = (await leggi(god, id)).json();
         expect(b.overdueAmount).toBe(0);
     });
@@ -186,8 +226,12 @@ describe("Il piano delle rate", () => {
     it("riscrivere il piano NON tocca i versamenti già registrati", async () => {
         const god = await login(app, "god", "god");
         const id = await iscrittoCon180(god);
-        await scrivi(god, id, [{ amount: 9_000, dueAt: fra(10) }]);
-        await incassa(god, id, 4_000);
+        // Due rate, e si versa la prima: 40 € è un confine, quindi ammessa.
+        await scrivi(god, id, [
+            { amount: 4_000, dueAt: fra(10) },
+            { amount: 5_000, dueAt: fra(40) },
+        ]);
+        expect((await incassa(god, id, 4_000)).statusCode).toBe(200);
 
         // Il piano si riorganizza; il denaro che qualcuno ha preso in mano no.
         await scrivi(god, id, [
@@ -312,6 +356,64 @@ describe("Il piano delle rate", () => {
             expect(res.statusCode).toBe(200);
             expect(res.json().instalments).toHaveLength(1);
             expect(res.json().instalments[0].amount).toBe(9_000);
+        });
+    });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Il filtro «in ritardo» sulla lista iscritti
+    // ═════════════════════════════════════════════════════════════════════════
+
+    describe("Il filtro di chi è indietro", () => {
+        function inRitardo(god: string) {
+            return app.inject({
+                method: "POST",
+                url: "/api/registrations/",
+                headers: { authorization: god },
+                payload: {
+                    query: { overdueOnly: true },
+                    options: { limit: 100, page: 1, populate: "" },
+                },
+            });
+        }
+
+        it("trova chi ha rate scadute e scoperte, e non gli altri", async () => {
+            const god = await login(app, "god", "god");
+
+            // A: due rate scadute, nulla versato → in ritardo.
+            const indietro = await iscrittoCon180(god);
+            await scrivi(god, indietro, [
+                { amount: 3_000, dueAt: fa(30) },
+                { amount: 3_000, dueAt: fa(2) },
+                { amount: 3_000, dueAt: fra(28) },
+            ]);
+
+            // B: stesse rate, ma le ha versate → in pari.
+            const inPari = await iscrittoCon180(god);
+            await scrivi(god, inPari, [
+                { amount: 3_000, dueAt: fa(30) },
+                { amount: 3_000, dueAt: fa(2) },
+                { amount: 3_000, dueAt: fra(28) },
+            ]);
+            await incassa(god, inPari, 6_000);
+
+            // C: nessun piano → non è in ritardo, perché non c'era una scadenza.
+            const senzaPiano = await iscrittoCon180(god);
+
+            const ids = (await inRitardo(god)).json().docs.map((d: any) => d.id);
+            expect(ids).toContain(indietro);
+            expect(ids).not.toContain(inPari);
+            expect(ids).not.toContain(senzaPiano);
+        });
+
+        it("una rata che scade DOMANI non mette in ritardo", async () => {
+            const god = await login(app, "god", "god");
+            const id = await iscrittoCon180(god);
+            await scrivi(god, id, [
+                { amount: 9_000, dueAt: fra(1) },
+            ]);
+
+            const ids = (await inRitardo(god)).json().docs.map((d: any) => d.id);
+            expect(ids).not.toContain(id);
         });
     });
 });
