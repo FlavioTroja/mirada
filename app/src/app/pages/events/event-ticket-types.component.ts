@@ -331,9 +331,7 @@ import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
             } @empty {
               <keijo-info-box [icon]="ticketIcon" title="Nessun titolo d’ingresso" variant="info">
                 <span>
-                  Il titolo d’ingresso è ciò che il ballerino compra: pass completo, ingresso a una
-                  singola milonga, pacchetto di workshop. Ogni titolo porta l’elenco esplicito
-                  delle sessioni che include.
+                  {{ emptyHint() }} Ogni titolo porta l’elenco esplicito di ciò che include.
                 </span>
               </keijo-info-box>
             }
@@ -374,6 +372,13 @@ export class EventTicketTypesComponent implements OnInit {
 
   readonly store = inject(TicketTypeStore);
   readonly eventStore = inject(EventStore);
+
+  /** L'esempio giusto per questo tipo: un corso non vende pass di festival. */
+  readonly emptyHint = computed(() =>
+    this.eventStore.current()?.eventType?.family === 'COURSE'
+      ? 'Il titolo è ciò a cui l’allievo si iscrive: il trimestre intero, oppure la lezione singola.'
+      : 'Il titolo d’ingresso è ciò che il ballerino compra: pass completo, ingresso a una singola milonga, pacchetto di workshop.',
+  );
 
   /** «Lezioni» in un corso, «Sessioni» in un festival: la parola è del tipo. */
   readonly sessionsLabel = computed(() =>

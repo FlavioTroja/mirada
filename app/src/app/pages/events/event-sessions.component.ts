@@ -276,10 +276,14 @@ import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
                 </ng-template>
               </keijo-entity-list-item>
             } @empty {
-              <keijo-info-box [icon]="sessionIcon" title="Nessuna sessione" variant="info">
+              <keijo-info-box
+                [icon]="sessionIcon"
+                [title]="'Ancora nessuna voce in ' + sessionsLabel().toLowerCase()"
+                variant="info"
+              >
                 <span>
-                  Workshop, milonghe e spettacoli si aggiungono qui. Ogni titolo d’ingresso porta
-                  poi l’elenco esplicito delle sessioni che include.
+                  {{ emptyHint() }} Ogni titolo d’ingresso porta poi l’elenco esplicito di ciò
+                  che include.
                 </span>
               </keijo-info-box>
             }
@@ -377,6 +381,19 @@ export class EventSessionsComponent implements OnInit {
     // E la parola vera quando il tipo è noto: «Lezioni» dentro un corso.
     this.headerTitle.set(this.sessionsLabel());
   }
+
+  /**
+   * L'esempio giusto per QUESTO tipo di evento.
+   *
+   * «Workshop, milonghe e spettacoli» è il vocabolario di un festival, e dentro
+   * un corso è la frase sbagliata: l'intestazione dice «Lezioni» e il testo
+   * sotto parlerebbe d'altro — la confusione spostata di un livello, non tolta.
+   */
+  readonly emptyHint = computed(() =>
+    this.eventStore.current()?.eventType?.family === 'COURSE'
+      ? 'Le lezioni del corso si aggiungono qui, una per data.'
+      : 'Workshop, milonghe e spettacoli si aggiungono qui.',
+  );
 
   /** Come si chiamano qui le sessioni — la parola viene dal catalogo. */
   readonly sessionsLabel = computed(() =>

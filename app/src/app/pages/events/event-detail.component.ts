@@ -491,7 +491,9 @@ export class EventDetailComponent implements OnInit {
     this.eventId.set(id);
     // Su una rotta di dettaglio il titolo dell'header è il **nome dell'entità**,
     // mai l'id né il nome dell'istanza (`KEIJO-DETAIL-HEADER-TITLE-NEVER-ID`).
-    this.headerTitle.set('Evento');
+    // Il titolo di testata segue la porta da cui si è entrati: chi arriva da
+    // «Corsi» e legge «Evento» ha appena visto due voci di menù contraddirsi.
+    this.headerTitle.set(entityLabelFor(this.family));
 
     await Promise.all([this.loadCatalogues(), id ? this.loadEvent(id) : this.prepareNew()]);
     this.registerActions();
