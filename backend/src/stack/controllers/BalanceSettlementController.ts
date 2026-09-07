@@ -18,7 +18,12 @@ import {
     BalanceSettlementPaginateBodyInputSchema,
     BalanceSettlementPaginateDTO,
 } from "@DTOs/balance_settlement/BalanceSettlementQueryDTO";
-import { PaymentInstalmentPlanDTO, PaymentInstalmentPlanSchema } from "@DTOs/payment_instalment/PaymentInstalmentDTO";
+import {
+    PaymentInstalmentGenerateDTO,
+    PaymentInstalmentGenerateSchema,
+    PaymentInstalmentPlanDTO,
+    PaymentInstalmentPlanSchema,
+} from "@DTOs/payment_instalment/PaymentInstalmentDTO";
 
 /**
  * `BalanceSettlement` — il registro dei saldi incassati al botteghino
@@ -105,6 +110,45 @@ export class BalanceSettlementController {
      * Chiede il permesso della **cassa**, non quello delle iscrizioni: un piano
      * di rate è denaro, e chi non tiene la cassa non vede le cifre (`RB27`).
      */
+    /**
+     * **«Tre rate mensili da ottobre»** — `18-rate.md` §4.
+     *
+     * La forma in cui un piano si concorda allo sportello: quante rate e da
+     * quando, non tre importi e tre date. Gli importi li ripartisce il server con
+     * `splitCents`, quindi la somma torna al centesimo e `RB35` è soddisfatta per
+     * costruzione.
+     *
+     * Sostituisce il piano esistente, come il `PATCH`: generare è un modo di
+     * scriverlo, non un secondo piano che si affianca al primo.
+     */
+    @POST("/registration/:id/plan/generate", {
+        schema: {
+            operationId: "generateInstalmentPlan",
+            summary: "Generates a monthly instalment plan",
+            description:
+                "Builds N monthly instalments from a first due date and REPLACES the existing plan. Amounts are "
+                + "split server-side with splitCents, so they add up to the outstanding amount to the cent (100 EUR "
+                + "over three is 33.34/33.33/33.33, never 33.33 three times) and RB35 holds by construction. Month "
+                + "arithmetic clamps to the last day of the target month: 31 January plus one month is 28 February, "
+                + "not 3 March.",
+            params: exz.pathId,
+            body: PaymentInstalmentGenerateSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.CREATE, PermissionResource.BALANCE_SETTLEMENT, PermissionScope.ALL),
+        ],
+    })
+    async generatePlan(
+        req: FastifyRequest<{ Params: { id: string }; Body: PaymentInstalmentGenerateDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(
+            await this.balanceSettlementService.generatePlan(+req.user.id, +req.params.id, req.body),
+        );
+    }
+
     @PATCH("/registration/:id/plan", {
         schema: {
             operationId: "replaceInstalmentPlan",

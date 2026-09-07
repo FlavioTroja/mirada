@@ -595,6 +595,22 @@ export interface SalesChannelDepositCode extends Entity {
 }
 
 /** Il residuo di una persona, con le sue righe di incasso (`RF-SAL-14`). */
+/**
+ * **Una rata attesa** — `18-rate.md`.
+ *
+ * ⚠️ Non ha un campo «pagata», e non deve averlo (`RB34`): il piano è una
+ * previsione, i versamenti sono i fatti, e il ritardo è il confronto fra i due —
+ * `overdueAmount` qui sotto.
+ */
+export interface PaymentInstalment extends Entity {
+  registrationId: number;
+  /** Centesimi interi. La somma delle rate è esattamente il dovuto (`RB35`). */
+  amount: number;
+  dueAt: string;
+  sortOrder: number;
+  note?: string | null;
+}
+
 export interface RegistrationBalance {
   registrationId: number;
   eventId: number;
@@ -607,6 +623,15 @@ export interface RegistrationBalance {
   /** `dueAmount - settledAmount`. Negativo = incassato in eccesso: è un conflitto. */
   openAmount: number;
   settlements: BalanceSettlement[];
+  /** Le rate concordate, per scadenza. Vuoto quando non c'è un piano. */
+  instalments: PaymentInstalment[];
+  /**
+   * **Quanto sarebbe già dovuto essere versato e non lo è.** Mai negativo: chi
+   * è in anticipo è in pari, non «in ritardo di meno».
+   */
+  overdueAmount: number;
+  /** La prossima scadenza non ancora coperta dai versamenti. */
+  nextDueAt?: string | null;
 }
 
 /**

@@ -36,3 +36,26 @@ export const PaymentInstalmentPlanSchema = z.object({
 });
 
 export type PaymentInstalmentPlanDTO = z.infer<typeof PaymentInstalmentPlanSchema>;
+
+/**
+ * `POST /api/balance-settlements/registration/:id/plan/generate` —
+ * **«tre rate mensili da ottobre»**.
+ *
+ * È la forma in cui il piano si concorda davvero allo sportello: si dice quante
+ * rate e da quando, non tre importi e tre date.
+ *
+ * ── Perché genera il SERVER ─────────────────────────────────────────────────
+ * Perché `RB35` è una regola del server, e l'arrotondamento è la parte che la
+ * fa fallire. 100 € in tre rate non sono 33,33 tre volte: `splitCents` dà
+ * `33,34 · 33,33 · 33,33`, e la somma torna al centesimo. Se a dividere fosse il
+ * client, un arrotondamento diverso dal nostro produrrebbe un piano rifiutato —
+ * e l'operatore vedrebbe un errore per una cifra che non ha scelto.
+ */
+export const PaymentInstalmentGenerateSchema = z.object({
+    /** Quante rate. Una sola è legittima: è «pagherà tutto il 1° di ottobre». */
+    count: z.number().int().min(1).max(24),
+    /** La scadenza della prima. Le altre cadono di mese in mese. */
+    firstDueAt: z.coerce.date(),
+});
+
+export type PaymentInstalmentGenerateDTO = z.infer<typeof PaymentInstalmentGenerateSchema>;

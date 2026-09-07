@@ -217,4 +217,101 @@ describe("Il piano delle rate", () => {
         const res = await scrivi(god, reg.id, [{ amount: 1_000, dueAt: fra(5) }]);
         expect(res.statusCode).toBe(400);
     });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // «Tre rate mensili da ottobre» — la generazione
+    // ═════════════════════════════════════════════════════════════════════════
+
+    describe("La generazione del piano", () => {
+        function genera(god: string, id: number, count: number, firstDueAt: string) {
+            return app.inject({
+                method: "POST",
+                url: `/api/balance-settlements/registration/${id}/plan/generate`,
+                headers: { authorization: god },
+                payload: { count, firstDueAt },
+            });
+        }
+
+        it("genera tre rate mensili che sommano al dovuto", async () => {
+            const god = await login(app, "god", "god");
+            const id = await iscrittoCon180(god);
+
+            const res = await genera(god, id, 3, "2026-10-01T00:00:00.000Z");
+            expect(res.statusCode).toBe(200);
+
+            const rate = res.json().instalments;
+            expect(rate).toHaveLength(3);
+            expect(rate.reduce((t: number, r: any) => t + r.amount, 0)).toBe(9_000);
+            // Di mese in mese: ottobre, novembre, dicembre.
+            const mesi = rate.map((r: any) => new Date(r.dueAt).getMonth());
+            expect(mesi).toEqual([9, 10, 11]);
+        });
+
+        it("il resto va ai primi, e la somma torna al centesimo", async () => {
+            const god = await login(app, "god", "god");
+            const scenario = await createEventScenario();
+            // Un titolo da 100,00 € in tre rate: 33,34 · 33,33 · 33,33.
+            const titolo = await prisma().ticketType.create({
+                data: { eventId: scenario.event.id, name: { it: "Trimestre" }, basePrice: 10_000 },
+            });
+            const iscr = await app.inject({
+                method: "POST",
+                url: "/api/registrations/enrol",
+                headers: { authorization: god },
+                payload: {
+                    eventId: scenario.event.id,
+                    ticketTypeId: titolo.id,
+                    holderName: "Ada",
+                    holderSurname: "Bruni",
+                    holderEmail: `${unique("terzi")}@test.it`,
+                    declaredRole: DeclaredDanceRole.LEADER,
+                },
+            });
+            const id = iscr.json().registration.id;
+
+            const res = await genera(god, id, 3, "2026-10-01T00:00:00.000Z");
+            const importi = res.json().instalments.map((r: any) => r.amount);
+
+            // Non 3.333 tre volte: un centesimo perso per rata è il modo peggiore
+            // in cui un conto può non tornare (`RB28`).
+            expect(importi).toEqual([3_334, 3_333, 3_333]);
+            expect(importi.reduce((t: number, a: number) => t + a, 0)).toBe(10_000);
+        });
+
+        it("il 31 gennaio più un mese è FINE FEBBRAIO, non il 3 marzo", async () => {
+            const god = await login(app, "god", "god");
+            const id = await iscrittoCon180(god);
+
+            // È il difetto che si vede solo a gennaio, cioè quando è tardi:
+            // `setMonth` trabocca perché il 31 febbraio non esiste.
+            const res = await genera(god, id, 3, "2027-01-31T00:00:00.000Z");
+            const giorni = res.json().instalments.map((r: any) => {
+                const d = new Date(r.dueAt);
+                return [d.getMonth(), d.getDate()];
+            });
+
+            expect(giorni[0]).toEqual([0, 31]);   // 31 gennaio
+            expect(giorni[1]).toEqual([1, 28]);   // 28 febbraio — non 3 marzo
+            expect(giorni[2]).toEqual([2, 31]);   // 31 marzo
+        });
+
+        it("sostituisce il piano precedente invece di affiancarsene uno", async () => {
+            const god = await login(app, "god", "god");
+            const id = await iscrittoCon180(god);
+            await scrivi(god, id, [{ amount: 9_000, dueAt: fra(5) }]);
+
+            const res = await genera(god, id, 2, "2026-10-01T00:00:00.000Z");
+            expect(res.json().instalments).toHaveLength(2);
+        });
+
+        it("una rata sola è legittima: «pagherà tutto il 1° di ottobre»", async () => {
+            const god = await login(app, "god", "god");
+            const id = await iscrittoCon180(god);
+
+            const res = await genera(god, id, 1, "2026-10-01T00:00:00.000Z");
+            expect(res.statusCode).toBe(200);
+            expect(res.json().instalments).toHaveLength(1);
+            expect(res.json().instalments[0].amount).toBe(9_000);
+        });
+    });
 });

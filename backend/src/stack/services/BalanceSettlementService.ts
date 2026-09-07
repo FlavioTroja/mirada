@@ -27,7 +27,11 @@ import {
     BalanceSettlementSyncResultDTO,
 } from "@DTOs/balance_settlement/BalanceSettlementResponseDTO";
 import { RegistrationBalanceDTO } from "@DTOs/balance_settlement/RegistrationBalanceDTO";
-import { PaymentInstalmentPlanDTO } from "@DTOs/payment_instalment/PaymentInstalmentDTO";
+import {
+    PaymentInstalmentGenerateDTO,
+    PaymentInstalmentPlanDTO,
+} from "@DTOs/payment_instalment/PaymentInstalmentDTO";
+import { splitCents } from "@utils/helpers/splitCents";
 import { PaymentInstalmentRepository } from "@repositories/PaymentInstalmentRepository";
 
 /** Ciò che una riga di incasso ha bisogno di sapere, comunque sia arrivata. */
@@ -510,6 +514,74 @@ export class BalanceSettlementService {
         });
 
         return this.balanceOf(principalId, registration.id);
+    }
+
+
+    /**
+     * **Genera il piano**: «tre rate mensili da ottobre» — `18-rate.md` §4.
+     *
+     * È la forma in cui un piano si concorda allo sportello. Gli importi li
+     * ripartisce `splitCents`, che garantisce l'invariante di `RB28` — *la somma
+     * delle quote è esattamente l'importo di partenza* — e quindi soddisfa
+     * `RB35` per costruzione: un piano generato non può non tornare.
+     *
+     * 100 € in tre rate non sono 33,33 tre volte: sono `33,34 · 33,33 · 33,33`.
+     * Il resto va ai primi, un centesimo per volta, in modo deterministico.
+     *
+     * ⚠️ **Il mese si somma con cautela.** Il 31 gennaio più un mese non è il 3
+     * marzo: `Date.setMonth` trabocca sul mese successivo quando il giorno non
+     * esiste. Si porta quindi il giorno all'ULTIMO del mese di destinazione —
+     * chi ha concordato «il 31» intendeva «a fine mese», non «il 3 del mese
+     * dopo». È il difetto che si vede solo a gennaio, cioè quando è tardi.
+     */
+    public async generatePlan(
+        principalId: number,
+        registrationId: number,
+        dto: PaymentInstalmentGenerateDTO,
+    ): Promise<RegistrationBalanceDTO> {
+        const registration = await this.findRegistrationInScopeOrThrow(principalId, registrationId);
+
+        if (registration.balanceDueAmount <= 0) {
+            Log.warn(
+                `[BalanceSettlement Service]: plan generation refused — registration (id ${registration.id}) has `
+                + "nothing due",
+            );
+            throw new httpErrors.BadRequest(
+                "Questa iscrizione non ha un importo dovuto: non c'è nulla da rateizzare.",
+            );
+        }
+
+        const amounts = splitCents(registration.balanceDueAmount, dto.count);
+        const instalments = amounts.map((amount, index) => ({
+            amount,
+            dueAt: BalanceSettlementService.addMonths(dto.firstDueAt, index),
+        }));
+
+        Log.info(
+            `[BalanceSettlement Service]: generating ${dto.count} monthly instalment(s) for registration `
+            + `(id ${registration.id}) from ${dto.firstDueAt.toISOString()}`,
+        );
+
+        return this.replacePlan(principalId, registration.id, { instalments });
+    }
+
+    /**
+     * Somma mesi tenendo il giorno dentro il mese di destinazione.
+     *
+     * `new Date(2027, 0, 31)` più un mese con `setMonth` diventa il 3 marzo,
+     * perché il 31 febbraio non esiste e JavaScript trabocca invece di
+     * fermarsi. Qui si porta al 28 (o 29): «il 31» concordato a gennaio
+     * significa fine mese, e una rata che salta un mese intero è un piano che
+     * nessuno ha concordato.
+     */
+    private static addMonths(from: Date, months: number): Date {
+        const target = new Date(from.getTime());
+        const day = target.getDate();
+        target.setDate(1);
+        target.setMonth(target.getMonth() + months);
+        const lastOfMonth = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+        target.setDate(Math.min(day, lastOfMonth));
+        return target;
     }
 
     public async findById(principalId: number, id: number, options?: FindOptions): Promise<BalanceSettlement | null> {

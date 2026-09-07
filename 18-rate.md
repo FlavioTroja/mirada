@@ -100,11 +100,37 @@ una risposta giusta e che rallenta uno sportello.
 | dove | cambiamento |
 |---|---|
 | **nuovo** | `PaymentInstalment` — importo e scadenza, una riga per rata |
+| **nuovo** | `POST …/plan/generate` — «tre rate mensili da ottobre» (§4.1) |
 | Sotto-risorsa | `PATCH /registrations/:id/instalments` con **l'array intero**, come le sessioni di un titolo (regola 12 di `controllers.md`) |
 | `RegistrationBalance` | le rate, quanto è **scaduto e non coperto**, e la prossima scadenza |
 | Scheda dell'iscrizione | il piano accanto al residuo, con la riga in ritardo evidenziata |
 | Elenco iscritti | un filtro «in ritardo con le rate» |
 | `BalanceSettlement` | **nessun cambiamento**: incassare resta ciò che era |
+
+---
+
+### 4.1 Il piano si genera, non si compila — `RF-RAT-1`
+
+Decisione del committente: **il piano si scrive dopo l'iscrizione, dalla scheda della persona**,
+e si dice *«tre rate mensili da ottobre»* invece di compilare tre importi e tre date.
+
+Gli importi li divide il **server**, con `splitCents` — lo stesso attrezzo che `14` §4.5 usa per
+ripartire un residuo fra i posti, e che garantisce `RB28`: *la somma delle quote è esattamente
+l'importo di partenza*. Ne discende che **un piano generato soddisfa `RB35` per costruzione**:
+100 € in tre rate sono `33,34 · 33,33 · 33,33`, mai `33,33` tre volte.
+
+Dividere nel front-office sarebbe stato più semplice e sbagliato: un arrotondamento diverso da
+quello del server produrrebbe un piano **rifiutato**, e l'operatore vedrebbe un errore su una
+cifra che non ha scelto.
+
+⚠️ **Il 31 gennaio più un mese non è il 3 marzo.** `Date.setMonth` trabocca quando il giorno non
+esiste nel mese di destinazione: si porta quindi al 28 (o 29). Chi concorda «il 31» intende «a
+fine mese», e una rata che salta un mese intero è un piano che nessuno ha concordato. È il
+difetto che si vede solo a gennaio, cioè quando è tardi — e ha una prova sua.
+
+Il `PATCH` con l'array intero resta, per correggere una data o spostare un importo dopo aver
+generato. E un array vuoto toglie il piano: si torna al residuo aperto, che è come funzionava
+prima.
 
 ---
 

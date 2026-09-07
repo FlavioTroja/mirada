@@ -82,6 +82,21 @@ export class ApiClient {
    * `PATCH /{plural}/:id/<subs>` con **l'array intero**:
    * `id: -1` = riga nuova, `toBeDisconnected: true` = riga rimossa (§3.2).
    */
+  /**
+   * `PATCH <percorso>` con un corpo qualunque.
+   *
+   * Serve alle rotte che **non** hanno la forma `/{plural}/:id/<subs>`: il piano
+   * delle rate vive su `/balance-settlements/registration/:id/plan`, perché quel
+   * controller è organizzato per iscrizione — la lettura del residuo sta già su
+   * `/registration/:id` — e non per identificativo della propria entità.
+   *
+   * ⚠️ Non è la scorciatoia per saltare `update` e `patchChildren`: quelli
+   * portano una convenzione, questo copre ciò che la convenzione non prevede.
+   */
+  patchPath<T>(path: string, body: unknown): Promise<T> {
+    return this.run(firstValueFrom(this.http.patch<T>(this.url(path), body)));
+  }
+
   patchChildren<T>(base: string, id: number, subs: string, rows: unknown[]): Promise<T> {
     return this.run(firstValueFrom(this.http.patch<T>(this.url(`/${base}/${id}/${subs}`), rows)));
   }

@@ -18,6 +18,7 @@ import {
   SelectOption,
 } from '@keijo/ui';
 import {
+  calendarMonth,
   cancel as cancelIcon,
   celebration,
   check,
@@ -55,7 +56,11 @@ import {
   REGISTRATION_STATUS_UI,
   RegistrationChannel,
 } from '../../core/domain/enums';
-import { QuotaConsumption, RegistrationBalance } from '../../core/domain/models';
+import {
+  PaymentInstalment,
+  QuotaConsumption,
+  RegistrationBalance,
+} from '../../core/domain/models';
 import {
   centsToEuroInput,
   euroInputToCents,
@@ -384,6 +389,88 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
           </keijo-page-section-wrapper>
         }
 
+        @if (balance(); as bal) {
+          <keijo-page-section-wrapper
+            title="Piano delle rate"
+            [buttons]="planning() ? planButtons : []"
+            (buttonClick)="onPlanAction($event)"
+          >
+            @if (planning()) {
+              @if (planErrors().length) {
+                <p class="mirada-error">{{ planErrors().join(' ') }}</p>
+              }
+              <keijo-form-wrapper [formGroup]="planForm">
+                <keijo-form-row [cols]="2">
+                  <keijo-input
+                    [formControl]="planForm.controls.count"
+                    label="quante rate"
+                    id="planCount"
+                    type="number"
+                  />
+                  <keijo-input
+                    [formControl]="planForm.controls.firstDueAt"
+                    label="prima scadenza"
+                    id="planFirst"
+                    type="date"
+                  />
+                </keijo-form-row>
+              </keijo-form-wrapper>
+              <p class="mirada-hint">
+                Le rate cadono di mese in mese dalla prima scadenza, e gli importi li divide il
+                server: {{ euro(bal.dueAmount) }} in rate uguali, con il resto sulle prime, così
+                la somma torna al centesimo. Le date si possono correggere dopo.
+              </p>
+            } @else if (!bal.instalments.length) {
+              <keijo-info-box [icon]="calendarIcon" title="Nessun piano concordato" variant="info">
+                <span>
+                  Il residuo resta aperto senza scadenze, ed è ciò che vale per quasi tutti.
+                  Concordare un piano serve quando qualcuno paga in più volte e si vuole sapere
+                  chi è indietro.
+                </span>
+              </keijo-info-box>
+            }
+
+            @if (bal.instalments.length) {
+              @if (bal.overdueAmount > 0) {
+                <keijo-info-box [icon]="conflictIcon" title="In ritardo con le rate" variant="warning">
+                  <span>
+                    Alla data di oggi mancano <strong>{{ euro(bal.overdueAmount) }}</strong> su
+                    quanto era atteso. Il sistema non fa nulla in automatico: nessun sollecito,
+                    nessuna decadenza — è una segnalazione, e cosa farne lo decidi tu.
+                  </span>
+                </keijo-info-box>
+              }
+
+              <keijo-list-items-wrapper>
+                @for (rata of bal.instalments; track rata.id) {
+                  <keijo-list-item-wrapper direction="row">
+                    <div class="settlement">
+                      <span class="mirada-value">{{ euro(rata.amount) }}</span>
+                      <div class="row">
+                        <keijo-pill
+                          [variant]="scaduta(rata) ? 'warning' : 'default'"
+                          [icon]="calendarIcon"
+                        >
+                          {{ when(rata.dueAt) }}
+                        </keijo-pill>
+                        @if (rata.note) {
+                          <keijo-pill variant="default" [icon]="clockIcon">{{ rata.note }}</keijo-pill>
+                        }
+                      </div>
+                    </div>
+                  </keijo-list-item-wrapper>
+                }
+              </keijo-list-items-wrapper>
+
+              <p class="mirada-hint">
+                Le rate sono ciò che era <strong>atteso</strong>; gli incassi qui sopra sono ciò
+                che è stato <strong>versato</strong>. Nessuna rata porta una spunta «pagata»:
+                sarebbe un terzo numero, e prima o poi direbbe una cosa diversa dagli altri due.
+              </p>
+            }
+          </keijo-page-section-wrapper>
+        }
+
         @if (balanceError(); as guasto) {
           <keijo-page-section-wrapper title="Saldo da versare">
             <keijo-info-box [icon]="conflictIcon" title="Saldo non leggibile" variant="error">
@@ -502,6 +589,8 @@ export class RegistrationDetailComponent implements OnInit {
   readonly copyIcon = contentCopy;
   /** L'origine offline è sincronizzazione, non tempo: l'orologio è già del `collectedAt`. */
   readonly offlineIcon = cloudOff;
+  /** Una scadenza è una data, non un momento: l'orologio è del versamento. */
+  readonly calendarIcon = calendarMonth;
 
   private readonly registrationId = signal(0);
   readonly editing = signal(false);
@@ -527,6 +616,8 @@ export class RegistrationDetailComponent implements OnInit {
    */
   readonly balanceError = signal<string | null>(null);
   readonly settling = signal(false);
+  readonly planning = signal(false);
+  readonly planErrors = signal<string[]>([]);
   readonly settleErrors = signal<string[]>([]);
   private readonly operatorNames = signal<Map<number, string>>(new Map());
 
@@ -556,6 +647,11 @@ export class RegistrationDetailComponent implements OnInit {
     { id: 'apply', icon: check, label: 'Riassegna', variant: 'accent' },
     { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
   ];
+  readonly planButtons: SectionActionButton[] = [
+    { id: 'plan', icon: check, label: 'Genera piano', variant: 'accent' },
+    { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
+  ];
+
   readonly settleButtons: SectionActionButton[] = [
     { id: 'settle', icon: check, label: 'Registra incasso', variant: 'accent' },
     { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
@@ -580,6 +676,11 @@ export class RegistrationDetailComponent implements OnInit {
 
   readonly reassignForm = new FormGroup({
     role: new FormControl<DanceRole>('LEADER', { nonNullable: true }),
+  });
+
+  readonly planForm = new FormGroup({
+    count: new FormControl('3', { nonNullable: true, validators: [Validators.required] }),
+    firstDueAt: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
   readonly settleForm = new FormGroup({
@@ -648,6 +749,26 @@ export class RegistrationDetailComponent implements OnInit {
     // incassare: un comando che apre un modulo per registrare zero euro è un
     // comando che tradisce chi lo preme.
     const bal = this.balance();
+    if (this.canSettle() && bal && bal.dueAmount > 0) {
+      actions.push({
+        id: 'plan',
+        icon: calendarMonth,
+        label: bal.instalments.length ? 'Ripiano' : 'Rateizza',
+        tooltip: bal.instalments.length
+          ? 'Riscrivi il piano delle rate'
+          : 'Concorda un piano di rate',
+        run: () => this.startPlan(),
+      });
+      if (bal.instalments.length) {
+        actions.push({
+          id: 'unplan',
+          icon: cancelIcon,
+          label: 'Togli piano',
+          tooltip: 'Torna al residuo aperto senza scadenze',
+          run: () => void this.removePlan(),
+        });
+      }
+    }
     if (this.canSettle() && bal && bal.openAmount > 0) {
       actions.push({
         id: 'settle',
@@ -757,6 +878,80 @@ export class RegistrationDetailComponent implements OnInit {
       this.operatorNames.set(new Map((page.docs ?? []).map((u) => [u.id, u.username])));
     } catch {
       // Senza i nomi restano i numeri: è meno leggibile, non è un guasto.
+    }
+  }
+
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // Il piano delle rate — `18-rate.md`
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /** Una rata già scaduta si segnala, che sia coperta o no: la data è passata. */
+  scaduta(rata: PaymentInstalment): boolean {
+    return new Date(rata.dueAt) <= new Date();
+  }
+
+  startPlan(): void {
+    this.planErrors.set([]);
+    const fraUnMese = new Date();
+    fraUnMese.setMonth(fraUnMese.getMonth() + 1);
+    this.planForm.reset({
+      count: '3',
+      // Un default che non obbliga a digitare: la prima rata fra un mese è ciò
+      // che una segreteria concorda nove volte su dieci.
+      firstDueAt: fraUnMese.toISOString().slice(0, 10),
+    });
+    this.planning.set(true);
+  }
+
+  async onPlanAction(button: SectionActionButton): Promise<void> {
+    if (button.id === 'cancel') {
+      this.planning.set(false);
+      return;
+    }
+
+    this.planErrors.set([]);
+    const count = Number(this.planForm.controls.count.value);
+    const first = this.planForm.controls.firstDueAt.value;
+    if (!Number.isInteger(count) || count < 1 || !first) {
+      this.planErrors.set(['Servono il numero di rate e la data della prima.']);
+      return;
+    }
+
+    try {
+      // Gli importi NON si calcolano qui: li divide il server con `splitCents`,
+      // così la somma torna al centesimo e il piano non può essere rifiutato per
+      // un arrotondamento che l'operatore non ha scelto.
+      const aggiornato = await this.settlements.generatePlan(
+        this.registrationId(),
+        count,
+        new Date(first).toISOString(),
+      );
+      this.balance.set(aggiornato);
+      this.planning.set(false);
+      this.toast.show('SUCCESS', `Piano di ${count} rate concordato.`);
+      this.registerActions();
+    } catch (err) {
+      this.planErrors.set([(err as Error)?.message || 'Piano non salvato.']);
+    }
+  }
+
+  async removePlan(): Promise<void> {
+    const ok = await this.confirm.ask({
+      title: 'Togliere il piano?',
+      message:
+        'Le rate concordate spariscono e il residuo torna aperto senza scadenze. '
+        + 'Gli incassi già registrati non si toccano: quelli sono i fatti.',
+      confirmLabel: 'Togli',
+    });
+    if (!ok) return;
+
+    try {
+      this.balance.set(await this.settlements.replacePlan(this.registrationId(), []));
+      this.toast.show('SUCCESS', 'Piano rimosso.');
+      this.registerActions();
+    } catch (err) {
+      this.planErrors.set([(err as Error)?.message || 'Piano non rimosso.']);
     }
   }
 

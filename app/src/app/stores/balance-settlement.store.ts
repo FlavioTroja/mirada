@@ -39,4 +39,30 @@ export class BalanceSettlementStore extends EntityStore<BalanceSettlement, Balan
   balanceOf(registrationId: number): Promise<RegistrationBalance> {
     return this.api.fetch<RegistrationBalance>(`/balance-settlements/registration/${registrationId}`);
   }
+
+  /**
+   * `POST …/plan/generate` — **«tre rate mensili da ottobre»** (`18-rate.md`).
+   *
+   * Gli importi li ripartisce il **server**: 100 € in tre rate sono
+   * 33,34 · 33,33 · 33,33, e la somma torna al centesimo. Dividere qui
+   * significherebbe rischiare un arrotondamento diverso dal suo, e un piano
+   * rifiutato per una cifra che l'operatore non ha scelto.
+   */
+  generatePlan(registrationId: number, count: number, firstDueAt: string): Promise<RegistrationBalance> {
+    return this.api.post<RegistrationBalance>(
+      `/balance-settlements/registration/${registrationId}/plan/generate`,
+      { count, firstDueAt },
+    );
+  }
+
+  /** `PATCH …/plan` con l'array intero. Vuoto = il piano si cancella. */
+  replacePlan(
+    registrationId: number,
+    instalments: { amount: number; dueAt: string; note?: string }[],
+  ): Promise<RegistrationBalance> {
+    return this.api.patchPath<RegistrationBalance>(
+      `/balance-settlements/registration/${registrationId}/plan`,
+      { instalments },
+    );
+  }
 }
