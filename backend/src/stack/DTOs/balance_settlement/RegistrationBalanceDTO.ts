@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BalanceSettlementSchema } from "@prisma-gen/zod";
+import { BalanceSettlementSchema, PaymentInstalmentSchema } from "@prisma-gen/zod";
 
 /**
  * Il residuo di **una persona**, come lo legge la scheda dell'iscrizione
@@ -27,6 +27,29 @@ export const RegistrationBalanceSchema = z.object({
     /** `dueAmount - settledAmount`. Negativo = incassato più del dovuto, ed è un conflitto. */
     openAmount: z.number().int(),
     settlements: BalanceSettlementSchema.array(),
+
+    // ── Il piano delle rate — `18-rate.md` ──────────────────────────────────
+    /**
+     * Le rate concordate, per scadenza. Vuoto quando non esiste un piano: il
+     * residuo è aperto e basta, che è come funzionava prima.
+     */
+    instalments: PaymentInstalmentSchema.array(),
+    /**
+     * **Quanto sarebbe già dovuto essere versato e non lo è** — `RB34`.
+     *
+     * `somma delle rate scadute − settledAmount`, mai negativo. È l'unico numero
+     * che risponde a «questa persona è in ritardo?», e si ottiene confrontando
+     * previsione e fatti: nessuna rata porta una spunta «pagata», perché sarebbe
+     * un terzo posto in cui vive la stessa verità.
+     *
+     * Zero anche quando un piano non c'è: senza scadenze non si è mai in ritardo.
+     */
+    overdueAmount: z.number().int(),
+    /**
+     * La prossima scadenza non ancora coperta dai versamenti. Nulla quando il
+     * piano è finito, o quando non c'è.
+     */
+    nextDueAt: z.coerce.date().nullable(),
 });
 
 export type RegistrationBalanceDTO = z.infer<typeof RegistrationBalanceSchema>;

@@ -23,6 +23,8 @@ import { CheckInWithRelationsSchema, CheckInPartialWithRelationsSchema, CheckInO
 import type { CheckInWithRelations, CheckInPartialWithRelations, CheckInOptionalDefaultsWithRelations } from './CheckInSchema'
 import { BalanceSettlementWithRelationsSchema, BalanceSettlementPartialWithRelationsSchema, BalanceSettlementOptionalDefaultsWithRelationsSchema } from './BalanceSettlementSchema'
 import type { BalanceSettlementWithRelations, BalanceSettlementPartialWithRelations, BalanceSettlementOptionalDefaultsWithRelations } from './BalanceSettlementSchema'
+import { PaymentInstalmentWithRelationsSchema, PaymentInstalmentPartialWithRelationsSchema, PaymentInstalmentOptionalDefaultsWithRelationsSchema } from './PaymentInstalmentSchema'
+import type { PaymentInstalmentWithRelations, PaymentInstalmentPartialWithRelations, PaymentInstalmentOptionalDefaultsWithRelations } from './PaymentInstalmentSchema'
 
 /////////////////////////////////////////
 // REGISTRATION SCHEMA
@@ -161,6 +163,7 @@ export type RegistrationRelations = {
   tickets: TicketWithRelations[];
   checkIns: CheckInWithRelations[];
   balanceSettlements: BalanceSettlementWithRelations[];
+  instalments: PaymentInstalmentWithRelations[];
 };
 
 export type RegistrationWithRelations = z.infer<typeof RegistrationSchema> & RegistrationRelations
@@ -176,6 +179,7 @@ export const RegistrationWithRelationsSchema: z.ZodType<RegistrationWithRelation
   tickets: z.lazy(() => TicketWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementWithRelationsSchema).array(),
+  instalments: z.lazy(() => PaymentInstalmentWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -193,6 +197,7 @@ export type RegistrationOptionalDefaultsRelations = {
   tickets: TicketOptionalDefaultsWithRelations[];
   checkIns: CheckInOptionalDefaultsWithRelations[];
   balanceSettlements: BalanceSettlementOptionalDefaultsWithRelations[];
+  instalments: PaymentInstalmentOptionalDefaultsWithRelations[];
 };
 
 export type RegistrationOptionalDefaultsWithRelations = z.infer<typeof RegistrationOptionalDefaultsSchema> & RegistrationOptionalDefaultsRelations
@@ -208,6 +213,7 @@ export const RegistrationOptionalDefaultsWithRelationsSchema: z.ZodType<Registra
   tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInOptionalDefaultsWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementOptionalDefaultsWithRelationsSchema).array(),
+  instalments: z.lazy(() => PaymentInstalmentOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -225,6 +231,7 @@ export type RegistrationPartialRelations = {
   tickets?: TicketPartialWithRelations[];
   checkIns?: CheckInPartialWithRelations[];
   balanceSettlements?: BalanceSettlementPartialWithRelations[];
+  instalments?: PaymentInstalmentPartialWithRelations[];
 };
 
 export type RegistrationPartialWithRelations = z.infer<typeof RegistrationPartialSchema> & RegistrationPartialRelations
@@ -240,6 +247,7 @@ export const RegistrationPartialWithRelationsSchema: z.ZodType<RegistrationParti
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
+  instalments: z.lazy(() => PaymentInstalmentPartialWithRelationsSchema).array(),
 })).partial()
 
 export type RegistrationOptionalDefaultsWithPartialRelations = z.infer<typeof RegistrationOptionalDefaultsSchema> & RegistrationPartialRelations
@@ -255,6 +263,7 @@ export const RegistrationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<R
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
+  instalments: z.lazy(() => PaymentInstalmentPartialWithRelationsSchema).array(),
 }).partial())
 
 export type RegistrationWithPartialRelations = z.infer<typeof RegistrationSchema> & RegistrationPartialRelations
@@ -270,6 +279,7 @@ export const RegistrationWithPartialRelationsSchema: z.ZodType<RegistrationWithP
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
+  instalments: z.lazy(() => PaymentInstalmentPartialWithRelationsSchema).array(),
 }).partial())
 
 export default RegistrationSchema;

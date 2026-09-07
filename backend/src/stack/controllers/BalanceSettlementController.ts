@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { Controller, GET, POST } from "fastify-decorators";
+import { Controller, GET, PATCH, POST } from "fastify-decorators";
 import httpErrors from "http-errors";
 import { Authenticate } from "@middleware/Authenticate";
 import { HasPermission } from "@middleware/HasPermission";
@@ -18,6 +18,7 @@ import {
     BalanceSettlementPaginateBodyInputSchema,
     BalanceSettlementPaginateDTO,
 } from "@DTOs/balance_settlement/BalanceSettlementQueryDTO";
+import { PaymentInstalmentPlanDTO, PaymentInstalmentPlanSchema } from "@DTOs/payment_instalment/PaymentInstalmentDTO";
 
 /**
  * `BalanceSettlement` — il registro dei saldi incassati al botteghino
@@ -91,6 +92,46 @@ export class BalanceSettlementController {
         reply: FastifyReply,
     ) {
         reply.status(200).send(await this.balanceSettlementService.sync(+req.user.id, req.body));
+    }
+
+    /**
+     * **Il piano delle rate di un'iscrizione** — `18-rate.md` §4.
+     *
+     * Un `PATCH` con **l'array intero**, come le sessioni di un titolo (regola 12
+     * di `controllers.md`): `RB35` è un vincolo sull'insieme — la somma dev'essere
+     * il dovuto — e verificarlo una rata per volta è impossibile senza rendere
+     * inaffrontabile ogni riorganizzazione del piano.
+     *
+     * Chiede il permesso della **cassa**, non quello delle iscrizioni: un piano
+     * di rate è denaro, e chi non tiene la cassa non vede le cifre (`RB27`).
+     */
+    @PATCH("/registration/:id/plan", {
+        schema: {
+            operationId: "replaceInstalmentPlan",
+            summary: "Replaces the whole instalment plan of a registration",
+            description:
+                "Rewrites the agreed instalment plan in one call: the array IS the plan, and its order is the "
+                + "order. The instalments must add up EXACTLY to the registration's outstanding amount (RB35) — a "
+                + "plan that does not add up is refused, never silently corrected. An empty array clears the plan and "
+                + "returns to an open balance with no deadlines. No instalment carries a 'paid' flag (RB34): the plan "
+                + "is the forecast, the settlements are the facts, and lateness is the comparison between them. "
+                + "Settlements are never touched.",
+            params: exz.pathId,
+            body: PaymentInstalmentPlanSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.CREATE, PermissionResource.BALANCE_SETTLEMENT, PermissionScope.ALL),
+        ],
+    })
+    async replacePlan(
+        req: FastifyRequest<{ Params: { id: string }; Body: PaymentInstalmentPlanDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(
+            await this.balanceSettlementService.replacePlan(+req.user.id, +req.params.id, req.body),
+        );
     }
 
     @GET("/registration/:id", {

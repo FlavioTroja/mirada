@@ -1,5 +1,5 @@
 import { Service } from "fastify-decorators";
-import { BalanceSettlement, BalanceSettlementMethod, Prisma, Registration } from "@prisma/client";
+import { BalanceSettlement, BalanceSettlementMethod, PaymentInstalment, Prisma, Registration } from "@prisma/client";
 import httpErrors from "http-errors";
 import { Log } from "@utils/adapters/log";
 import { getPrismaClient } from "@utils/adapters/prisma";
@@ -27,6 +27,8 @@ import {
     BalanceSettlementSyncResultDTO,
 } from "@DTOs/balance_settlement/BalanceSettlementResponseDTO";
 import { RegistrationBalanceDTO } from "@DTOs/balance_settlement/RegistrationBalanceDTO";
+import { PaymentInstalmentPlanDTO } from "@DTOs/payment_instalment/PaymentInstalmentDTO";
+import { PaymentInstalmentRepository } from "@repositories/PaymentInstalmentRepository";
 
 /** Ciò che una riga di incasso ha bisogno di sapere, comunque sia arrivata. */
 type SettlementInput = {
@@ -79,6 +81,7 @@ type ConflictReason = "ALREADY_SETTLED" | "EXCEEDS_BALANCE" | "NO_BALANCE_DUE" |
 export class BalanceSettlementService {
     constructor(
         private readonly balanceSettlementRepository: BalanceSettlementRepository,
+        private readonly paymentInstalmentRepository: PaymentInstalmentRepository,
         private readonly registrationRepository: RegistrationRepository,
         private readonly eventRepository: EventRepository,
         private readonly organizationScopeService: OrganizationScopeService,
@@ -366,6 +369,7 @@ export class BalanceSettlementService {
     public async balanceOf(principalId: number, registrationId: number): Promise<RegistrationBalanceDTO> {
         const registration = await this.findRegistrationInScopeOrThrow(principalId, registrationId);
         const settlements = await this.balanceSettlementRepository.findByRegistration(registration.id);
+        const instalments = await this.paymentInstalmentRepository.findByRegistration(registration.id);
 
         return {
             registrationId: registration.id,
@@ -376,7 +380,136 @@ export class BalanceSettlementService {
             settledAmount: registration.balanceSettledAmount,
             openAmount: registration.balanceDueAmount - registration.balanceSettledAmount,
             settlements,
+            instalments,
+            ...this.readPlan(instalments, registration.balanceSettledAmount),
         };
+    }
+
+    /**
+     * **Il confronto fra previsione e fatti** — `18-rate.md` §3, `RB34`.
+     *
+     * Nessuna rata porta una spunta «pagata»: il ritardo si ottiene sommando ciò
+     * che era atteso entro oggi e sottraendo ciò che è stato versato. Il denaro
+     * copre il piano nell'ordine delle scadenze, e non serve sapere quale
+     * versamento appartenga a quale rata — una domanda che, con i soldi in mano
+     * allo sportello, non ha una risposta giusta (§3.3).
+     *
+     * ── Perché `overdueAmount` non scende sotto zero ────────────────────────
+     * Chi è in anticipo non è «in ritardo di meno»: è in pari. Un numero negativo
+     * inviterebbe a sommarlo altrove e produrrebbe totali che si compensano fra
+     * persone diverse — un allievo avanti che copre uno indietro.
+     */
+    private readPlan(
+        instalments: PaymentInstalment[],
+        settledAmount: number,
+    ): { overdueAmount: number; nextDueAt: Date | null } {
+        if (!instalments.length) {
+            // Senza scadenze non si è mai in ritardo: il residuo è aperto e basta.
+            return { overdueAmount: 0, nextDueAt: null };
+        }
+
+        const now = new Date();
+        const ordered = [...instalments].sort(
+            (a, b) => a.dueAt.getTime() - b.dueAt.getTime() || a.sortOrder - b.sortOrder,
+        );
+
+        const expectedByNow = ordered
+            .filter(row => row.dueAt <= now)
+            .reduce((sum, row) => sum + row.amount, 0);
+
+        // La prossima scadenza **non ancora coperta**: si scorre il piano
+        // accumulando, e ci si ferma alla prima rata che il versato non raggiunge.
+        let cumulative = 0;
+        let nextDueAt: Date | null = null;
+        for (const row of ordered) {
+            cumulative += row.amount;
+            if (cumulative > settledAmount) {
+                nextDueAt = row.dueAt;
+                break;
+            }
+        }
+
+        return {
+            overdueAmount: Math.max(0, expectedByNow - settledAmount),
+            nextDueAt,
+        };
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // Il piano — `PATCH /registrations/:id/instalments`, `18-rate.md` §4
+    // ═════════════════════════════════════════════════════════════════════════
+
+    /**
+     * **Riscrive il piano intero.** Non una rata per volta, e la ragione è
+     * `RB35`: la somma delle rate dev'essere il dovuto dell'iscrizione, che è un
+     * vincolo sull'INSIEME. Modificare una rata per volta significherebbe
+     * attraversare stati in cui il piano non torna — e o si rifiuta ogni passo
+     * intermedio, rendendo impossibile riorganizzare un piano, o non si verifica
+     * affatto.
+     *
+     * Un array vuoto cancella il piano: si torna al residuo aperto senza
+     * scadenze, ed è un'operazione legittima.
+     *
+     * ⚠️ I versamenti non si toccano. Stanno su `BalanceSettlement`, sono i
+     * **fatti**, e riscrivere una previsione non cambia il denaro che qualcuno
+     * ha già preso in mano.
+     */
+    public async replacePlan(
+        principalId: number,
+        registrationId: number,
+        dto: PaymentInstalmentPlanDTO,
+    ): Promise<RegistrationBalanceDTO> {
+        const registration = await this.findRegistrationInScopeOrThrow(principalId, registrationId);
+
+        if (registration.balanceDueAmount <= 0) {
+            Log.warn(
+                `[BalanceSettlement Service]: plan refused — registration (id ${registration.id}) has nothing due`,
+            );
+            throw new httpErrors.BadRequest(
+                "Questa iscrizione non ha un importo dovuto: non c'è nulla da rateizzare.",
+            );
+        }
+
+        const total = dto.instalments.reduce((sum, row) => sum + row.amount, 0);
+        if (dto.instalments.length && total !== registration.balanceDueAmount) {
+            // `RB35` — un piano che non torna promette meno del dovuto o pretende
+            // più del prezzo. Si rifiuta dicendo di quanto sbaglia: correggerlo in
+            // silenzio significherebbe decidere al posto di chi lo ha concordato.
+            Log.warn(
+                `[BalanceSettlement Service]: plan refused on registration (id ${registration.id}) — instalments sum `
+                + `to ${total} cents against ${registration.balanceDueAmount} due`,
+            );
+            throw new httpErrors.BadRequest(
+                `La somma delle rate è ${(total / 100).toFixed(2)} €, ma il dovuto è `
+                + `${(registration.balanceDueAmount / 100).toFixed(2)} €.`,
+            );
+        }
+
+        Log.info(
+            `[BalanceSettlement Service]: replacing plan of registration (id ${registration.id}) with `
+            + `${dto.instalments.length} instalment(s) totalling ${total} cents`,
+        );
+
+        await getPrismaClient().$transaction(async prisma => {
+            await this.paymentInstalmentRepository.deleteByRegistration(registration.id, prisma);
+            for (const [index, row] of dto.instalments.entries()) {
+                await this.paymentInstalmentRepository.save(
+                    {
+                        registrationId: registration.id,
+                        amount: row.amount,
+                        dueAt: row.dueAt,
+                        // L'ordine dell'array **è** l'ordine: chiederlo al client
+                        // significherebbe accettare un piano in cui i due si
+                        // contraddicono.
+                        sortOrder: index,
+                        note: row.note ?? null,
+                    } as never,
+                    prisma,
+                );
+            }
+        });
+
+        return this.balanceOf(principalId, registration.id);
     }
 
     public async findById(principalId: number, id: number, options?: FindOptions): Promise<BalanceSettlement | null> {

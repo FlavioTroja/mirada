@@ -1458,6 +1458,7 @@ model Registration {
   tickets             Ticket[]
   checkIns            CheckIn[]
   balanceSettlements  BalanceSettlement[]
+  instalments         PaymentInstalment[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -2500,6 +2501,61 @@ enum BalanceSettlementMethod {
   SATISPAY
   BANK_TRANSFER
   OTHER
+}
+
+/// **Una rata attesa** — `18-rate.md` §3.
+///
+/// La scuola concorda con l'allievo «tre rate da 60 €, il 1° di ottobre,
+/// novembre e dicembre», e queste sono quelle tre righe.
+///
+/// ── ⚠️ Non ha uno stato «pagata», ed è la regola di questa tabella (`RB34`) ──
+/// Il piano è una **previsione**; i fatti sono le righe di `BalanceSettlement`.
+/// Chi è in ritardo si ottiene confrontando i due — «somma delle rate già
+/// scadute meno totale versato» — non leggendo una spunta.
+///
+/// Una spunta sarebbe un terzo posto in cui vive la stessa verità, e prima o poi
+/// direbbe una cosa diversa dagli altri due. È lo stesso ragionamento di
+/// `CheckIn` (l'utilizzo non è uno stato del biglietto, `09` §7), di
+/// `Registration.balanceSettledAmount` (la somma delle righe, `14` §5.2) e di
+/// `CapacityQuota.consumed`.
+///
+/// E toglie di mezzo una domanda senza risposta: se si versano 50 € su una rata
+/// da 60, quella rata è «pagata»? Col confronto la domanda non si pone — alla
+/// data di quella rata mancano dieci euro, ed è tutto ciò che serve sapere.
+///
+/// ── Nessun legame con il singolo versamento (§3.3) ──────────────────────────
+/// `BalanceSettlement` non punta a una rata. Chiedere all'operatore, con i soldi
+/// in mano, **a quale rata** attribuire ciò che sta incassando è una domanda che
+/// non ha una risposta giusta e che rallenta uno sportello. Il denaro copre il
+/// piano nell'ordine delle scadenze.
+model PaymentInstalment {
+  id Int @id @default(autoincrement())
+
+  registrationId Int
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  /// Centesimi interi (§3.1). La somma delle rate di un'iscrizione è
+  /// **esattamente** il suo `balanceDueAmount` (`RB35`): il vincolo è del
+  /// servizio, perché è lì che le due grandezze si vedono insieme.
+  amount Int
+
+  /// Quando quella rata era attesa. È l'unico dato che il residuo aperto, da
+  /// solo, non sa dare — ed è la ragione per cui questa tabella esiste.
+  dueAt DateTime
+
+  /// L'ordine concordato. Due rate possono cadere lo stesso giorno.
+  sortOrder Int @default(0)
+
+  /// Quello che la segreteria vuole lasciare scritto: «la terza la porta a
+  /// gennaio, d'accordo con l'insegnante».
+  note String?
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([registrationId, dueAt])
+  @@index([dueAt])
 }
 
 /// Il registro dei saldi incassati (`14` §6, `RF-SAL-8`).

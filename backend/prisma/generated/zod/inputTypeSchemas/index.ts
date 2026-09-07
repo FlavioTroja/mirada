@@ -49,6 +49,7 @@ export { SalesChannelMappingScalarFieldEnumSchema } from './SalesChannelMappingS
 export { SalesChannelDepositCodeScalarFieldEnumSchema } from './SalesChannelDepositCodeScalarFieldEnumSchema';
 export { ExternalSaleScalarFieldEnumSchema } from './ExternalSaleScalarFieldEnumSchema';
 export { ExternalSaleEventScalarFieldEnumSchema } from './ExternalSaleEventScalarFieldEnumSchema';
+export { PaymentInstalmentScalarFieldEnumSchema } from './PaymentInstalmentScalarFieldEnumSchema';
 export { BalanceSettlementScalarFieldEnumSchema } from './BalanceSettlementScalarFieldEnumSchema';
 export { SortOrderSchema } from './SortOrderSchema';
 export { NullableJsonNullValueInputSchema } from './NullableJsonNullValueInputSchema';
@@ -88,6 +89,7 @@ export { SalesChannelMappingOrderByRelevanceFieldEnumSchema } from './SalesChann
 export { SalesChannelDepositCodeOrderByRelevanceFieldEnumSchema } from './SalesChannelDepositCodeOrderByRelevanceFieldEnumSchema';
 export { ExternalSaleOrderByRelevanceFieldEnumSchema } from './ExternalSaleOrderByRelevanceFieldEnumSchema';
 export { ExternalSaleEventOrderByRelevanceFieldEnumSchema } from './ExternalSaleEventOrderByRelevanceFieldEnumSchema';
+export { PaymentInstalmentOrderByRelevanceFieldEnumSchema } from './PaymentInstalmentOrderByRelevanceFieldEnumSchema';
 export { BalanceSettlementOrderByRelevanceFieldEnumSchema } from './BalanceSettlementOrderByRelevanceFieldEnumSchema';
 export { RoleNameSchema } from './RoleNameSchema';
 export { UiScopeSchema } from './UiScopeSchema';

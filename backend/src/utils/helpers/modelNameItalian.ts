@@ -66,6 +66,7 @@ export const ModelNameItalian: Record<Prisma.ModelName, string> = {
 
     // Mirada Tango — acconto e saldo
     BalanceSettlement: "incasso del saldo",
+    PaymentInstalment: "rata",
 };
 
 export const italianModelName = (name: Prisma.ModelName): string => ModelNameItalian[name];
