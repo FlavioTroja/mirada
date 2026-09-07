@@ -4,6 +4,21 @@
 tesseramento · **Non contraddice `09` §7**: la lettura corrente di quell'invariante è più
 stretta del suo testo
 
+> **Stato: accantonato** (7 settembre 2026). Il committente ha deciso di non procedere per ora.
+>
+> Il documento resta perché la scoperta del §2 vale a prescindere dal carnet — `09` §7 vieta uno
+> **stato**, non un **conteggio**, e questo cambia la stima di qualunque titolo a consumo si
+> vorrà costruire in futuro. Vale anche il §3: i tre ostacoli reali sono colonne, non invarianti.
+>
+> ⚠️ **Non è un piano, e nessuna delle decisioni del §8 è stata presa.** Chi lo riprende
+> ricomincia da K5, che è quella che tocca il motore di capienza.
+>
+> **Va detto anche come è nato**: la priorità l'ho presa da `06` §B8 — che chiama il carnet «la
+> principale leva di fidelizzazione delle scuole» — e non dal committente. È una frase scritta
+> mesi prima, in un documento, da chi non aveva davanti i clienti veri. Prendere una priorità da
+> un documento invece che da chi decide è l'errore di metodo che ha prodotto questa analisi
+> prima che qualcuno l'avesse chiesta.
+
 ---
 
 ## 1. Il problema
