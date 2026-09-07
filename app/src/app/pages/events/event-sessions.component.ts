@@ -278,7 +278,7 @@ import { EventWorkspaceNavComponent } from './event-workspace-nav.component';
             } @empty {
               <keijo-info-box
                 [icon]="sessionIcon"
-                [title]="'Ancora nessuna voce in ' + sessionsLabel().toLowerCase()"
+                title="L’elenco è ancora vuoto"
                 variant="info"
               >
                 <span>
