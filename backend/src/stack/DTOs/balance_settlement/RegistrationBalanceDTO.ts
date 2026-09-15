@@ -26,7 +26,22 @@ export const RegistrationBalanceSchema = z.object({
     settledAmount: z.number().int(),
     /** `dueAmount - settledAmount`. Negativo = incassato più del dovuto, ed è un conflitto. */
     openAmount: z.number().int(),
-    settlements: BalanceSettlementSchema.array(),
+    /**
+     * Gli incassi, ciascuno con **il nome di chi lo ha preso in mano**.
+     *
+     * ⚠️ Il nome lo risolve il SERVER e non il front-office. Chiederlo di là
+     * significava leggere l'elenco utenti, che è un permesso di piattaforma: un
+     * `OWNER` non ce l'ha, quindi la chiamata falliva **sempre** proprio per chi
+     * usa questa schermata, e l'intercettore mostrava «User 5 lacks
+     * READ#USER#ALL permission» sopra un incasso andato a buon fine.
+     *
+     * Visto in esercizio il 15 settembre 2026. Non si nasconde un errore: non si
+     * fa la chiamata, e il dato arriva da dove è già noto.
+     */
+    settlements: BalanceSettlementSchema.extend({
+        /** Nullo se l'utenza non è più leggibile: resta il numero, come prima. */
+        operatorName: z.string().nullable(),
+    }).array(),
 
     // ── Il piano delle rate — `18-rate.md` ──────────────────────────────────
     /**

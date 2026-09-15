@@ -20,6 +20,7 @@ import {
 import {
   calendarMonth,
   cancel as cancelIcon,
+  eventBusy,
   celebration,
   check,
   checkCircle,
@@ -57,6 +58,7 @@ import {
   RegistrationChannel,
 } from '../../core/domain/enums';
 import {
+  BalanceSettlement,
   PaymentInstalment,
   QuotaConsumption,
   RegistrationBalance,
@@ -361,7 +363,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
                         {{ when(row.collectedAt) }}
                       </keijo-pill>
                       <keijo-pill variant="default" [icon]="operatorIcon">
-                        {{ operatorLabel(row.operatorUserId) }}
+                        {{ operatorLabel(row) }}
                       </keijo-pill>
                       @if (row.deviceId) {
                         <keijo-pill [isID]="true" [icon]="copyIcon">{{ row.deviceId }}</keijo-pill>
@@ -641,7 +643,6 @@ export class RegistrationDetailComponent implements OnInit {
   readonly planning = signal(false);
   readonly planErrors = signal<string[]>([]);
   readonly settleErrors = signal<string[]>([]);
-  private readonly operatorNames = signal<Map<number, string>>(new Map());
 
   readonly declaredRoleOptions: SelectOption[] = DECLARED_DANCE_ROLE_OPTIONS.map((o) => ({
     label: o.label,
@@ -784,7 +785,11 @@ export class RegistrationDetailComponent implements OnInit {
       if (bal.instalments.length) {
         actions.push({
           id: 'unplan',
-          icon: cancelIcon,
+          // ⚠️ NON `cancelIcon`: è la stessa icona di «Rifiuta l'iscrizione», e
+          // in testata finivano a due posti di distanza — due ✕ identiche di cui
+          // una rilascia la capienza di una persona. Un calendario sbarrato dice
+          // che si toglie una scadenza, non qualcuno.
+          icon: eventBusy,
           label: 'Togli piano',
           tooltip: 'Torna al residuo aperto senza scadenze',
           run: () => void this.removePlan(),
@@ -841,9 +846,21 @@ export class RegistrationDetailComponent implements OnInit {
     return BALANCE_SETTLEMENT_METHOD_UI[method].icon;
   }
 
-  /** Chi ha incassato. Con il nome, non con un numero: è a lui che si chiede. */
-  operatorLabel(operatorUserId: number): string {
-    return this.operatorNames().get(operatorUserId) ?? `operatore #${operatorUserId}`;
+  /**
+   * Chi ha incassato. Con il nome, non con un numero: è a lui che si chiede.
+   *
+   * ⚠️ Il nome arriva ORA DAL SERVER, dentro la riga dell'incasso. Prima lo
+   * risolveva questa pagina leggendo l'elenco utenti — che è un permesso di
+   * piattaforma: un OWNER non ce l'ha, quindi la chiamata falliva SEMPRE proprio
+   * per chi usa questa schermata, e sopra un incasso riuscito compariva «User 5
+   * lacks READ#USER#ALL permission».
+   *
+   * Il `try/catch` che avevo messo non poteva renderla silenziosa: l'errore lo
+   * mostra l'intercettore, non il chiamante. Non si nasconde una chiamata che
+   * fallisce — non si fa.
+   */
+  operatorLabel(row: BalanceSettlement): string {
+    return row.operatorName ?? `operatore #${row.operatorUserId}`;
   }
 
   /**
@@ -874,9 +891,6 @@ export class RegistrationDetailComponent implements OnInit {
       // condizione, l'unico caso in cui il conflitto esiste è l'unico in cui
       // non si vede.
       this.balance.set(bal.dueAmount > 0 || bal.settlements.length > 0 ? bal : null);
-      if (bal.settlements.length) {
-        await this.loadOperatorNames();
-      }
     } catch (err) {
       // Il `403` di chi non tiene la cassa è già escluso sopra: la chiamata non
       // parte nemmeno. Quello che resta qui sono i guasti veri — 5xx, rete
@@ -889,17 +903,6 @@ export class RegistrationDetailComponent implements OnInit {
           ? null
           : (err as Error)?.message || 'Il saldo di questa iscrizione non è leggibile.',
       );
-    }
-  }
-
-  /** Una lettura sola: gli operatori di cassa di un evento sono una manciata. */
-  private async loadOperatorNames(): Promise<void> {
-    if (this.operatorNames().size) return;
-    try {
-      const page = await this.api.list<{ id: number; username: string }>('users', {}, { limit: 200 });
-      this.operatorNames.set(new Map((page.docs ?? []).map((u) => [u.id, u.username])));
-    } catch {
-      // Senza i nomi restano i numeri: è meno leggibile, non è un guasto.
     }
   }
 
@@ -981,10 +984,23 @@ export class RegistrationDetailComponent implements OnInit {
     const bal = this.balance();
     if (!bal) return;
     this.settleErrors.set([]);
+    // ── Quanto proporre ──────────────────────────────────────────────────
+    // Senza un piano, il residuo intero: alla porta si salda tutto, e chi
+    // incassa non deve ricopiare una cifra che il server sa già.
+    //
+    // ⚠️ CON un piano, la PROSSIMA RATA. Proporre il residuo intero a chi è
+    // venuto a versarne una invita a prendere 180 € invece di 60 — e con `RB36`
+    // le uniche cifre ammesse sono i confini del piano, quindi un precompilato
+    // fuori confine è un importo che il modulo propone e poi rifiuta.
+    const confini = bal.instalments.reduce<number[]>(
+      (acc, rata) => [...acc, (acc.at(-1) ?? 0) + rata.amount],
+      [],
+    );
+    const prossimoConfine = confini.find((c) => c > bal.settledAmount);
+    const proposta = prossimoConfine ? prossimoConfine - bal.settledAmount : bal.openAmount;
+
     this.settleForm.reset({
-      // Precompilato con ciò che resta aperto: alla porta si versa il saldo
-      // intero, e chi incassa non deve ricopiare una cifra che il server sa.
-      amount: centsToEuroInput(bal.openAmount),
+      amount: centsToEuroInput(proposta),
       method: 'CASH',
       note: '',
     });

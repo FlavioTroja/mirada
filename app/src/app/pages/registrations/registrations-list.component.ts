@@ -423,8 +423,20 @@ export class RegistrationsListComponent implements OnInit {
   readonly eventOptions = signal<SelectOption[]>([]);
   readonly ticketTypeOptions = signal<SelectOption[]>([]);
 
-  /** Si sta iscrivendo A LISTINO, cioè con un importo dovuto. */
-  readonly enrolling = computed(() => !!this.form.controls.ticketTypeId.value);
+  /**
+   * Si sta iscrivendo A LISTINO, cioè con un importo dovuto.
+   *
+   * ⚠️ È un `signal` alimentato da `valueChanges`, **non** un `computed` che
+   * legge `form.controls.ticketTypeId.value`. Un form reattivo non è un segnale:
+   * un `computed` che ne legge il valore non ha nulla da cui dipendere, calcola
+   * una volta sola e **non si aggiorna mai più**.
+   *
+   * Compila, non fallisce, e non funziona: scelto un titolo, il campo «canale»
+   * restava a schermo e il suggerimento sull'iscrizione a listino non compariva.
+   * Visto in esercizio il 15 settembre 2026 — nessuna prova lo copriva, perché
+   * è un comportamento di sola interfaccia.
+   */
+  readonly enrolling = signal(false);
   private readonly eventFilterOptions = signal<KeijoFilterOption[]>([]);
 
   readonly channelOptions: SelectOption[] = REGISTRATION_CHANNEL_OPTIONS.map((o) => ({
@@ -545,6 +557,10 @@ export class RegistrationsListComponent implements OnInit {
     this.form.controls.eventId.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe((eventId) => void this.loadTicketTypes(eventId));
+
+    this.form.controls.ticketTypeId.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((ticketTypeId) => this.enrolling.set(!!ticketTypeId));
   }
 
   /**

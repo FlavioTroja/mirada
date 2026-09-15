@@ -659,4 +659,6 @@ export interface BalanceSettlement extends Entity {
   /** Valorizzato quando la riga nasce in conflitto con un incasso già registrato. */
   conflictWithId?: number | null;
   note?: string | null;
+  /** Il nome di chi ha incassato, risolto dal server (`18-rate.md`). */
+  operatorName?: string | null;
 }

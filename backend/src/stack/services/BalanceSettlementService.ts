@@ -32,7 +32,9 @@ import {
     PaymentInstalmentPlanDTO,
 } from "@DTOs/payment_instalment/PaymentInstalmentDTO";
 import { splitCents } from "@utils/helpers/splitCents";
+import { euro } from "@utils/helpers/euro";
 import { PaymentInstalmentRepository } from "@repositories/PaymentInstalmentRepository";
+import { UserRepository } from "@repositories/UserRepository";
 
 /** Ciò che una riga di incasso ha bisogno di sapere, comunque sia arrivata. */
 type SettlementInput = {
@@ -86,6 +88,7 @@ export class BalanceSettlementService {
     constructor(
         private readonly balanceSettlementRepository: BalanceSettlementRepository,
         private readonly paymentInstalmentRepository: PaymentInstalmentRepository,
+        private readonly userRepository: UserRepository,
         private readonly registrationRepository: RegistrationRepository,
         private readonly eventRepository: EventRepository,
         private readonly organizationScopeService: OrganizationScopeService,
@@ -133,7 +136,7 @@ export class BalanceSettlementService {
                 + `open on registration (id ${registration.id})`,
             );
             throw new httpErrors.BadRequest(
-                `L'importo supera il residuo ancora aperto (${(open / 100).toFixed(2)} €).`,
+                `L'importo supera il residuo ancora aperto (${euro(open)}).`,
             );
         }
 
@@ -380,6 +383,7 @@ export class BalanceSettlementService {
         const registration = await this.findRegistrationInScopeOrThrow(principalId, registrationId);
         const settlements = await this.balanceSettlementRepository.findByRegistration(registration.id);
         const instalments = await this.paymentInstalmentRepository.findByRegistration(registration.id);
+        const operatorNames = await this.resolveOperatorNames(settlements);
 
         return {
             registrationId: registration.id,
@@ -389,10 +393,43 @@ export class BalanceSettlementService {
             dueAmount: registration.balanceDueAmount,
             settledAmount: registration.balanceSettledAmount,
             openAmount: registration.balanceDueAmount - registration.balanceSettledAmount,
-            settlements,
+            settlements: settlements.map(row => ({
+                ...row,
+                operatorName: operatorNames.get(row.operatorUserId) ?? null,
+            })),
             instalments,
             ...this.readPlan(instalments, registration.balanceSettledAmount),
         };
+    }
+
+    /**
+     * **Chi ha incassato, con il nome.**
+     *
+     * Una lettura sola per l'intera scheda: gli operatori di cassa di un evento
+     * sono una manciata, e quasi sempre uno solo.
+     *
+     * Sta qui e non nel front-office perché di là serviva il permesso di leggere
+     * l'elenco utenti — che è di piattaforma, e che chi tiene la cassa non ha.
+     */
+    private async resolveOperatorNames(
+        settlements: { operatorUserId: number }[],
+    ): Promise<Map<number, string>> {
+        const ids = [...new Set(settlements.map(row => row.operatorUserId))];
+        if (!ids.length) {
+            return new Map();
+        }
+
+        const users = await this.userRepository.findMany(
+            { id: { in: ids } },
+            { populate: "person" },
+        ) as { id: number; username: string; person?: { name?: string; surname?: string } }[];
+
+        return new Map(users.map(user => {
+            const nome = [user.person?.name, user.person?.surname].filter(Boolean).join(" ").trim();
+            // Il nome proprio se c'è, altrimenti l'utenza: meglio 'g.rossi' di
+            // 'operatore #5', che non dice a chi si chiede conto di un incasso.
+            return [user.id, nome || user.username];
+        }));
     }
 
     /**
@@ -451,7 +488,7 @@ export class BalanceSettlementService {
             + `boundary of registration (id ${registration.id}); next boundary needs ${dovuto} cents`,
         );
         throw new httpErrors.BadRequest(
-            `Le rate si versano intere: la prossima è di ${(dovuto / 100).toFixed(2)} €.`,
+            `Le rate si versano intere: la prossima è di ${euro(dovuto)}.`,
         );
     }
 
@@ -550,8 +587,8 @@ export class BalanceSettlementService {
                 + `to ${total} cents against ${registration.balanceDueAmount} due`,
             );
             throw new httpErrors.BadRequest(
-                `La somma delle rate è ${(total / 100).toFixed(2)} €, ma il dovuto è `
-                + `${(registration.balanceDueAmount / 100).toFixed(2)} €.`,
+                `La somma delle rate è ${euro(total)}, ma il dovuto è `
+                + `${euro(registration.balanceDueAmount)}.`,
             );
         }
 

@@ -102,8 +102,11 @@ describe("Il piano delle rate", () => {
         expect(res.statusCode).toBe(400);
         // Il messaggio porta entrambe le cifre: correggerlo in silenzio
         // significherebbe decidere al posto di chi il piano l'ha concordato.
-        expect(res.json().message).toContain("60.00");
-        expect(res.json().message).toContain("90.00");
+        // Virgola e non punto: il messaggio finisce accanto agli importi del
+        // front-office, che scrive «180,00 €». Due notazioni nello stesso
+        // riquadro fanno dubitare che siano la stessa cosa.
+        expect(res.json().message).toContain("60,00");
+        expect(res.json().message).toContain("90,00");
     });
 
     it("il ritardo è il CONFRONTO fra scadute e versato, non una spunta (`RB34`)", async () => {
@@ -147,7 +150,7 @@ describe("Il piano delle rate", () => {
         const res = await incassa(god, id, 5_000);
         expect(res.statusCode).toBe(400);
         // Allo sportello c'è qualcuno col portafoglio in mano: si dice quanto.
-        expect(res.json().message).toContain("30.00");
+        expect(res.json().message).toContain("30,00");
     });
 
     it("ammette DUE rate insieme, che è un confine come un altro", async () => {
