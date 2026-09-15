@@ -511,18 +511,38 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
           </keijo-list-items-wrapper>
         </keijo-page-section-wrapper>
 
-        <keijo-page-section-wrapper title="Non ancora disponibile">
+        <!--
+          ⚠️ Questo riquadro diceva che le basi REST di Order, Ticket,
+          RequirementOutcome e CheckIn «non sono ancora esposte dal contratto
+          condiviso». Era falso, e lo era **dal primo commit**: i quattro
+          controller nascono lo stesso giorno di questo testo, e tre dei quattro
+          filtrano già per iscrizione. Ciò che manca è qui, non di là.
+          (Niente apici inversi in questo commento: chiudono il template literal
+          e il compilatore riporta un errore che parla di tipi — app/CLAUDE.md.)
+
+          La differenza non è di parole: la vecchia versione diceva «stiamo
+          aspettando qualcun altro», e chi la leggeva non andava a controllare.
+        -->
+        <keijo-page-section-wrapper title="Non ancora costruito">
           <keijo-info-box
             [icon]="pendingIcon"
-            title="Ordine, biglietti, requisiti e check-in"
+            title="Biglietti, requisiti e check-in"
             variant="info"
           >
             <span>
-              Il §4.3 prevede in questa scheda anche l’ordine di provenienza, i biglietti emessi,
-              i servizi acquistati, gli esiti dei requisiti e i check-in per sessione. Le basi
-              REST di <strong>Order</strong>, <strong>Ticket</strong>,
-              <strong>RequirementOutcome</strong> e <strong>CheckIn</strong> non sono ancora
-              esposte dal contratto condiviso: queste sezioni compariranno quando lo saranno.
+              Il §4.3 prevede in questa scheda anche i biglietti emessi, gli esiti dei requisiti e
+              i check-in per sessione. Il backend li espone già, e tutti e tre si filtrano per
+              iscrizione: <strong>mancano le sezioni in questo back-office</strong>, non le
+              rotte.
+            </span>
+          </keijo-info-box>
+          <keijo-info-box [icon]="pendingIcon" title="L’ordine di provenienza" variant="info">
+            <span>
+              Questo è un caso diverso, e non si risolve costruendo una sezione. Un ordine non
+              appartiene a un’iscrizione: appartiene a chi compra, e contiene righe — una persona
+              può comprare per tre. Il legame passa quindi dai biglietti, e oggi
+              <strong>non esiste un modo di chiedere «l’ordine di questa iscrizione»</strong>
+              senza attraversarli.
             </span>
           </keijo-info-box>
         </keijo-page-section-wrapper>
