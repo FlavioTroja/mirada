@@ -329,12 +329,28 @@ import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
                 </ng-template>
               </keijo-entity-list-item>
             } @empty {
-              <keijo-info-box [icon]="registrationIcon" title="Nessun iscritto" variant="info">
-                <span>
-                  Gli iscritti arrivano dalla vendita online sul sito pubblico. Da qui si
-                  aggiungono a mano solo gli ingressi che passano da altri canali.
-                </span>
-              </keijo-info-box>
+              <!--
+                Lo stato vuoto segue il FILTRO attivo. Con «in ritardo» acceso,
+                una lista vuota è una buona notizia: dire «gli iscritti arrivano
+                dalla vendita online» inviterebbe ad aggiungerne uno, che non è
+                affatto la cosa da fare.
+              -->
+              @if (store.query().overdueOnly) {
+                <keijo-info-box [icon]="registrationIcon" title="Nessuno è in ritardo" variant="info">
+                  <span>
+                    Tutti gli iscritti con un piano di rate sono in pari con quanto era atteso a
+                    oggi. Chi non ha un piano non compare qui: senza scadenze non si è mai in
+                    ritardo.
+                  </span>
+                </keijo-info-box>
+              } @else {
+                <keijo-info-box [icon]="registrationIcon" title="Nessun iscritto" variant="info">
+                  <span>
+                    Gli iscritti arrivano dalla vendita online sul sito pubblico. Da qui si
+                    aggiungono a mano solo gli ingressi che passano da altri canali.
+                  </span>
+                </keijo-info-box>
+              }
             }
           </keijo-list-items-wrapper>
         }
