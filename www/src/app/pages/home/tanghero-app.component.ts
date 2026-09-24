@@ -350,19 +350,15 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   `,
   styles: [
     `
-      /* Banda a tutta larghezza dentro un contenitore che larghezza piena non
-         ha: il margine negativo la fa uscire dal contenitore di pagina e il
-         padding le ridà il respiro. Serve a staccarla dai risultati: una
-         sezione che cambia argomento e continua sullo stesso fondo legge
-         come un seguito della ricerca. */
       /* ⚠️ Margini laterali a ZERO, non a -1.25rem. Il negativo serviva a uscire
          da un padding che il contenitore non ha: la sezione sporgeva di 20px
          a destra, e la home aveva una barra di scorrimento ORIZZONTALE. */
+      /* Nessun fondo e nessun filo propri: la sezione sta nel tratto bianco
+         della home, che le da il fondo — su slesh.it quel tratto e un blocco
+         solo, senza cuciture. */
       .tang {
-        margin: 4rem 0 0;
-        padding: 3.5rem 1.25rem 3rem;
-        background: rgb(var(--foreground-color));
-        border-top: 1px solid var(--www-line);
+        margin: 0;
+        padding: 4.5rem 1.25rem 4rem;
       }
 
       .tang-head {
