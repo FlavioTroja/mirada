@@ -85,6 +85,7 @@ import {
   centsToEuroInput,
   euroInputToCents,
   formatCents,
+  formatDate,
   formatDateTime,
 } from '../../core/i18n/format';
 import { LocaleService, i18nPlain } from '../../core/i18n/i18n-text';
@@ -301,12 +302,34 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
           >
             <div class="grid">
               <div>
-                <p class="mirada-label">Residuo nato con la vendita</p>
-                <p class="mirada-value">{{ euro(bal.dueAmount) }}</p>
-                <p class="mirada-hint">
-                  È la parte non versata al negozio: l’acconto è stato incassato là, questo si
-                  incassa qui. Non è un pagamento della piattaforma e non compare fra gli incassi.
-                </p>
+                @switch (dueOrigin()) {
+                  @case ('SHOP') {
+                    <p class="mirada-label">Residuo nato con la vendita</p>
+                    <p class="mirada-value">{{ euro(bal.dueAmount) }}</p>
+                    <p class="mirada-hint">
+                      È la parte non versata al negozio: l’acconto è stato incassato là, questo si
+                      incassa qui. Non è un pagamento della piattaforma e non compare fra gli
+                      incassi.
+                    </p>
+                  }
+                  @case ('LIST') {
+                    <p class="mirada-label">Dovuto a listino</p>
+                    <p class="mirada-value">{{ euro(bal.dueAmount) }}</p>
+                    <p class="mirada-hint">
+                      Il prezzo del titolo, deciso dal server all’iscrizione. Si incassa qui, in una
+                      volta o a rate. Non è un pagamento della piattaforma e non compare fra gli
+                      incassi.
+                    </p>
+                  }
+                  @default {
+                    <p class="mirada-label">Dovuto</p>
+                    <p class="mirada-value">{{ euro(bal.dueAmount) }}</p>
+                    <p class="mirada-hint">
+                      Quanto questa persona versa alla cassa. Non è un pagamento della piattaforma e
+                      non compare fra gli incassi.
+                    </p>
+                  }
+                }
               </div>
               <div>
                 <p class="mirada-label">Già incassato</p>
@@ -473,7 +496,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
                           [variant]="scaduta(rata) ? 'warning' : 'default'"
                           [icon]="calendarIcon"
                         >
-                          {{ when(rata.dueAt) }}
+                          {{ day(rata.dueAt) }}
                         </keijo-pill>
                         @if (rata.note) {
                           <keijo-pill variant="default" [icon]="clockIcon">{{ rata.note }}</keijo-pill>
@@ -878,6 +901,24 @@ export class RegistrationDetailComponent implements OnInit {
   readonly canSettle = computed(() => this.auth.can().boxOffice);
   readonly consumptions = computed(() => this.store.current()?.quotaConsumptions ?? []);
 
+  /**
+   * Da dove viene il dovuto, perché la spiegazione accanto alla cifra cambia.
+   *
+   * Solo due strade scrivono un dovuto: l'acconto incassato da un negozio
+   * esterno (`14`) e l'iscrizione a listino della segreteria (`15`). Il canale
+   * NON le distingue — si modifica dal modulo di questa stessa scheda — mentre il
+   * biglietto sì: quelli del negozio portano `externalSaleId`, e l'iscrizione a
+   * listino un biglietto non ce l'ha.
+   *
+   * ⚠️ Prima la scheda diceva «l'acconto è stato incassato al negozio» a
+   * chiunque, anche a chi un negozio non l'aveva mai visto. Se i biglietti non
+   * si sono potuti leggere non si tira a indovinare: `null`, e un testo neutro.
+   */
+  readonly dueOrigin = computed<'SHOP' | 'LIST' | null>(() => {
+    if (this.doorError()) return null;
+    return this.tickets().some((t) => t.externalSaleId) ? 'SHOP' : 'LIST';
+  });
+
   readonly editButtons: SectionActionButton[] = [
     { id: 'save', icon: check, label: 'Salva', variant: 'accent' },
     { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
@@ -1040,6 +1081,14 @@ export class RegistrationDetailComponent implements OnInit {
 
   when(value: string | null | undefined): string {
     return formatDateTime(value);
+  }
+
+  /**
+   * Una scadenza è un **giorno**. Con `when()` le rate si leggevano «15/10/2026,
+   * 02:00»: la mezzanotte UTC vista dall'Italia, un'ora che nessuno ha concordato.
+   */
+  day(value: string | null | undefined): string {
+    return formatDate(value);
   }
 
   declaredUi(role: DeclaredDanceRole) {
