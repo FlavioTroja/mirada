@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!--
+    L'immagine di condivisione di mirada.dance (og:image, 1200x630).
+    Sorgente di www/public/social-card-v2.jpg: si rigenera con ./genera.sh.
+    Palette di shared/mirada-theme.scss: prugna #170B1E, viola #944BBB, lilla #C495E3.
+  -->
+  <defs>
+    <radialGradient id="a" cx="78%" cy="45%" r="55%">
+      <stop offset="0" stop-color="#944BBB" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#944BBB" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="b" cx="12%" cy="95%" r="50%">
+      <stop offset="0" stop-color="#8C5064" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#8C5064" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#170B1E"/>
+  <rect width="1200" height="630" fill="url(#a)"/>
+  <rect width="1200" height="630" fill="url(#b)"/>
+
+  <!-- Il marchio -->
+  <rect x="80" y="84" width="22" height="22" fill="#C495E3" transform="rotate(45 91 95)"/>
+  <text x="120" y="106" font-family="Sora" font-weight="700" font-size="32" fill="#FDFDFD">Mirada <tspan fill="#C495E3">Tango</tspan></text>
+
+  <!-- Il titolo -->
+  <text font-family="Sora" font-weight="700" font-size="76" fill="#FDFDFD" letter-spacing="-1.5">
+    <tspan x="78" y="262">Eventi di tango</tspan>
+    <tspan x="78" y="350" fill="#C495E3">argentino</tspan>
+  </text>
+
+  <rect x="80" y="392" width="420" height="2" fill="#FDFDFD" fill-opacity="0.16"/>
+
+  <text font-family="Sora" font-weight="400" font-size="27" fill="#FDFDFD" fill-opacity="0.82">
+    <tspan x="80" y="448">Festival, marathon, encuentro e stage.</tspan>
+    <tspan x="80" y="490">Cerca per città, periodo e ruolo di ballo.</tspan>
+  </text>
+
+  <text x="80" y="556" font-family="Sora" font-weight="600" font-size="24" letter-spacing="4" fill="#C495E3">MIRADA.DANCE</text>
+
+  <!-- La M della favicon, in grande, con due anelli -->
+  <circle cx="930" cy="315" r="205" fill="none" stroke="#C495E3" stroke-opacity="0.18" stroke-width="2"/>
+  <circle cx="930" cy="315" r="160" fill="none" stroke="#C495E3" stroke-opacity="0.28" stroke-width="2"/>
+  <g transform="translate(830 215) scale(3.125)">
+    <rect width="64" height="64" rx="15" fill="#22152B" stroke="#C495E3" stroke-opacity="0.35" stroke-width="0.6"/>
+    <path d="M17 46V19l15 17 15-17v27" fill="none" stroke="#C495E3" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

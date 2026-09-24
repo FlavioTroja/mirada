@@ -160,8 +160,8 @@ entra — stessa tavolozza, stesso carattere, stesso marchio.
 
 | dove vive | cosa |
 |---|---|
-| `branding/logo.svg` | il rombo d'oro con «Mirada Tango», come la testata del sito |
-| `branding/sfondo.svg` | gli aloni bordeaux e oro su nero: rifà con gradienti statici ciò che nel back-office è un componente animato |
+| `branding/logo-v2.svg` | il rombo lilla con «Mirada Tango» in Sora, come la testata del sito — testo **in tracciati** |
+| `branding/sfondo-v2.svg` | gli aloni viola e malva sul prugna: rifà con gradienti statici ciò che nel back-office è un componente animato |
 | `branding/authentik.css` | tavolozza e tipografia, applicate al brand |
 | `branding/applica.sh` | riapplica tutto; idempotente |
 
@@ -173,9 +173,26 @@ backend** (`files` lo monta in sola lettura):
 ```bash
 cd ~/orch/mirada/production
 docker compose exec -T backend sh -c 'mkdir -p /app/public/images/branding/fonts'
-docker compose exec -T backend sh -c 'cat > /app/public/images/branding/logo.svg' < logo.svg
-# … idem per sfondo.svg e i tre .woff2 di Poppins
+docker compose exec -T backend sh -c 'cat > /app/public/images/branding/logo-v2.svg' < logo-v2.svg
+# … idem per sfondo-v2.svg, e per il font:
+docker compose exec -T backend sh -c 'cat > /app/public/images/branding/fonts/sora-latin-wght-normal.woff2' \
+  < ../../app/node_modules/@fontsource-variable/sora/files/sora-latin-wght-normal.woff2
 ```
+
+⚠️ **Logo e sfondo portano la versione nel nome** (`-v2`): `mirada.dance` li
+serve con `max-age` di una settimana, e con lo stesso nome chi ha già visto la
+pagina vedrebbe i vecchi per sette giorni. Cambiandoli, si passa a `-v3` e si
+aggiorna `applica.sh`.
+
+⚠️ **Ogni `docker compose exec -T` va lanciato con il suo input.** In uno
+script passato con `bash -s` su standard input, il primo `exec -T` si prende
+il resto dello script come proprio input: non esegue nulla, e non dà errore.
+
+⚠️ **Il testo del logo è in tracciati, non in `<text>`.** Authentik mostra il
+logo come `<img>`, e un SVG caricato così non carica caratteri web: scritto in
+`<text>`, usciva nel carattere di sistema. Per rifarlo: un SVG con il testo in
+Sora e `rsvg-convert -f svg` con Sora in **TTF** — `rsvg` non disegna i `woff2`,
+e ripiega su un altro carattere senza avvisare (`woff2_decompress` converte).
 
 ⚠️ **I font hanno bisogno di CORS, le immagini no.** `auth.mirada.dance` è
 un'origine diversa da `mirada.dance`, e i font — a differenza delle immagini —

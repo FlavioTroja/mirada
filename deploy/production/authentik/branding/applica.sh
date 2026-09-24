@@ -9,6 +9,10 @@
 # È idempotente: rilanciarlo riscrive gli stessi valori. Serve dopo un ripristino
 # del database di Authentik, o quando si cambia il CSS in questo repository.
 #
+# ⚠️ Logo e sfondo hanno la VERSIONE NEL NOME (-v2). mirada.dance li serve con
+# una settimana di cache: con lo stesso nome, chi ha già visto la pagina
+# vedrebbe i vecchi per sette giorni. Si cambia il nome, non il contenuto.
+#
 # ⚠️ Gli asset (logo, sfondo, font) NON stanno in Authentik: sono serviti da
 # https://mirada.dance/images/branding/, cioè dallo stesso posto da cui viene
 # tutto il resto di Mirada. Vanno caricati nel volume `public` PRIMA di questo
@@ -29,9 +33,9 @@ python3 - "$CSS" > /tmp/mirada-brand.json <<'PY'
 import json, sys
 print(json.dumps({
     "branding_title": "Mirada Tango",
-    "branding_logo": "https://mirada.dance/images/branding/logo.svg",
+    "branding_logo": "https://mirada.dance/images/branding/logo-v2.svg",
     "branding_favicon": "https://mirada.dance/favicon.ico",
-    "branding_default_flow_background": "https://mirada.dance/images/branding/sfondo.svg",
+    "branding_default_flow_background": "https://mirada.dance/images/branding/sfondo-v2.svg",
     "branding_custom_css": open(sys.argv[1], encoding="utf-8").read(),
 }))
 PY

@@ -48,7 +48,7 @@ const JSON_LD_ID = 'mirada-jsonld';
  * 1200×630 (1.91:1) è il formato che le reti ritagliano senza perdere niente.
  */
 const IMMAGINE_PREDEFINITA: SeoImage = {
-  url: '/social-card.jpg',
+  url: '/social-card-v2.jpg',
   mimeType: 'image/jpeg',
   width: 1200,
   height: 630,
