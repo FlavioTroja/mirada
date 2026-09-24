@@ -213,6 +213,56 @@ keijo-page-section-wrapper > div.border-ui-info {
   padding: 0.75rem 1rem !important;
 }
 
+/* ---------------------------------------------------------------------------
+   La FASCIA PRUGNA — testata, barra laterale e piè di pagina.
+
+   Su slesh.it la cornice è prugna `#170A1E` in entrambe le luci, e il contenuto
+   è chiaro. Qui la fascia non riscrive le regole di ciò che contiene: ne
+   **ridefinisce le variabili semantiche**, e tutto quello che sta dentro —
+   testo, accento, pulsanti, pill, voci di menu — si ribalta da sé, come fa il
+   tema scuro sull'intera pagina.
+
+   Misure sul prugna `#170B1E`: testo `#FDFDFD` 18,8:1 · lilla 7,9:1 ·
+   lilla sulla voce sollevata `#22152B` 7,2:1.
+   --------------------------------------------------------------------------- */
+.mirada-band {
+  --text-rgb: 253, 253, 253;
+  --primary-color: 253, 253, 253;
+  --accent-rgb: var(--mirada-lilac);
+  --scheme: dark;
+
+  --background-color: var(--mirada-night);
+  --foreground-color: var(--mirada-plum);
+
+  --keijo-accent: var(--mirada-lilac);
+  --color-accent-light: #321f40;
+  --color-accent: #c495e3;
+  --color-info-light: #2b1d36;
+  --color-info: #4a3857;
+  --color-info-text: #fdfdfd;
+  --color-default-light: #2b1d36;
+  --color-default-border: #4f3d5c;
+  --color-default-text: #fdfdfd;
+  --color-circle-button-light: #2b1d36;
+  --color-circle-button: #fdfdfd;
+  --color-white: #22152b;
+  --color-white-rgb: 34, 21, 43;
+  --mirada-control-border: #7c6a88; /* 3,5:1 */
+
+  --keijo-shadow-md: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --keijo-shadow-xl: 0 6px 18px 0 rgba(0, 0, 0, 0.45);
+
+  color-scheme: dark;
+  background-color: rgb(var(--mirada-night));
+  color: rgb(var(--text-rgb));
+}
+/* Nel tema scuro la pagina è già prugna: la cornice scende di un tono, se no
+   testata e contenuto si fondono. */
+:root[data-theme='dark'] .mirada-band {
+  --background-color: 16, 7, 22;
+  background-color: #100716;
+}
+
 /* La voce di menu della pagina aperta. La libreria la segna solo con il
    grassetto, che a colpo d'occhio non si vede: qui prende il viola, come
    l'elemento attivo di Slesh. */

@@ -28,7 +28,14 @@ import { landingFor } from '../../shell/sidebar-routes';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ButtonComponent],
   template: `
-    <div class="home">
+    <!--
+      Tre fasce, come slesh.it: la cornice prugna in alto con marchio, accesso e
+      titolo; il contenuto chiaro al centro; il piede prugna. La fascia prugna
+      e la classe mirada-band del tema condiviso: ridefinisce le variabili, e
+      tutto cio che contiene si ribalta da se.
+    -->
+    <div class="fascia mirada-band">
+      <div class="home">
       <header class="topbar">
         <div class="brand">
           <span class="rombo" aria-hidden="true"></span>
@@ -68,7 +75,10 @@ import { landingFor } from '../../shell/sidebar-routes';
           </a>
         </div>
       </section>
+      </div>
+    </div>
 
+    <div class="home">
       <section class="griglia">
         <article>
           <h2>Costruisci l’evento</h2>
@@ -132,12 +142,14 @@ import { landingFor } from '../../shell/sidebar-routes';
           </li>
         </ol>
       </section>
+    </div>
 
-      <footer class="piede">
+    <footer class="piede mirada-band">
+      <div class="piede-riga">
         <span>Mirada Tango</span>
         <a href="https://mirada.dance" target="_blank" rel="noopener">mirada.dance</a>
-      </footer>
-    </div>
+      </div>
+    </footer>
   `,
   styles: [
     `
@@ -146,8 +158,15 @@ import { landingFor } from '../../shell/sidebar-routes';
         z-index: 1;
         max-width: 68rem;
         margin: 0 auto;
-        padding: 1.25rem 1.25rem 4rem;
+        padding: 1.25rem;
         color: rgb(var(--text-rgb));
+      }
+      .fascia {
+        position: relative;
+        z-index: 1;
+      }
+      .fascia .home {
+        padding-bottom: 3.5rem;
       }
 
       .topbar {
@@ -181,9 +200,12 @@ import { landingFor } from '../../shell/sidebar-routes';
         color: rgb(var(--color-error, 255, 138, 128));
       }
 
+      /* Il titolo al centro, come l'apertura di slesh.it. */
       .hero {
-        padding: 1rem 0 3.5rem;
-        max-width: 44rem;
+        padding: 2.5rem 0 1rem;
+        max-width: 48rem;
+        margin: 0 auto;
+        text-align: center;
       }
       .occhiello {
         margin: 0;
@@ -207,6 +229,7 @@ import { landingFor } from '../../shell/sidebar-routes';
       .hero-azioni {
         margin-top: 1.75rem;
         display: flex;
+        justify-content: center;
         align-items: center;
         gap: 1.25rem;
         flex-wrap: wrap;
@@ -221,15 +244,18 @@ import { landingFor } from '../../shell/sidebar-routes';
       /* auto-fit e non auto-fill: su schermi larghi auto-fill creerebbe colonne
          vuote che si prendono lo spazio, e le schede resterebbero strette. */
       .griglia {
+        margin-top: 2.5rem;
         display: grid;
         gap: 1rem;
         grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
       }
+      /* Le schede di slesh.it: bianche, filo appena visibile, ombra larga. */
       .griglia article {
-        background: rgba(var(--text-rgb), 0.04);
-        border: 1px solid rgba(var(--text-rgb), 0.1);
-        border-radius: 14px;
-        padding: 1.25rem 1.35rem;
+        background: rgb(var(--foreground-color));
+        border: 1px solid rgba(var(--text-rgb), 0.08);
+        border-radius: var(--mirada-radius);
+        box-shadow: var(--keijo-shadow-lg);
+        padding: 1.5rem 1.5rem;
       }
       .griglia h2 {
         margin: 0 0 0.5rem;
@@ -243,7 +269,7 @@ import { landingFor } from '../../shell/sidebar-routes';
       }
 
       .passi {
-        margin-top: 3.5rem;
+        margin: 3.5rem 0 3rem;
         max-width: 44rem;
       }
       .passi h2 {
@@ -267,17 +293,22 @@ import { landingFor } from '../../shell/sidebar-routes';
       }
 
       .piede {
-        margin-top: 4rem;
-        padding-top: 1.25rem;
-        border-top: 1px solid rgba(var(--text-rgb), 0.1);
+        position: relative;
+        z-index: 1;
+        font-size: 0.85rem;
+        /* 0.7 sul prugna: 10:1. */
+        color: rgba(var(--text-rgb), 0.7);
+      }
+      .piede-riga {
+        max-width: 68rem;
+        margin: 0 auto;
+        padding: 2rem 1.25rem 2.5rem;
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        font-size: 0.85rem;
-        color: rgba(var(--text-rgb), 0.55);
       }
       .piede a {
-        color: rgba(var(--text-rgb), 0.55);
+        color: rgba(var(--text-rgb), 0.7);
         text-decoration: none;
       }
 

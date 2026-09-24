@@ -11,7 +11,7 @@ import { SiteHeaderComponent } from './layout/site-header.component';
     <main id="contenuto">
       <router-outlet />
     </main>
-    <footer class="site-footer">
+    <footer class="site-footer mirada-band">
       <p>
         <strong>Mirada Tango</strong> — marketplace di eventi di tango argentino.
         Gli importi mostrati comprendono i diritti di prevendita solo dove indicato.
@@ -36,7 +36,8 @@ import { SiteHeaderComponent } from './layout/site-header.component';
       .site-footer {
         margin-top: 4rem;
         padding: 2rem 1.25rem 3rem;
-        border-top: 1px solid rgba(var(--text-rgb), 0.12);
+        /* Prugna come il piè di pagina di slesh.it: la fascia è in
+           shared/mirada-theme.scss. Sul prugna il testo a 0.62 scende a 7,5:1. */
         color: rgba(var(--text-rgb), 0.62);
         font-size: 0.85rem;
         line-height: 1.6;

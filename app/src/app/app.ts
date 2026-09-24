@@ -54,7 +54,7 @@ import { OidcService } from './core/auth/oidc.service';
         </div>
 
         <div class="shell-grid">
-          <div class="sidebar-col">
+          <div class="sidebar-col mirada-band">
             @if (isDesktop()) {
               <keijo-sidebar
                 [routes]="sidebarRoutes()"
@@ -86,7 +86,7 @@ import { OidcService } from './core/auth/oidc.service';
           </div>
 
           <main class="content-col">
-            <div class="header-row">
+            <div class="header-row mirada-band">
               <keijo-header
                 [title]="pageTitle()"
                 [showBackButton]="showBackButton()"
@@ -242,12 +242,12 @@ export class App {
 
   readonly homeIcon = home;
 
-  /** Orb di sfondo sulla palette calda della wall: bordeaux, vinaccia, oro. */
+  /** Orb di sfondo sulla palette di slesh.it: il viola dell'accento e i suoi vicini. */
   readonly orbColors: [string, string, string, string] = [
-    'hsl(345, 62%, 26%)',
-    'hsl(325, 45%, 18%)',
-    'hsl(20, 55%, 22%)',
-    'hsl(42, 70%, 32%)',
+    'hsl(279, 43%, 51%)',
+    'hsl(285, 45%, 30%)',
+    'hsl(265, 40%, 45%)',
+    'hsl(300, 30%, 40%)',
   ];
 
   /** Le voci di sidebar dipendono dalle capacità del ruolo (§1, §3.8). */

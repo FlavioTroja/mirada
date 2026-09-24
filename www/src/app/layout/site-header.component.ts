@@ -13,6 +13,8 @@ import { AvatarComponent } from '../shared/avatar.component';
   selector: 'app-site-header',
   imports: [RouterLink, RouterLinkActive, AvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // Prugna come la testata di slesh.it: la fascia è in shared/mirada-theme.scss.
+  host: { class: 'mirada-band' },
   template: `
     <header class="site-header">
       <a class="brand" routerLink="/" aria-label="Mirada Tango — vai alla home">
@@ -71,8 +73,6 @@ import { AvatarComponent } from '../shared/avatar.component';
         position: sticky;
         top: 0;
         z-index: 20;
-        backdrop-filter: blur(8px);
-        background: rgba(var(--background-color), 0.86);
         border-bottom: 1px solid rgba(var(--text-rgb), 0.12);
       }
       .site-header {

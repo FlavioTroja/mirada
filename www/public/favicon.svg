@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Mirada Tango: il prugna e il lilla di shared/mirada-theme.scss (18 → 7,9:1). -->
+  <rect width="64" height="64" rx="15" fill="#170B1E"/>
+  <path d="M17 46V19l15 17 15-17v27" fill="none" stroke="#C495E3" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
