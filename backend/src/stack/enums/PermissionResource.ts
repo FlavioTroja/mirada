@@ -57,6 +57,7 @@ export enum PermissionResource {
     SALES_CHANNEL = "SALES_CHANNEL",
     EXTERNAL_SALE = "EXTERNAL_SALE",
     BALANCE_SETTLEMENT = "BALANCE_SETTLEMENT",
+    PROSPECT = "PROSPECT",
 
     // People
     CONTACT = "CONTACT",

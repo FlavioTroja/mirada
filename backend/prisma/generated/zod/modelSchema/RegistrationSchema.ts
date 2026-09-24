@@ -23,6 +23,8 @@ import { CheckInWithRelationsSchema, CheckInPartialWithRelationsSchema, CheckInO
 import type { CheckInWithRelations, CheckInPartialWithRelations, CheckInOptionalDefaultsWithRelations } from './CheckInSchema'
 import { BalanceSettlementWithRelationsSchema, BalanceSettlementPartialWithRelationsSchema, BalanceSettlementOptionalDefaultsWithRelationsSchema } from './BalanceSettlementSchema'
 import type { BalanceSettlementWithRelations, BalanceSettlementPartialWithRelations, BalanceSettlementOptionalDefaultsWithRelations } from './BalanceSettlementSchema'
+import { ProspectWithRelationsSchema, ProspectPartialWithRelationsSchema, ProspectOptionalDefaultsWithRelationsSchema } from './ProspectSchema'
+import type { ProspectWithRelations, ProspectPartialWithRelations, ProspectOptionalDefaultsWithRelations } from './ProspectSchema'
 import { PaymentInstalmentWithRelationsSchema, PaymentInstalmentPartialWithRelationsSchema, PaymentInstalmentOptionalDefaultsWithRelationsSchema } from './PaymentInstalmentSchema'
 import type { PaymentInstalmentWithRelations, PaymentInstalmentPartialWithRelations, PaymentInstalmentOptionalDefaultsWithRelations } from './PaymentInstalmentSchema'
 
@@ -163,6 +165,7 @@ export type RegistrationRelations = {
   tickets: TicketWithRelations[];
   checkIns: CheckInWithRelations[];
   balanceSettlements: BalanceSettlementWithRelations[];
+  convertedProspects: ProspectWithRelations[];
   instalments: PaymentInstalmentWithRelations[];
 };
 
@@ -179,6 +182,7 @@ export const RegistrationWithRelationsSchema: z.ZodType<RegistrationWithRelation
   tickets: z.lazy(() => TicketWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementWithRelationsSchema).array(),
+  convertedProspects: z.lazy(() => ProspectWithRelationsSchema).array(),
   instalments: z.lazy(() => PaymentInstalmentWithRelationsSchema).array(),
 }))
 
@@ -197,6 +201,7 @@ export type RegistrationOptionalDefaultsRelations = {
   tickets: TicketOptionalDefaultsWithRelations[];
   checkIns: CheckInOptionalDefaultsWithRelations[];
   balanceSettlements: BalanceSettlementOptionalDefaultsWithRelations[];
+  convertedProspects: ProspectOptionalDefaultsWithRelations[];
   instalments: PaymentInstalmentOptionalDefaultsWithRelations[];
 };
 
@@ -213,6 +218,7 @@ export const RegistrationOptionalDefaultsWithRelationsSchema: z.ZodType<Registra
   tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInOptionalDefaultsWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementOptionalDefaultsWithRelationsSchema).array(),
+  convertedProspects: z.lazy(() => ProspectOptionalDefaultsWithRelationsSchema).array(),
   instalments: z.lazy(() => PaymentInstalmentOptionalDefaultsWithRelationsSchema).array(),
 }))
 
@@ -231,6 +237,7 @@ export type RegistrationPartialRelations = {
   tickets?: TicketPartialWithRelations[];
   checkIns?: CheckInPartialWithRelations[];
   balanceSettlements?: BalanceSettlementPartialWithRelations[];
+  convertedProspects?: ProspectPartialWithRelations[];
   instalments?: PaymentInstalmentPartialWithRelations[];
 };
 
@@ -247,6 +254,7 @@ export const RegistrationPartialWithRelationsSchema: z.ZodType<RegistrationParti
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
+  convertedProspects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
   instalments: z.lazy(() => PaymentInstalmentPartialWithRelationsSchema).array(),
 })).partial()
 
@@ -263,6 +271,7 @@ export const RegistrationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<R
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
+  convertedProspects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
   instalments: z.lazy(() => PaymentInstalmentPartialWithRelationsSchema).array(),
 }).partial())
 
@@ -279,6 +288,7 @@ export const RegistrationWithPartialRelationsSchema: z.ZodType<RegistrationWithP
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   checkIns: z.lazy(() => CheckInPartialWithRelationsSchema).array(),
   balanceSettlements: z.lazy(() => BalanceSettlementPartialWithRelationsSchema).array(),
+  convertedProspects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
   instalments: z.lazy(() => PaymentInstalmentPartialWithRelationsSchema).array(),
 }).partial())
 

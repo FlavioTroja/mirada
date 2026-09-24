@@ -50,3 +50,4 @@ export * from './ExternalSaleSchema';
 export * from './ExternalSaleEventSchema';
 export * from './PaymentInstalmentSchema';
 export * from './BalanceSettlementSchema';
+export * from './ProspectSchema';

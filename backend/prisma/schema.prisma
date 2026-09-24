@@ -563,6 +563,7 @@ model Organization {
   events             Event[]
   fiscalDeclarations FiscalDeclaration[]
   salesChannels      SalesChannel[]
+  prospects          Prospect[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -947,6 +948,8 @@ model Event {
   passIssuances      PassIssuance[]
   tickets            Ticket[]
   externalSales      ExternalSale[]
+  /// Chi è venuto all'open day di questo corso e non si è iscritto (`19-prospect.md`).
+  prospects          Prospect[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1458,6 +1461,8 @@ model Registration {
   tickets             Ticket[]
   checkIns            CheckIn[]
   balanceSettlements  BalanceSettlement[]
+  /// I prospect che questa iscrizione ha convertito (`19-prospect.md` §4).
+  convertedProspects  Prospect[]
   instalments         PaymentInstalment[]
 
   deleted   Boolean  @default(false)
@@ -2631,4 +2636,70 @@ model BalanceSettlement {
   @@index([operatorUserId])
   @@index([conflictWithId])
   @@index([collectedAt])
+}
+
+// -----------------------------------------------------------------------------
+// I prospect dell'open day — `19-prospect.md`
+// -----------------------------------------------------------------------------
+
+/// Lo stato che la segreteria **dichiara**. «Iscritto» non è fra questi: è un
+/// fatto, e lo dice `Prospect.convertedRegistrationId` (`19` §4).
+enum ProspectStatus {
+  /// Da ricontattare all'apertura del prossimo corso. Lo stato di nascita.
+  TO_CONTACT
+  CONTACTED
+  NOT_INTERESTED
+}
+
+/// **Chi è venuto all'open day di un corso e non si è iscritto.**
+///
+/// Non è un'iscrizione — non ha titolo né ruolo assegnato — e non è una
+/// `Person`: l'anagrafica globale non porta filtro di tenancy e pretende
+/// un'email unica, mentre questo è un contatto che **la scuola** ha raccolto, e
+/// che nessun'altra organizzazione deve vedere. Spesso, poi, c'è solo il
+/// telefono.
+model Prospect {
+  id Int @id @default(autoincrement())
+
+  /// Derivata dal corso di provenienza, mai dal corpo della richiesta.
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Il corso di cui ha seguito l'open day. `Restrict`: un corso si cancella
+  /// soft, e la provenienza di un contatto non deve sparire con lui.
+  sourceEventId Int
+  sourceEvent   Event @relation(fields: [sourceEventId], references: [id], onDelete: Restrict)
+
+  name    String
+  surname String?
+  /// In minuscolo, scritta dal servizio: è la chiave con cui si riconosce
+  /// l'iscrizione che lo converte (`19` §4).
+  email   String?
+  phone   String?
+
+  preferredRole PreferredDanceRole?
+  note          String?
+
+  /// **Quando ha acconsentito a essere ricontattato.** Obbligatorio: senza
+  /// consenso un contatto non si raccoglie per ricontattarlo, ed è questa
+  /// colonna a dimostrarlo (`19` §3). Scritta dal server alla creazione.
+  consentAt DateTime
+
+  status      ProspectStatus @default(TO_CONTACT)
+  /// Scritta dal server al passaggio a `CONTACTED`.
+  contactedAt DateTime?
+
+  /// **L'iscrizione che lo ha convertito**, trovata dal server confrontando le
+  /// email — mai dichiarata dal client (`19` §4). `SetNull`: se l'iscrizione
+  /// sparisce, il prospect torna a essere un contatto da lavorare.
+  convertedRegistrationId Int?
+  convertedRegistration   Registration? @relation(fields: [convertedRegistrationId], references: [id], onDelete: SetNull)
+  convertedAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([sourceEventId])
+  @@index([convertedRegistrationId])
 }

@@ -129,6 +129,21 @@ export const routes: Routes = [
         (m) => m.TicketTypeSessionsComponent,
       ),
   },
+  {
+    // La scheda «Open day» del corso: la stessa pagina di `/prospects`, filtrata
+    // sul corso e con il modulo per raccoglierli lì dove si è (`19-prospect.md`).
+    path: 'courses/:id/prospects',
+    canActivate: [requireCapability('prospects')],
+    loadComponent: () =>
+      import('./pages/prospects/prospects.component').then((m) => m.ProspectsComponent),
+  },
+  // ------------------------------------------------------------- /prospects
+  {
+    path: 'prospects',
+    canActivate: [requireCapability('prospects')],
+    loadComponent: () =>
+      import('./pages/prospects/prospects.component').then((m) => m.ProspectsComponent),
+  },
   // ---------------------------------------------------------------- /events
   {
     path: 'events',

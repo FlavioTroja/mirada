@@ -10,6 +10,7 @@ import {
   FiscalDeclarationKind,
   OrganizationStatus,
   PayoutStatus,
+  PreferredDanceRole,
   PriceTierKind,
   QuotaReservedFor,
   QuotaScope,
@@ -23,6 +24,7 @@ import {
   SalesCloseCriterion,
   TicketStatus,
   TicketTypeVisibility,
+  ProspectStatus,
 } from './enums';
 
 /**
@@ -717,4 +719,29 @@ export interface BalanceSettlement extends Entity {
   note?: string | null;
   /** Il nome di chi ha incassato, risolto dal server (`18-rate.md`). */
   operatorName?: string | null;
+}
+
+/**
+ * **Chi è venuto all'open day di un corso e non si è iscritto** (`19-prospect.md`).
+ *
+ * Appartiene alla scuola che l'ha raccolto: non è anagrafica di piattaforma.
+ */
+export interface Prospect extends Entity {
+  organizationId: number;
+  sourceEventId: number;
+  sourceEvent?: MiradaEvent | null;
+  name: string;
+  surname?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  preferredRole?: PreferredDanceRole | null;
+  note?: string | null;
+  /** Quando ha acconsentito a essere ricontattato. Scritta dal server. */
+  consentAt: string;
+  status: ProspectStatus;
+  contactedAt?: string | null;
+  /** L'iscrizione che l'ha convertito, trovata dal server. Nulla = non ancora iscritto. */
+  convertedRegistrationId?: number | null;
+  convertedRegistration?: Registration | null;
+  convertedAt?: string | null;
 }

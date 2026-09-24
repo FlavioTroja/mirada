@@ -41,6 +41,8 @@ import { TicketWithRelationsSchema, TicketPartialWithRelationsSchema, TicketOpti
 import type { TicketWithRelations, TicketPartialWithRelations, TicketOptionalDefaultsWithRelations } from './TicketSchema'
 import { ExternalSaleWithRelationsSchema, ExternalSalePartialWithRelationsSchema, ExternalSaleOptionalDefaultsWithRelationsSchema } from './ExternalSaleSchema'
 import type { ExternalSaleWithRelations, ExternalSalePartialWithRelations, ExternalSaleOptionalDefaultsWithRelations } from './ExternalSaleSchema'
+import { ProspectWithRelationsSchema, ProspectPartialWithRelationsSchema, ProspectOptionalDefaultsWithRelationsSchema } from './ProspectSchema'
+import type { ProspectWithRelations, ProspectPartialWithRelations, ProspectOptionalDefaultsWithRelations } from './ProspectSchema'
 
 /////////////////////////////////////////
 // EVENT SCHEMA
@@ -175,6 +177,7 @@ export type EventRelations = {
   passIssuances: PassIssuanceWithRelations[];
   tickets: TicketWithRelations[];
   externalSales: ExternalSaleWithRelations[];
+  prospects: ProspectWithRelations[];
 };
 
 export type EventWithRelations = Omit<z.infer<typeof EventSchema>, "minorsConditions"> & {
@@ -203,6 +206,7 @@ export const EventWithRelationsSchema: z.ZodType<EventWithRelations> = EventSche
   passIssuances: z.lazy(() => PassIssuanceWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketWithRelationsSchema).array(),
   externalSales: z.lazy(() => ExternalSaleWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -231,6 +235,7 @@ export type EventOptionalDefaultsRelations = {
   passIssuances: PassIssuanceOptionalDefaultsWithRelations[];
   tickets: TicketOptionalDefaultsWithRelations[];
   externalSales: ExternalSaleOptionalDefaultsWithRelations[];
+  prospects: ProspectOptionalDefaultsWithRelations[];
 };
 
 export type EventOptionalDefaultsWithRelations = Omit<z.infer<typeof EventOptionalDefaultsSchema>, "minorsConditions"> & {
@@ -259,6 +264,7 @@ export const EventOptionalDefaultsWithRelationsSchema: z.ZodType<EventOptionalDe
   passIssuances: z.lazy(() => PassIssuanceOptionalDefaultsWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketOptionalDefaultsWithRelationsSchema).array(),
   externalSales: z.lazy(() => ExternalSaleOptionalDefaultsWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -287,6 +293,7 @@ export type EventPartialRelations = {
   passIssuances?: PassIssuancePartialWithRelations[];
   tickets?: TicketPartialWithRelations[];
   externalSales?: ExternalSalePartialWithRelations[];
+  prospects?: ProspectPartialWithRelations[];
 };
 
 export type EventPartialWithRelations = Omit<z.infer<typeof EventPartialSchema>, "minorsConditions"> & {
@@ -315,6 +322,7 @@ export const EventPartialWithRelationsSchema: z.ZodType<EventPartialWithRelation
   passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   externalSales: z.lazy(() => ExternalSalePartialWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
 })).partial()
 
 export type EventOptionalDefaultsWithPartialRelations = Omit<z.infer<typeof EventOptionalDefaultsSchema>, "minorsConditions"> & {
@@ -343,6 +351,7 @@ export const EventOptionalDefaultsWithPartialRelationsSchema: z.ZodType<EventOpt
   passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   externalSales: z.lazy(() => ExternalSalePartialWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
 }).partial())
 
 export type EventWithPartialRelations = Omit<z.infer<typeof EventSchema>, "minorsConditions"> & {
@@ -371,6 +380,7 @@ export const EventWithPartialRelationsSchema: z.ZodType<EventWithPartialRelation
   passIssuances: z.lazy(() => PassIssuancePartialWithRelationsSchema).array(),
   tickets: z.lazy(() => TicketPartialWithRelationsSchema).array(),
   externalSales: z.lazy(() => ExternalSalePartialWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
 }).partial())
 
 export default EventSchema;

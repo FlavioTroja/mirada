@@ -51,6 +51,7 @@ export { ExternalSaleScalarFieldEnumSchema } from './ExternalSaleScalarFieldEnum
 export { ExternalSaleEventScalarFieldEnumSchema } from './ExternalSaleEventScalarFieldEnumSchema';
 export { PaymentInstalmentScalarFieldEnumSchema } from './PaymentInstalmentScalarFieldEnumSchema';
 export { BalanceSettlementScalarFieldEnumSchema } from './BalanceSettlementScalarFieldEnumSchema';
+export { ProspectScalarFieldEnumSchema } from './ProspectScalarFieldEnumSchema';
 export { SortOrderSchema } from './SortOrderSchema';
 export { NullableJsonNullValueInputSchema } from './NullableJsonNullValueInputSchema';
 export { JsonNullValueInputSchema } from './JsonNullValueInputSchema';
@@ -91,6 +92,7 @@ export { ExternalSaleOrderByRelevanceFieldEnumSchema } from './ExternalSaleOrder
 export { ExternalSaleEventOrderByRelevanceFieldEnumSchema } from './ExternalSaleEventOrderByRelevanceFieldEnumSchema';
 export { PaymentInstalmentOrderByRelevanceFieldEnumSchema } from './PaymentInstalmentOrderByRelevanceFieldEnumSchema';
 export { BalanceSettlementOrderByRelevanceFieldEnumSchema } from './BalanceSettlementOrderByRelevanceFieldEnumSchema';
+export { ProspectOrderByRelevanceFieldEnumSchema } from './ProspectOrderByRelevanceFieldEnumSchema';
 export { RoleNameSchema } from './RoleNameSchema';
 export { UiScopeSchema } from './UiScopeSchema';
 export { ValueTypeSchema } from './ValueTypeSchema';
@@ -132,5 +134,6 @@ export { SalesChannelStatusSchema } from './SalesChannelStatusSchema';
 export { ExternalSaleStatusSchema } from './ExternalSaleStatusSchema';
 export { ExternalSaleEventStatusSchema } from './ExternalSaleEventStatusSchema';
 export { BalanceSettlementMethodSchema } from './BalanceSettlementMethodSchema';
+export { ProspectStatusSchema } from './ProspectStatusSchema';
 export { InputJsonValueSchema } from './InputJsonValueSchema';
 export { JsonValueSchema } from './JsonValueSchema';

@@ -89,6 +89,12 @@ export interface Capabilities {
    * in più per chi arriva con un residuo aperto.
    */
   boxOffice: boolean;
+  /**
+   * `/prospects` — chi è venuto all'open day e non si è iscritto
+   * (`19-prospect.md`). Chi costruisce i corsi; né la porta né la cassa, che
+   * non hanno ragione di leggere il telefono di un contatto.
+   */
+  prospects: boolean;
 }
 
 const NONE: Capabilities = {
@@ -106,6 +112,7 @@ const NONE: Capabilities = {
   registrationsWrite: false,
   refunds: false,
   boxOffice: false,
+  prospects: false,
 };
 
 export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
@@ -138,6 +145,7 @@ export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
       registrationsWrite: true,
       refunds: true,
       boxOffice: true,
+      prospects: true,
     };
   }
 
@@ -154,6 +162,7 @@ export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
       registrations: true,
       registrationsWrite: true,
       boxOffice: true,
+      prospects: true,
     };
   }
 

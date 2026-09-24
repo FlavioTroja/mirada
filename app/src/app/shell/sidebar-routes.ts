@@ -7,6 +7,7 @@ import {
   dashboard,
   domain,
   howToReg,
+  contactPhone,
   school,
   summarize,
 } from '@keijo/ui/icons';
@@ -80,6 +81,12 @@ export function sidebarRoutesFor(can: Capabilities): KeijoSidebarRoute[] {
     // togliere rientrerebbe dalla porta principale.
     routes.push({ icon: celebration, label: 'Eventi', path: '/events' });
     routes.push({ icon: school, label: 'Corsi', path: '/courses' });
+  }
+
+  if (can.prospects) {
+    // Subito dopo i corsi, perché è lì che nascono — all'open day — e lì che
+    // tornano utili, all'apertura del corso successivo (`19-prospect.md`).
+    routes.push({ icon: contactPhone, label: 'Prospect', path: '/prospects' });
   }
 
   if (can.registrations) {

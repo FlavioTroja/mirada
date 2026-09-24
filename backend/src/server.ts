@@ -57,6 +57,7 @@ import { TicketTransferController } from "@controllers/TicketTransferController"
 import { PassIssuanceController } from "@controllers/PassIssuanceController";
 import { CheckInController } from "@controllers/CheckInController";
 import { BalanceSettlementController } from "@controllers/BalanceSettlementController";
+import { ProspectController } from "@controllers/ProspectController";
 import { OrderController } from "@controllers/OrderController";
 import { PurchaseController } from "@controllers/PurchaseController";
 import { ReservationController } from "@controllers/ReservationController";
@@ -345,6 +346,7 @@ export class APIServer {
                 PassIssuanceController,
                 CheckInController,
                 BalanceSettlementController,
+                ProspectController,
                 // --- Mirada Tango, fase D2 — checkout (passi 18→22) ---
                 OrderController,
                 PurchaseController,

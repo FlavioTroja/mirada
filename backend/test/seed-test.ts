@@ -25,6 +25,8 @@ export async function seed(prisma: PrismaClient) {
     // Acconto e saldo (`14`): BalanceSettlement è Restrict da Registration e da
     // User, quindi precede entrambe — e siccome User è l'ultima tabella del
     // blocco, precede di fatto tutto il resto.
+    // Prima di eventi e iscrizioni: il corso di provenienza è `Restrict`.
+    await prisma.prospect.deleteMany();
     await prisma.balanceSettlement.deleteMany();
     await prisma.checkIn.deleteMany();
     await prisma.ticketTransfer.deleteMany();

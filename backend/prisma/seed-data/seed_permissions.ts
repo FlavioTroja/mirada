@@ -492,6 +492,20 @@ const MATRIX: ResourceMatrix[] = [
             own(RoleName.BOX_OFFICE, [PermissionAction.CREATE, PermissionAction.READ]),
         ],
     },
+
+    // ─── I prospect dell'open day (`19-prospect.md`) ─────────────────────────
+    {
+        // | PROSPECT | ∀ | ∀#OWN | ∀#OWN | – | – |
+        //
+        // Né la porta né la cassa: un prospect è un nome con un telefono,
+        // raccolto per essere ricontattato, e chi scansiona biglietti o incassa
+        // saldi non ha ragione di leggerlo. Chi costruisce i corsi, sì.
+        resource: PermissionResource.PROSPECT,
+        grants: [
+            own(RoleName.OWNER, ALL_ACTIONS),
+            own(RoleName.EVENT_MANAGER, ALL_ACTIONS),
+        ],
+    },
 ];
 
 /**

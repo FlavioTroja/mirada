@@ -23,6 +23,8 @@ import { FiscalDeclarationWithRelationsSchema, FiscalDeclarationPartialWithRelat
 import type { FiscalDeclarationWithRelations, FiscalDeclarationPartialWithRelations, FiscalDeclarationOptionalDefaultsWithRelations } from './FiscalDeclarationSchema'
 import { SalesChannelWithRelationsSchema, SalesChannelPartialWithRelationsSchema, SalesChannelOptionalDefaultsWithRelationsSchema } from './SalesChannelSchema'
 import type { SalesChannelWithRelations, SalesChannelPartialWithRelations, SalesChannelOptionalDefaultsWithRelations } from './SalesChannelSchema'
+import { ProspectWithRelationsSchema, ProspectPartialWithRelationsSchema, ProspectOptionalDefaultsWithRelationsSchema } from './ProspectSchema'
+import type { ProspectWithRelations, ProspectPartialWithRelations, ProspectOptionalDefaultsWithRelations } from './ProspectSchema'
 
 /////////////////////////////////////////
 // ORGANIZATION SCHEMA
@@ -106,6 +108,7 @@ export type OrganizationRelations = {
   events: EventWithRelations[];
   fiscalDeclarations: FiscalDeclarationWithRelations[];
   salesChannels: SalesChannelWithRelations[];
+  prospects: ProspectWithRelations[];
 };
 
 export type OrganizationWithRelations = z.infer<typeof OrganizationSchema> & OrganizationRelations
@@ -122,6 +125,7 @@ export const OrganizationWithRelationsSchema: z.ZodType<OrganizationWithRelation
   events: z.lazy(() => EventWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationWithRelationsSchema).array(),
   salesChannels: z.lazy(() => SalesChannelWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -140,6 +144,7 @@ export type OrganizationOptionalDefaultsRelations = {
   events: EventOptionalDefaultsWithRelations[];
   fiscalDeclarations: FiscalDeclarationOptionalDefaultsWithRelations[];
   salesChannels: SalesChannelOptionalDefaultsWithRelations[];
+  prospects: ProspectOptionalDefaultsWithRelations[];
 };
 
 export type OrganizationOptionalDefaultsWithRelations = z.infer<typeof OrganizationOptionalDefaultsSchema> & OrganizationOptionalDefaultsRelations
@@ -156,6 +161,7 @@ export const OrganizationOptionalDefaultsWithRelationsSchema: z.ZodType<Organiza
   events: z.lazy(() => EventOptionalDefaultsWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationOptionalDefaultsWithRelationsSchema).array(),
   salesChannels: z.lazy(() => SalesChannelOptionalDefaultsWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -174,6 +180,7 @@ export type OrganizationPartialRelations = {
   events?: EventPartialWithRelations[];
   fiscalDeclarations?: FiscalDeclarationPartialWithRelations[];
   salesChannels?: SalesChannelPartialWithRelations[];
+  prospects?: ProspectPartialWithRelations[];
 };
 
 export type OrganizationPartialWithRelations = z.infer<typeof OrganizationPartialSchema> & OrganizationPartialRelations
@@ -190,6 +197,7 @@ export const OrganizationPartialWithRelationsSchema: z.ZodType<OrganizationParti
   events: z.lazy(() => EventPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
   salesChannels: z.lazy(() => SalesChannelPartialWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
 })).partial()
 
 export type OrganizationOptionalDefaultsWithPartialRelations = z.infer<typeof OrganizationOptionalDefaultsSchema> & OrganizationPartialRelations
@@ -206,6 +214,7 @@ export const OrganizationOptionalDefaultsWithPartialRelationsSchema: z.ZodType<O
   events: z.lazy(() => EventPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
   salesChannels: z.lazy(() => SalesChannelPartialWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
 }).partial())
 
 export type OrganizationWithPartialRelations = z.infer<typeof OrganizationSchema> & OrganizationPartialRelations
@@ -222,6 +231,7 @@ export const OrganizationWithPartialRelationsSchema: z.ZodType<OrganizationWithP
   events: z.lazy(() => EventPartialWithRelationsSchema).array(),
   fiscalDeclarations: z.lazy(() => FiscalDeclarationPartialWithRelationsSchema).array(),
   salesChannels: z.lazy(() => SalesChannelPartialWithRelationsSchema).array(),
+  prospects: z.lazy(() => ProspectPartialWithRelationsSchema).array(),
 }).partial())
 
 export default OrganizationSchema;

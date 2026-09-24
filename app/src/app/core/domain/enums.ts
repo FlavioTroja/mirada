@@ -21,6 +21,7 @@ import {
   favorite,
   handshake,
   howToReg,
+  markEmailRead,
   inventory,
   key,
   lock,
@@ -33,6 +34,7 @@ import {
   pending,
   percent,
   person,
+  personOff,
   personSearch,
   playArrow,
   publish,
@@ -106,6 +108,49 @@ export const DECLARED_DANCE_ROLE_OPTIONS = [
   { label: 'Follower', value: 'FOLLOWER' },
   { label: 'Ruolo flessibile', value: 'FLEXIBLE' },
 ];
+
+export const PREFERRED_DANCE_ROLE_UI: Record<PreferredDanceRole, StatusUi> = {
+  LEADER: { label: 'Leader', variant: 'info', icon: person },
+  FOLLOWER: { label: 'Follower', variant: 'info', icon: favorite },
+  BOTH: { label: 'Entrambi i ruoli', variant: 'default', icon: swapHoriz },
+};
+
+export const PREFERRED_DANCE_ROLE_OPTIONS = (
+  Object.keys(PREFERRED_DANCE_ROLE_UI) as PreferredDanceRole[]
+).map((key) => ({ label: PREFERRED_DANCE_ROLE_UI[key].label, value: key }));
+
+// ---------------------------------------------------------------------------
+// Prospect dell'open day (`19-prospect.md`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lo stato che la segreteria dichiara. **«Iscritto» non è fra questi**: è un
+ * fatto, lo trova il server confrontando le email, e si legge da
+ * `Prospect.convertedRegistrationId` — vedi `PROSPECT_CONVERTED_UI`.
+ */
+export type ProspectStatus = 'TO_CONTACT' | 'CONTACTED' | 'NOT_INTERESTED';
+
+export const PROSPECT_STATUS_UI: Record<ProspectStatus, StatusUi> = {
+  TO_CONTACT: {
+    label: 'Da ricontattare',
+    variant: 'warning',
+    icon: schedule,
+    hint: 'Da sentire all’apertura del prossimo corso.',
+  },
+  CONTACTED: { label: 'Contattato', variant: 'info', icon: markEmailRead },
+  NOT_INTERESTED: { label: 'Non interessato', variant: 'default', icon: personOff },
+};
+
+export const PROSPECT_STATUS_OPTIONS = (Object.keys(PROSPECT_STATUS_UI) as ProspectStatus[]).map(
+  (key) => ({ label: PROSPECT_STATUS_UI[key].label, value: key }),
+);
+
+export const PROSPECT_CONVERTED_UI: StatusUi = {
+  label: 'Iscritto',
+  variant: 'success',
+  icon: howToReg,
+  hint: 'Si è iscritto a un corso della scuola: lo ha riconosciuto il sistema dall’email.',
+};
 
 // ---------------------------------------------------------------------------
 // Organizzazione

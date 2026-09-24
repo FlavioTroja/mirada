@@ -10,6 +10,7 @@ import {
   celebration,
   chevronRight,
   checklist,
+  contactPhone,
   description,
   eventSeat,
   locationOn,
@@ -18,6 +19,7 @@ import {
   sell,
   theaters,
 } from '@keijo/ui/icons';
+import { AuthService } from '../../core/auth/auth.service';
 import { EVENT_STATUS_UI } from '../../core/domain/enums';
 import { formatRange } from '../../core/i18n/format';
 import { MiradaEvent } from '../../core/domain/models';
@@ -31,8 +33,11 @@ interface WorkspaceLink {
   label: string;
   icon: KeijoIconShape;
   path: string;
-  /** Capacità del `EventType` che abilita la scheda; `undefined` = sempre visibile. */
-  requires?: 'multiSession' | 'cast';
+  /**
+   * Capacità del `EventType` che abilita la scheda; `undefined` = sempre visibile.
+   * `course` non è una capacità ma la famiglia: l'open day esiste solo nei corsi.
+   */
+  requires?: 'multiSession' | 'cast' | 'course';
 }
 
 /**
@@ -119,6 +124,7 @@ interface WorkspaceLink {
 export class EventWorkspaceNavComponent {
   private readonly router = inject(Router);
   private readonly locale = inject(LocaleService);
+  private readonly auth = inject(AuthService);
 
   readonly event = input<MiradaEvent | null>(null);
   /** Identificativo della scheda corrente: viene mostrata come non cliccabile. */
@@ -162,10 +168,19 @@ export class EventWorkspaceNavComponent {
       { id: 'quotas', label: 'Quote di capienza', icon: eventSeat, path: `${base}/quotas` },
       { id: 'requirements', label: 'Requisiti', icon: checklist, path: `${base}/requirements` },
       { id: 'services', label: 'Servizi', icon: restaurant, path: `${base}/services` },
+      {
+        id: 'prospects',
+        label: 'Open day',
+        icon: contactPhone,
+        path: `${base}/prospects`,
+        requires: 'course',
+      },
     ];
 
     return all.filter((link) => {
+      if (link.id === 'prospects' && !this.auth.can().prospects) return false;
       if (!link.requires) return true;
+      if (link.requires === 'course') return type?.family === 'COURSE';
       if (!type) return true;
       if (link.requires === 'multiSession') return type.capMultiSession;
       return type.capCast;

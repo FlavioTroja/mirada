@@ -86,6 +86,37 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
     }
 
     /** Le due iscrizioni di una coppia (§4.10): sono loro a puntare alla coppia. */
+    /**
+     * Le iscrizioni **vive** presso un'organizzazione di chi porta una di queste
+     * email, a eventi che finiscono dopo `endingAfter` — la domanda con cui un
+     * prospect si scopre iscritto (`19-prospect.md` §4).
+     *
+     * Il confronto è senza maiuscole: `holderEmail` è la fotografia di ciò che è
+     * stato digitato, e «Marta@Gmail.com» è la stessa persona di «marta@gmail.com».
+     */
+    async findActiveByOrganizationAndEmails(
+        organizationId: number,
+        emails: string[],
+        endingAfter: Date,
+        tx?: Prisma.TransactionClient,
+    ) {
+        if (emails.length === 0) {
+            return [];
+        }
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: {
+                    deleted: false,
+                    status: { in: ACTIVE_REGISTRATION_STATUSES },
+                    OR: emails.map(email => ({ holderEmail: { equals: email, mode: "insensitive" as const } })),
+                    event: { organizationId, deleted: false, endAt: { gte: endingAfter } },
+                },
+                select: { id: true, holderEmail: true, createdAt: true, event: { select: { endAt: true } } },
+                orderBy: { createdAt: "asc" },
+            })
+        );
+    }
+
     async findByCouple(coupleId: number, tx?: Prisma.TransactionClient): Promise<Registration[]> {
         return this.findMany({ coupleId, deleted: false }, { orderBy: { id: "asc" } }, tx);
     }
