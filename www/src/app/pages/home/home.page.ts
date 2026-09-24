@@ -27,6 +27,10 @@ import { TangheroAppComponent } from './tanghero-app.component';
   imports: [TangheroAppComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- L'apertura sta nella fascia prugna, attaccata alla testata: su slesh.it
+         testata e apertura sono un blocco solo. La fascia e la classe
+         mirada-band di shared/mirada-theme.scss. -->
+    <div class="apertura mirada-band">
     <div class="www-wrap hero-wrap">
       <header class="hero">
         <p class="eyebrow">Eventi di tango argentino</p>
@@ -46,7 +50,10 @@ import { TangheroAppComponent } from './tanghero-app.component';
           </p>
         }
       </header>
+    </div>
+    </div>
 
+    <div class="www-wrap">
       <!-- I due lati della piattaforma. Sono due mestieri diversi e vanno detti
            separati: un organizzatore e un ballerino non cercano la stessa cosa,
            e un testo solo per entrambi non parla a nessuno dei due. -->
@@ -96,10 +103,11 @@ import { TangheroAppComponent } from './tanghero-app.component';
     `
       .hero-wrap {
         padding-top: 3.5rem;
+        padding-bottom: 4rem;
       }
       .hero {
         max-width: 46rem;
-        margin: 0 auto 3rem;
+        margin: 0 auto;
         text-align: center;
       }
       .eyebrow {
@@ -141,9 +149,9 @@ import { TangheroAppComponent } from './tanghero-app.component';
       @media (max-width: 560px) {
         .hero-wrap {
           padding-top: 2.5rem;
+          padding-bottom: 3rem;
         }
         .hero {
-          margin-bottom: 2.25rem;
           text-align: left;
         }
       }

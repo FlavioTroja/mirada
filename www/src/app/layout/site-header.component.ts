@@ -73,7 +73,9 @@ import { AvatarComponent } from '../shared/avatar.component';
         position: sticky;
         top: 0;
         z-index: 20;
-        border-bottom: 1px solid rgba(var(--text-rgb), 0.12);
+        /* Nessun filo sotto: su slesh.it testata e apertura sono un blocco
+           prugna solo, e fra il prugna e il contenuto chiaro il confine si
+           vede già. */
       }
       .site-header {
         max-width: 76rem;
