@@ -14,6 +14,12 @@ import { landingFor } from '../../shell/sidebar-routes';
  * ancora cosa sia Mirada non arriva a compilarlo. Questa pagina racconta il
  * prodotto a chi organizza; l'accesso è un tasto in alto a destra.
  *
+ * ── È L'UNICA pagina per chi organizza ──────────────────────────────────────
+ * `mirada.dance` parla solo a chi balla, e agli organizzatori lascia un link nel
+ * piede che porta qui (decisione del committente, 24 settembre 2026). Tutto ciò
+ * che una scuola o un organizzatore può gestire va quindi detto **qui**: se una
+ * funzione non compare in questa pagina, per chi arriva dal sito non esiste.
+ *
  * ⚠️ Il tasto **non** porta a `https://auth.mirada.dance/`, anche se è lì che
  * si finisce. Porta all'AUTORIZZAZIONE OIDC, che mostra quella stessa schermata
  * e poi **riporta indietro**. Puntare alla radice di Authentik lascerebbe chi
@@ -55,12 +61,12 @@ import { landingFor } from '../../shell/sidebar-routes';
       }
 
       <section class="hero">
-        <p class="occhiello">Per chi organizza tango argentino</p>
-        <h1>Dal primo annuncio all’ultimo ballo.</h1>
+        <p class="occhiello">Per scuole di tango e organizzatori di eventi</p>
+        <h1>Dal primo open day all’ultimo ballo.</h1>
         <p class="lead">
-          Mirada è il posto dove costruisci il tuo festival, marathon o encuentro, raccogli le
-          iscrizioni e tieni i conti. Il tuo evento finisce su un sito pubblico fatto per essere
-          trovato e condiviso, e tu resti padrone dei tuoi dati e dei tuoi incassi.
+          Mirada è il posto dove fai girare la tua scuola — corsi, allievi, rate — e dove
+          costruisci il tuo festival, marathon o encuentro, raccogli le iscrizioni e tieni i conti.
+          Tu resti padrone dei tuoi dati e dei tuoi incassi.
         </p>
         <div class="hero-azioni">
           <keijo-button
@@ -79,50 +85,110 @@ import { landingFor } from '../../shell/sidebar-routes';
     </div>
 
     <div class="home">
-      <section class="griglia">
-        <article>
-          <h2>Costruisci l’evento</h2>
-          <p>
-            Sessioni, cast, titoli d’ingresso con scaglioni di prezzo, requisiti da soddisfare e
-            servizi accessori. Ogni pezzo sta dove ti aspetti, e l’evento resta in bozza finché
-            non decidi tu.
-          </p>
-        </article>
-        <article>
-          <h2>Capienza e ruoli di ballo</h2>
-          <p>
-            Le quote si impostano per evento e per singola sessione, e separatamente per leader e
-            follower: la sala non si sbilancia da sola, e chi resta fuori lo sa prima di pagare.
-          </p>
-        </article>
-        <article>
-          <h2>Iscritti, coppie, requisiti</h2>
-          <p>
-            Chi si è iscritto, a cosa e con chi. Le coppie restano legate, i requisiti che
-            richiedono una verifica si approvano uno per uno.
-          </p>
-        </article>
-        <article>
-          <h2>Incassi e rimborsi</h2>
-          <p>
-            Il conto d’incasso della tua organizzazione, e policy di rimborso a scaglioni: quanto
-            si restituisce a sessanta, trenta o dieci giorni lo decidi una volta e vale per tutti.
-          </p>
-        </article>
-        <article>
-          <h2>Report ed esportazioni</h2>
-          <p>
-            Il riepilogo di come sta andando, e i file da scaricare quando ti servono altrove —
-            per il commercialista, per la SIAE, per la porta.
-          </p>
-        </article>
-        <article>
-          <h2>La tua squadra</h2>
-          <p>
-            Invita altri titolari, assegna responsabili eventi e operatori di check-in. Ogni ruolo
-            vede soltanto ciò che gli serve: chi sta alla porta non vede gli incassi.
-          </p>
-        </article>
+      <!-- Due mestieri, due gruppi: far girare un trimestre e costruire un
+           festival hanno campi diversi, come le due voci Corsi ed Eventi del
+           menu. Poi cio che vale per entrambi. -->
+      <section class="gruppo">
+        <h2 class="gruppo-titolo">Per la tua scuola</h2>
+        <div class="griglia">
+          <article>
+            <h3>Corsi e lezioni</h3>
+            <p>
+              Il corso del trimestre con le sue lezioni in calendario, i livelli e l’equilibrio fra
+              leader e follower della classe: il sistema sa quanti posti restano per ruolo.
+            </p>
+          </article>
+          <article>
+            <h3>Allievi e iscrizioni</h3>
+            <p>
+              Iscrivi gli allievi dalla segreteria, anche chi non ha un account: la sua anagrafica
+              resta una sola, e lo ritrovi al corso successivo.
+            </p>
+          </article>
+          <article>
+            <h3>Rate e saldi</h3>
+            <p>
+              Il piano delle rate concordato con l’allievo, e ogni versamento con data, importo e
+              metodo. Chi è indietro lo vedi a colpo d’occhio; cosa fare lo decidi tu.
+            </p>
+          </article>
+          <article>
+            <h3>Open day e prospect</h3>
+            <p>
+              Chi viene a provare e non si iscrive resta in elenco, con il suo consenso: all’apertura
+              del corso successivo lo ricontatti. Chi poi si iscrive esce dall’elenco da solo.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="gruppo">
+        <h2 class="gruppo-titolo">Per i tuoi eventi</h2>
+        <div class="griglia">
+          <article>
+            <h3>Costruisci l’evento</h3>
+            <p>
+              Sessioni, cast, titoli d’ingresso con scaglioni di prezzo, requisiti da soddisfare e
+              servizi accessori. Ogni pezzo sta dove ti aspetti, e l’evento resta in bozza finché
+              non decidi tu.
+            </p>
+          </article>
+          <article>
+            <h3>Capienza e ruoli di ballo</h3>
+            <p>
+              Le quote si impostano per evento e per singola sessione, e separatamente per leader e
+              follower: la sala non si sbilancia da sola, e chi resta fuori lo sa prima di pagare.
+            </p>
+          </article>
+          <article>
+            <h3>Iscritti, coppie, requisiti</h3>
+            <p>
+              Chi si è iscritto, a cosa e con chi. Le coppie restano legate, i requisiti che
+              richiedono una verifica si approvano uno per uno.
+            </p>
+          </article>
+          <article>
+            <h3>Il tuo negozio, se ce l’hai</h3>
+            <p>
+              Le vendite fatte sul tuo negozio online entrano qui da sole, e i biglietti li emette
+              Mirada: non devi scegliere fra i due.
+            </p>
+          </article>
+          <article>
+            <h3>Check-in alla porta</h3>
+            <p>
+              Si scansiona il codice dal telefono, anche senza rete: la coda all’ingresso non
+              dipende dal wi-fi della sala.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="gruppo">
+        <h2 class="gruppo-titolo">Per entrambi</h2>
+        <div class="griglia">
+          <article>
+            <h3>Incassi e rimborsi</h3>
+            <p>
+              Il conto d’incasso della tua organizzazione, e policy di rimborso a scaglioni: quanto
+              si restituisce a sessanta, trenta o dieci giorni lo decidi una volta e vale per tutti.
+            </p>
+          </article>
+          <article>
+            <h3>Report ed esportazioni</h3>
+            <p>
+              Il riepilogo di come sta andando, e i file da scaricare quando ti servono altrove —
+              per il commercialista, per la SIAE, per la porta.
+            </p>
+          </article>
+          <article>
+            <h3>La tua squadra</h3>
+            <p>
+              Invita altri titolari, assegna responsabili eventi, operatori di check-in e cassa. Ogni
+              ruolo vede soltanto ciò che gli serve: chi sta alla porta non vede gli incassi.
+            </p>
+          </article>
+        </div>
       </section>
 
       <section class="passi">
@@ -243,8 +309,14 @@ import { landingFor } from '../../shell/sidebar-routes';
 
       /* auto-fit e non auto-fill: su schermi larghi auto-fill creerebbe colonne
          vuote che si prendono lo spazio, e le schede resterebbero strette. */
+      .gruppo {
+        margin-top: 2.75rem;
+      }
+      .gruppo-titolo {
+        margin: 0 0 1rem;
+        font-size: 1.3rem;
+      }
       .griglia {
-        margin-top: 2.5rem;
         display: grid;
         gap: 1rem;
         grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
@@ -257,7 +329,7 @@ import { landingFor } from '../../shell/sidebar-routes';
         box-shadow: var(--keijo-shadow-lg);
         padding: 1.5rem 1.5rem;
       }
-      .griglia h2 {
+      .griglia h3 {
         margin: 0 0 0.5rem;
         font-size: 1.05rem;
       }

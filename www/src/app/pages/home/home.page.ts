@@ -3,19 +3,26 @@ import { RouterLink } from '@angular/router';
 import { SeoService } from '../../core/seo/seo.service';
 import { MOSTRA_VETRINA_EVENTI } from '../../core/flags';
 import { TangheroAppComponent } from './tanghero-app.component';
+import { StoreBadgesComponent } from '../../shared/store-badges.component';
 
 /**
- * `mirada.dance/` — la home.
+ * `mirada.dance/` — la home. **Parla solo a chi balla.**
  *
- * Racconta che cos'e il progetto, e poi che cosa arrivera. Non e la ricerca
- * eventi: quella vive a `/eventi` ed e un'altra pagina, con un altro mestiere.
+ * ── A chi parla, e perché a uno solo ────────────────────────────────────────
+ * Mirada, per chi balla, è l'app: scoprire le prossime serate, iscriversi ai
+ * corsi della propria scuola, vedere dove vanno gli amici, scriversi. La home
+ * esiste per portarli lì (decisione del committente, 24 settembre 2026).
  *
- * ── Perche non e piu un rinvio a `/eventi` ──────────────────────────────────
- * Lo era, e per un catalogo pieno sarebbe la scelta giusta: chi arriva sul sito
- * di una biglietteria vuole i biglietti. Con il catalogo ancora da riempire, la
- * prima cosa che il visitatore vedeva era la prova che non c'e niente da
- * comprare. Una home che spiega il progetto dice invece la cosa vera: la
- * piattaforma esiste, gli eventi arrivano.
+ * Prima parlava a due pubblici insieme — «chi organizza vende, chi balla
+ * trova» — e un testo per due non parla a nessuno dei due. Chi organizza ha la
+ * sua pagina, `app.mirada.dance`, che spiega tutto ciò che può gestire; da qui
+ * ci si arriva con un link nel piede, e basta.
+ *
+ * ── L'app non c'è ancora, e la pagina non lo nasconde ───────────────────────
+ * Gli store sono «presto» (`StoreBadgesComponent`), e ogni funzione è scritta
+ * come ciò che l'app farà. Ciò che funziona **già oggi** — l'iscrizione a un
+ * evento dal link che manda l'organizzatore — sta nelle domande frequenti, e
+ * solo lì, con le parole che la pagina dell'evento conferma.
  *
  * ── Resa dal server ─────────────────────────────────────────────────────────
  * Cade sotto il `**` di `app.routes.server.ts`, quindi `RenderMode.Server`. E
@@ -24,160 +31,138 @@ import { TangheroAppComponent } from './tanghero-app.component';
  */
 @Component({
   selector: 'app-home',
-  imports: [TangheroAppComponent, RouterLink],
+  imports: [TangheroAppComponent, RouterLink, StoreBadgesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- L'apertura sta nella fascia prugna, attaccata alla testata: su slesh.it
          testata e apertura sono un blocco solo. La fascia e la classe
          mirada-band di shared/mirada-theme.scss. -->
     <div class="apertura mirada-band">
-    <div class="www-wrap hero-wrap">
-      <header class="hero">
-        <p class="eyebrow">Eventi di tango argentino</p>
-        <h1 class="www-h1">
-          Chi organizza vende.<br />
-          Chi balla trova.
-        </h1>
-        <p class="www-lead hero-lead">
-          Mirada Tango &egrave; la piattaforma su cui un organizzatore costruisce il proprio
-          festival, marathon o encuentro e ne vende i titoli d&rsquo;ingresso &mdash; e su cui chi
-          balla li trova, si iscrive e si presenta all&rsquo;ingresso con un codice sul telefono.
-        </p>
-
-        @if (mostraVetrina) {
-          <p class="hero-cta">
-            <a class="www-btn" routerLink="/eventi">Guarda gli eventi</a>
+      <div class="www-wrap hero-wrap">
+        <header class="hero">
+          <p class="eyebrow">L&rsquo;app di chi balla tango argentino</p>
+          <h1 class="www-h1">Il tuo tango,<br />in tasca.</h1>
+          <p class="www-lead hero-lead">
+            Le milonghe e i festival dei prossimi giorni, i corsi della tua scuola, dove vanno a
+            ballare i tuoi amici &mdash; e una chat per mettervi d&rsquo;accordo. Mirada &egrave;
+            l&rsquo;app per Android e iPhone che parla la lingua di chi balla.
           </p>
-        }
-      </header>
-    </div>
+
+          <div class="hero-store">
+            <app-store-badges [centrati]="true" />
+          </div>
+
+          @if (mostraVetrina) {
+            <p class="hero-cta">
+              <a class="www-btn" routerLink="/eventi">Intanto, guarda gli eventi</a>
+            </p>
+          }
+        </header>
+      </div>
     </div>
 
-    <!-- ── 2. La striscia delle formule ─────────────────────────────────────
-         Su slesh.it qui c'e la striscia dei loghi dei clienti. Loghi non ne
-         abbiamo, e inventarli sarebbe il contrario di cio che la pagina deve
-         fare: al loro posto le formule che Mirada gestisce davvero. -->
+    <!-- ── 2. La striscia ──────────────────────────────────────────────────
+         Su slesh.it qui c'e la striscia dei loghi dei clienti. Qui: le occasioni
+         in cui chi balla apre l'app. -->
     <div class="formule mirada-band">
       <div class="www-wrap formule-wrap">
-        <p class="formule-titolo">Per ogni formula del tango argentino:</p>
+        <p class="formule-titolo">Ogni occasione per ballare, in un posto solo:</p>
         <ul class="formule-lista">
+          <li>Milonghe</li>
+          <li>Corsi</li>
           <li>Festival</li>
           <li>Marathon</li>
           <li>Encuentro</li>
-          <li>Stage</li>
         </ul>
       </div>
     </div>
 
     <!-- ── 3. Il tratto bianco ─────────────────────────────────────────────
-         Un fondo solo, come il lungo tratto chiaro di slesh.it: i due lati
-         della piattaforma e poi l'app. Prima erano due bianchi diversi, perla
-         e bianco, e il ritmo delle fasce non si leggeva. -->
+         Le quattro cose per cui si apre l'app, poi i telefoni. -->
     <div class="bianco">
-    <div class="www-wrap">
-      <!-- I due lati della piattaforma. Sono due mestieri diversi e vanno detti
-           separati: un organizzatore e un ballerino non cercano la stessa cosa,
-           e un testo solo per entrambi non parla a nessuno dei due. -->
-      <div class="sides">
-        <section class="side side-org">
-          <span class="punto" aria-hidden="true"></span>
-          <h2 class="www-h2">Per chi organizza</h2>
-          <p>
-            Titoli d&rsquo;ingresso, quote per ruolo e per sessione, iscrizioni a coppia, scaglioni
-            di prezzo. La capienza &egrave; governata dal sistema: non si vende un posto che non
-            c&rsquo;&egrave;, e l&rsquo;equilibrio fra leader e follower smette di essere un foglio
-            di calcolo.
-          </p>
-          <p>
-            All&rsquo;ingresso, il check-in funziona <strong>anche senza rete</strong>: il codice si
-            verifica sul dispositivo, e la coda non dipende dal wi-fi della sala.
-          </p>
-          <p class="www-hint">
-            Il tuo negozio ce l&rsquo;hai gi&agrave;? Le vendite fatte altrove entrano qui da sole, e
-            i biglietti li emette Mirada.
-          </p>
-        </section>
-
-        <section class="side side-balla">
-          <span class="punto" aria-hidden="true"></span>
-          <h2 class="www-h2">Per chi balla</h2>
-          <p>
-            Cerchi per citt&agrave;, periodo e <strong>ruolo di ballo</strong> &mdash; perch&eacute;
-            un evento esaurito per i leader pu&ograve; avere ancora posto per i follower, e sapere
-            quale dei due sei cambia la risposta.
-          </p>
-          <p>
-            Ti iscrivi, paghi, e il biglietto arriva per email con il suo codice. Se poi non puoi
-            andare, il nominativo si trasferisce: il posto non si perde.
-          </p>
-          <p class="www-hint">
-            Nessun account obbligatorio per guardare. Serve quando compri, perch&eacute; il
-            biglietto &egrave; tuo e deve poterti seguire.
-          </p>
-        </section>
+      <div class="www-wrap">
+        <div class="usi">
+          <section class="uso">
+            <span class="punto" aria-hidden="true"></span>
+            <h2 class="www-h3">Scopri dove si balla</h2>
+            <p>
+              Milonghe, festival, marathon ed encuentro vicino a te o nella citt&agrave; in cui vai.
+              Per ruolo, anche: un evento esaurito per i leader pu&ograve; avere ancora posto per i
+              follower.
+            </p>
+          </section>
+          <section class="uso">
+            <span class="punto" aria-hidden="true"></span>
+            <h2 class="www-h3">Iscriviti ai corsi</h2>
+            <p>
+              I corsi della tua scuola, le lezioni in calendario, l&rsquo;iscrizione con un tocco. E
+              il biglietto sul telefono, pronto all&rsquo;ingresso.
+            </p>
+          </section>
+          <section class="uso">
+            <span class="punto" aria-hidden="true"></span>
+            <h2 class="www-h3">Segui i tuoi amici</h2>
+            <p>
+              Dove vanno a ballare i tangheri che conosci, a quali serate e a quali festival. Per
+              organizzare il viaggio insieme, o per trovarvi in pista.
+            </p>
+          </section>
+          <section class="uso">
+            <span class="punto" aria-hidden="true"></span>
+            <h2 class="www-h3">Chatta con loro</h2>
+            <p>
+              Una chat per mettervi d&rsquo;accordo: chi guida, a che ora, chi porta le scarpe di
+              ricambio. E per cercare un partner per quel workshop.
+            </p>
+          </section>
+        </div>
       </div>
-    </div>
 
-    <!-- Che cosa arrivera. Sta DOPO la presentazione: prima si dice che cos'e
-         Mirada, poi che cosa diventera. Vedi la nota nel componente. -->
-    <app-tanghero-app />
+      <!-- I telefoni e le funzioni della fase 2 (12-app-tanghero.md). -->
+      <app-tanghero-app />
     </div>
 
     <!-- ── 4. Il tratto prugna: le domande ─────────────────────────────────
-         Come le domande frequenti di slesh.it, a gruppi. ⚠️ Ogni risposta dice
-         SOLO cio che questa pagina afferma gia, qui sopra: una domanda
-         frequente e il posto dove una promessa sembra piu solida di quanto
-         sia, e non e il posto per farne di nuove. -->
+         ⚠️ Ogni risposta dice SOLO cio che e vero oggi, o cio che questa pagina
+         afferma gia qui sopra: una domanda frequente e il posto dove una
+         promessa sembra piu solida di quanto sia. -->
     <section class="faq mirada-band" aria-labelledby="faq-title">
       <div class="www-wrap faq-wrap">
         <h2 id="faq-title" class="www-h1 faq-titolo">Domande frequenti</h2>
 
-        <div class="faq-gruppo">
-          <h3 class="faq-nome">Per chi balla</h3>
-          <div class="faq-voci">
-            <details>
-              <summary>Serve un account per guardare gli eventi?</summary>
-              <p>
-                No. Serve quando compri, perch&eacute; il biglietto &egrave; tuo e deve poterti
-                seguire.
-              </p>
-            </details>
-            <details>
-              <summary>Perch&eacute; conta il mio ruolo di ballo?</summary>
-              <p>
-                Perch&eacute; un evento esaurito per i leader pu&ograve; avere ancora posto per i
-                follower: sapere quale dei due sei cambia la risposta.
-              </p>
-            </details>
-            <details>
-              <summary>E se poi non posso andare?</summary>
-              <p>Il nominativo si trasferisce: il posto non si perde.</p>
-            </details>
-          </div>
-        </div>
-
-        <div class="faq-gruppo">
-          <h3 class="faq-nome">Per chi organizza</h3>
-          <div class="faq-voci">
-            <details>
-              <summary>Il check-in funziona senza internet?</summary>
-              <p>
-                S&igrave;. Il codice si verifica sul dispositivo, e la coda all&rsquo;ingresso non
-                dipende dal wi-fi della sala.
-              </p>
-            </details>
-            <details>
-              <summary>Vendo gi&agrave; su un mio negozio online. Devo smettere?</summary>
-              <p>No: le vendite fatte altrove entrano qui da sole, e i biglietti li emette Mirada.</p>
-            </details>
-            <details>
-              <summary>Il documento che riceve chi compra &egrave; fiscale?</summary>
-              <p>
-                No. &Egrave; una conferma d&rsquo;ordine con il QR di accesso, mai un titolo fiscale:
-                Mirada &egrave; uno strumento di vendita, non un intermediario fiscale.
-              </p>
-            </details>
-          </div>
+        <div class="faq-voci">
+          <details>
+            <summary>Quando posso scaricare l&rsquo;app?</summary>
+            <p>
+              Presto, su App Store e Google Play. La stiamo costruendo: quando sar&agrave; sugli
+              store, i pulsanti qui sopra porteranno l&agrave;.
+            </p>
+          </details>
+          <details>
+            <summary>Posso gi&agrave; iscrivermi a un evento?</summary>
+            <p>
+              S&igrave;. Se un organizzatore ti manda il link del suo evento, ti iscrivi e paghi da
+              l&igrave;, e il biglietto arriva per email con il suo codice.
+            </p>
+          </details>
+          <details>
+            <summary>Serve un account?</summary>
+            <p>
+              Per guardare no. Serve quando ti iscrivi, perch&eacute; il biglietto &egrave; tuo e
+              deve poterti seguire.
+            </p>
+          </details>
+          <details>
+            <summary>Perch&eacute; conta il mio ruolo di ballo?</summary>
+            <p>
+              Perch&eacute; un evento esaurito per i leader pu&ograve; avere ancora posto per i
+              follower: sapere quale dei due sei cambia la risposta.
+            </p>
+          </details>
+          <details>
+            <summary>E se poi non posso andare?</summary>
+            <p>Il nominativo si trasferisce: il posto non si perde.</p>
+          </details>
         </div>
       </div>
     </section>
@@ -205,8 +190,11 @@ import { TangheroAppComponent } from './tanghero-app.component';
         margin: 1rem auto 0;
         font-size: 1.05rem;
       }
+      .hero-store {
+        margin: 2rem 0 0;
+      }
       .hero-cta {
-        margin: 1.75rem 0 0;
+        margin: 1.5rem 0 0;
       }
 
       /* ── 2. Le formule ────────────────────────────────────────────── */
@@ -244,25 +232,28 @@ import { TangheroAppComponent } from './tanghero-app.component';
         background: rgb(var(--foreground-color));
         padding-top: 2.5rem;
       }
-      .sides {
+      .usi {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
         gap: 1.25rem;
-        max-width: 56rem;
+        max-width: 64rem;
         margin: 0 auto;
       }
       /* Le schede tinte di slesh.it, con il pallino del colore. Testo prugna
-         sulle due tinte: 18:1. */
-      .side {
+         sulla tinta: 18:1. */
+      .uso {
         border-radius: var(--www-radius);
         padding: 1.5rem 1.6rem;
         border: 1px solid rgba(var(--text-rgb), 0.06);
-      }
-      .side-org {
         background: #f7f0fb;
       }
-      .side-balla {
-        background: #fff8ec;
+      .uso h2 {
+        margin: 0 0 0.6rem;
+      }
+      .uso p {
+        margin: 0;
+        color: rgba(var(--text-rgb), 0.78);
+        line-height: 1.65;
       }
       .punto {
         display: block;
@@ -270,15 +261,9 @@ import { TangheroAppComponent } from './tanghero-app.component';
         height: 0.8rem;
         border-radius: 50%;
         margin-bottom: 0.9rem;
-      }
-      .side-org .punto {
         background: rgb(var(--mirada-violet));
       }
-      .side-balla .punto {
-        background: #e0a33a;
-      }
-      :host-context([data-theme='dark']) .side-org,
-      :host-context([data-theme='dark']) .side-balla {
+      :host-context([data-theme='dark']) .uso {
         background: rgba(var(--text-rgb), 0.05);
       }
 
@@ -291,17 +276,9 @@ import { TangheroAppComponent } from './tanghero-app.component';
         text-align: center;
         margin-bottom: 2.5rem;
       }
-      .faq-gruppo {
-        display: grid;
-        grid-template-columns: minmax(12rem, 1fr) 2fr;
-        gap: 1rem 2rem;
-        max-width: 56rem;
-        margin: 0 auto 2.5rem;
-      }
-      .faq-nome {
-        margin: 0.9rem 0 0;
-        font-size: 1.25rem;
-        font-weight: 600;
+      .faq-voci {
+        max-width: 44rem;
+        margin: 0 auto;
       }
       .faq-voci details {
         border-bottom: 1px solid rgba(var(--text-rgb), 0.14);
@@ -331,31 +308,11 @@ import { TangheroAppComponent } from './tanghero-app.component';
         color: rgba(var(--text-rgb), 0.78); /* 12:1 sul prugna */
         line-height: 1.65;
       }
-      @media (max-width: 640px) {
-        .faq-gruppo {
-          grid-template-columns: 1fr;
-        }
-      }
-      .side p {
-        margin: 0 0 0.7rem;
-        color: rgba(var(--text-rgb), 0.78);
-        line-height: 1.65;
-      }
-      .side p:last-child {
-        margin-bottom: 0;
-      }
-      .side strong {
-        color: rgb(var(--text-rgb));
-        font-weight: 600;
-      }
 
       @media (max-width: 560px) {
         .hero-wrap {
           padding-top: 2.5rem;
           padding-bottom: 3rem;
-        }
-        .hero {
-          text-align: left;
         }
       }
     `,
@@ -369,10 +326,10 @@ export class HomePage {
 
   constructor() {
     this.seo.apply({
-      title: 'Mirada Tango — eventi di tango argentino',
+      title: 'Mirada Tango — l’app di chi balla tango argentino',
       description:
-        'La piattaforma su cui gli organizzatori costruiscono festival, marathon ed encuentro e ne ' +
-        'vendono i titoli d’ingresso, e su cui chi balla li trova e si iscrive.',
+        'Milonghe, festival e corsi della tua scuola, dove vanno a ballare i tuoi amici e una chat ' +
+        'per mettervi d’accordo. Presto su App Store e Google Play.',
       path: '/',
     });
     this.seo.setJsonLd(null);

@@ -9,10 +9,11 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
  * che il visitatore non sa ancora che cosa sia.
  *
  * ── L'app NON esiste ancora, e il testo lo dice ─────────────────────────────
- * E fase 2 (`12-app-tanghero.md`). Niente distintivi App Store che non portano
- * da nessuna parte, niente verbi al presente: si annuncia, non si finge. Una
- * pagina che promette un prodotto scaricabile e non lo consegna brucia la sola
- * cosa che questa banda serve a costruire.
+ * E fase 2 (`12-app-tanghero.md`). Niente verbi al presente: si annuncia, non
+ * si finge. I distintivi degli store ci sono, nell'apertura della home, ma
+ * disattivati e con scritto «presto» (`StoreBadgesComponent`): una pagina che
+ * promette un prodotto scaricabile e non lo consegna brucia la sola cosa che
+ * questa banda serve a costruire.
  *
  * ── Le schermate sono SVG, non fotografie ───────────────────────────────────
  * Tre ragioni, e nessuna estetica. Restano nitide a ogni densita; pesano
@@ -34,12 +35,11 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   template: `
     <section class="tang" aria-labelledby="tang-title">
       <header class="tang-head">
-        <p class="eyebrow">L&rsquo;app del tanghero &middot; in arrivo</p>
-        <h2 id="tang-title" class="www-h1">Il tuo tango, in tasca.</h2>
+        <p class="eyebrow">L&rsquo;app &middot; in arrivo</p>
+        <h2 id="tang-title" class="www-h1">Che cosa ci sar&agrave; dentro.</h2>
         <p class="www-lead">
           Non un gestionale con un&rsquo;icona. L&rsquo;app che stiamo costruendo parla la lingua di
           chi balla: orchestre e cantanti, ruoli e stili, le citt&agrave; da cui arriva la pista.
-          Ecco che cosa ci sar&agrave; dentro.
         </p>
       </header>
 

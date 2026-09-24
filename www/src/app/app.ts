@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 import { SiteHeaderComponent } from './layout/site-header.component';
+import { StoreBadgesComponent } from './shared/store-badges.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, SiteHeaderComponent],
+  imports: [RouterOutlet, RouterLink, SiteHeaderComponent, StoreBadgesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-site-header />
@@ -12,18 +13,22 @@ import { SiteHeaderComponent } from './layout/site-header.component';
       <router-outlet />
     </main>
     <!-- Il piede di slesh.it: un invito al centro, poi le colonne. Prugna in
-         entrambi i temi, con la fascia di shared/mirada-theme.scss. -->
+         entrambi i temi, con la fascia di shared/mirada-theme.scss.
+
+         L'invito e all'app, non agli organizzatori: il sito parla a chi balla
+         (decisione del committente, 24 settembre 2026). Chi organizza ha la
+         sua colonna, e la sua pagina su app.mirada.dance. -->
     <footer class="site-footer mirada-band">
       <div class="invito">
-        <h2>Organizzi tango argentino?</h2>
-        <p>Costruisci il tuo festival, marathon o encuentro, e apri le iscrizioni.</p>
-        <a class="www-btn" href="https://app.mirada.dance">Apri la tua organizzazione</a>
+        <h2>Il tuo tango, in tasca.</h2>
+        <p>Serate, corsi, amici e chat: l&rsquo;app di Mirada arriva su Android e iPhone.</p>
+        <app-store-badges [centrati]="true" />
       </div>
 
       <div class="colonne">
         <div class="col col-marchio">
           <p class="marchio"><span aria-hidden="true">◆</span> Mirada <em>Tango</em></p>
-          <p>Marketplace di eventi di tango argentino.</p>
+          <p>L&rsquo;app di chi balla tango argentino.</p>
         </div>
         <nav class="col" aria-label="Il sito">
           <p class="col-titolo">Il sito</p>
@@ -32,7 +37,8 @@ import { SiteHeaderComponent } from './layout/site-header.component';
         </nav>
         <nav class="col" aria-label="Per chi organizza">
           <p class="col-titolo">Per chi organizza</p>
-          <a href="https://app.mirada.dance">Il back-office</a>
+          <p>Hai una scuola di tango o organizzi eventi?</p>
+          <a href="https://app.mirada.dance">Scopri cosa puoi gestire &rarr;</a>
         </nav>
         <div class="col col-note">
           <p class="col-titolo">Note</p>
