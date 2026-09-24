@@ -97,7 +97,11 @@
   --color-info: #e6e1ea;
   --color-info-text: #170b1e; /* 16,7:1 */
   --color-default-light: #f2eff4;
-  --color-default-border: #8f8496; /* 3,6:1 su bianco */
+  /* Il contorno delle pill: una pill è un'etichetta, non un comando, e 1.4.11
+     non le chiede 3:1. Tenue come i bordi di Slesh. */
+  --color-default-border: #d9d3dd;
+  /* Il contorno dei **controlli** — quello sì a 3:1 (vedi `.border-ui-info`). */
+  --mirada-control-border: #8f8496; /* 3,6:1 su bianco */
   --color-default-text: #170b1e; /* 16,7:1 */
   /* La bozza era viola, e ora il viola è l'accento: due significati sullo
      stesso colore si confondono. Diventa un blu ardesia. */
@@ -160,7 +164,8 @@
   --color-info: #4a3857;
   --color-info-text: #f5f1f7; /* 9,4:1 */
   --color-default-light: #2b1d36;
-  --color-default-border: #7c6a88; /* 3,5:1 */
+  --color-default-border: #4f3d5c;
+  --mirada-control-border: #7c6a88; /* 3,5:1 su superficie */
   --color-default-text: #f5f1f7; /* 14,1:1 */
   --color-draft-light: #1c2233;
   --color-draft: #8fb8e8; /* 7,7:1 */
@@ -188,7 +193,36 @@
    un controllo. Qui il solo bordo viene irrobustito, nei due temi.
    --------------------------------------------------------------------------- */
 .border-ui-info {
-  border-color: var(--color-default-border) !important; /* 3,6 · 3,5:1 */
+  border-color: var(--mirada-control-border) !important; /* 3,6 · 3,5:1 */
+}
+
+/* ---------------------------------------------------------------------------
+   L'aspetto di slesh.it sul back-office.
+
+   `@keijo/ui` usa la stessa `.border-ui-info` anche per il **riquadro di
+   sezione**, e con il contorno dei controlli ogni sezione era chiusa da una
+   riga scura: l'opposto dei riquadri di Slesh, che si staccano dal fondo con
+   un'ombra larga e un filo appena visibile. Un riquadro non è un comando, e
+   1.4.11 non gli chiede 3:1: qui prende l'aspetto di Slesh, e i pulsanti
+   tengono il loro contorno.
+   --------------------------------------------------------------------------- */
+keijo-page-section-wrapper > div.border-ui-info {
+  border-color: rgba(var(--text-rgb), 0.08) !important;
+  border-radius: var(--mirada-radius) !important;
+  box-shadow: var(--keijo-shadow-lg);
+  padding: 0.75rem 1rem !important;
+}
+
+/* La voce di menu della pagina aperta. La libreria la segna solo con il
+   grassetto, che a colpo d'occhio non si vede: qui prende il viola, come
+   l'elemento attivo di Slesh. */
+.keijo-sidebar-route__row {
+  border-radius: var(--mirada-radius-sm) !important;
+}
+.keijo-sidebar-route__row:has(.keijo-sidebar-route__label--selected) {
+  background-color: var(--color-accent-light) !important;
+  color: var(--color-accent) !important; /* 6,2:1 chiaro · 6,2:1 scuro */
+  box-shadow: inset 3px 0 0 rgb(var(--keijo-accent)), var(--keijo-shadow-md);
 }
 
 /* Sora, come Slesh. Il font è **incluso nel bundle** (`@fontsource-variable/sora`,
