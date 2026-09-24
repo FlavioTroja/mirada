@@ -72,6 +72,8 @@
   --primary-color: var(--mirada-night); /* #170B1E su #FFF → 19:1 */
 
   --keijo-accent: var(--mirada-violet); /* fondo dei pulsanti: bianco sopra 5,3:1 */
+  --mirada-accent-fill: var(--mirada-violet);
+  --mirada-on-accent: 255, 255, 255;
   --keijo-accent-light: 244, 236, 248;
   --keijo-error: 178, 38, 30;
   --keijo-error-light: 253, 236, 234;
@@ -142,6 +144,8 @@
   --primary-color: var(--mirada-snow); /* 15,5:1 su superficie */
 
   --keijo-accent: var(--mirada-lilac);
+  --mirada-accent-fill: var(--mirada-lilac);
+  --mirada-on-accent: var(--mirada-night); /* prugna sul lilla: 7,9:1 */
   --keijo-accent-light: 50, 31, 64;
   --keijo-error: 255, 138, 128;
   --keijo-error-light: 50, 20, 25;
@@ -213,6 +217,18 @@ keijo-page-section-wrapper > div.border-ui-info {
   padding: 0.75rem 1rem !important;
 }
 
+/* Il pulsante principale — variante `accent` di @keijo/ui — com'è su slesh.it:
+   una pillola piena. La libreria lo disegna come tinta pallida con testo e
+   contorno colorati, e raggio da 4px. Il testo sopra l'accento cambia con la
+   luce: bianco sul viola (5,3:1), prugna sul lilla del tema scuro (7,9:1). */
+button.bg-ui-accent.border-ui-accent {
+  background-color: rgb(var(--mirada-accent-fill)) !important;
+  border-color: rgb(var(--mirada-accent-fill)) !important;
+  color: rgb(var(--mirada-on-accent)) !important;
+  border-radius: 999px !important;
+  font-weight: 600;
+}
+
 /* ---------------------------------------------------------------------------
    La FASCIA PRUGNA — testata, barra laterale e piè di pagina.
 
@@ -235,6 +251,10 @@ keijo-page-section-wrapper > div.border-ui-info {
   --foreground-color: var(--mirada-plum);
 
   --keijo-accent: var(--mirada-lilac);
+  /* Il pulsante nella fascia è il viola pieno con il bianco, come l'apertura
+     di slesh.it: 5,3:1, qualunque sia la luce della pagina. */
+  --mirada-accent-fill: var(--mirada-violet);
+  --mirada-on-accent: 255, 255, 255;
   --color-accent-light: #321f40;
   --color-accent: #c495e3;
   --color-info-light: #2b1d36;

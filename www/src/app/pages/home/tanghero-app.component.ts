@@ -355,8 +355,11 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
          padding le ridà il respiro. Serve a staccarla dai risultati: una
          sezione che cambia argomento e continua sullo stesso fondo legge
          come un seguito della ricerca. */
+      /* ⚠️ Margini laterali a ZERO, non a -1.25rem. Il negativo serviva a uscire
+         da un padding che il contenitore non ha: la sezione sporgeva di 20px
+         a destra, e la home aveva una barra di scorrimento ORIZZONTALE. */
       .tang {
-        margin: 4rem -1.25rem 0;
+        margin: 4rem 0 0;
         padding: 3.5rem 1.25rem 3rem;
         background: rgb(var(--foreground-color));
         border-top: 1px solid var(--www-line);
