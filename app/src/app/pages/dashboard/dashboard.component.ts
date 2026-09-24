@@ -618,7 +618,7 @@ import { UnavailableSectionComponent } from '../../shared/unavailable-section.co
         grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
       }
       .tile {
-        border: 1px solid rgba(var(--mirada-ivory), 0.12);
+        border: 1px solid rgba(var(--text-rgb), 0.12);
         border-radius: 0.5rem;
         padding: 0.625rem 0.75rem;
       }

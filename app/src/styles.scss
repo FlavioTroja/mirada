@@ -6,7 +6,9 @@
 @tailwind utilities;
 @import '@keijo/ui/src/lib/styles/keijo-ui';
 
-/* Poppins e Space Mono sono **bundled** dentro @keijo/ui (`@font-face` nel file
-   importato sopra): nessun font da CDN, coerente con gli anti-pattern di KEIJO.md. */
+/* Sora (il testo, come slesh.it) viene da `@fontsource-variable/sora`, Space Mono
+   (i codici) da @keijo/ui: entrambi **nel bundle**, nessun font da CDN, coerente
+   con gli anti-pattern di KEIJO.md. */
+@import '@fontsource-variable/sora';
 
 @import 'mirada-theme';

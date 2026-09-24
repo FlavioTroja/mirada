@@ -13,26 +13,26 @@ export type ResolvedTheme = 'dark' | 'light';
 const KEY = 'mirada.theme';
 
 /**
- * **Il tema di partenza è lo scuro**, non «segui il sistema».
+ * **Il tema di partenza è il chiaro**, non «segui il sistema».
  *
- * Il buio è il tema di marca — viene dalla wall, dove per la proiezione in sala
- * non è una scelta estetica — e chi apre Mirada per la prima volta deve vedere
- * il prodotto com'è pensato, non come il suo sistema operativo lo interpreta.
- * `auto` resta disponibile come scelta **esplicita**: chi la vuole la sceglie,
- * ma non se la ritrova addosso senza averla chiesta.
+ * Dal 24 settembre 2026 l'identità è quella di slesh.it (`shared/mirada-theme.scss`):
+ * superfici chiare, prugna e viola. Chi apre Mirada per la prima volta deve
+ * vedere il prodotto com'è pensato, non come il suo sistema operativo lo
+ * interpreta. `auto` resta disponibile come scelta **esplicita**.
+ *
+ * Chi aveva già scelto un tema lo ritrova: la scelta vive in `localStorage`, e
+ * questo valore vale solo per chi non ha mai scelto.
  */
-const DEFAULT_CHOICE: ThemeChoice = 'dark';
+const DEFAULT_CHOICE: ThemeChoice = 'light';
 
 /**
  * Tema dell'interfaccia — `data-theme` su `<html>`, letto da `src/styles.scss`.
  *
- * Il tema **scuro** è quello di marca, ereditato dalla wall (`RF-WALL-31`): per
- * la proiezione in sala non è una scelta estetica ma di sicurezza. Il tema
- * **chiaro** esiste per il back-office, che si usa di giorno e spesso su
- * schermi non calibrati.
+ * Il **chiaro** è quello di marca. Lo **scuro**, prugna e viola, resta per chi
+ * lavora di sera e per la wall (`RF-WALL-31`), dove in sala buia non è una
+ * scelta estetica ma di sicurezza.
  *
- * Senza attributo vale lo scuro, quindi una pagina che si carica prima che
- * Angular parta non lampeggia mai in bianco.
+ * Senza attributo vale il chiaro, come `index.html`.
  */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
@@ -58,7 +58,7 @@ export class ThemeService {
         this.apply();
       });
     } catch {
-      /* matchMedia non disponibile: resta il tema scuro */
+      /* matchMedia non disponibile: resta la scelta salvata o il chiaro */
     }
     this.apply();
   }

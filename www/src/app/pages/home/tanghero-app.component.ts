@@ -54,8 +54,8 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             </title>
             <defs>
               <linearGradient id="g-live" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="rgb(var(--mirada-bordeaux))" stop-opacity="0.55" />
-                <stop offset="1" stop-color="rgb(var(--mirada-surface))" stop-opacity="0" />
+                <stop offset="0" stop-color="rgb(var(--mirada-violet))" stop-opacity="0.55" />
+                <stop offset="1" stop-color="rgb(var(--mirada-plum))" stop-opacity="0" />
               </linearGradient>
             </defs>
 
@@ -415,57 +415,57 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
          scura per progetto (RF-WALL-31 — uno schermo chiaro in una sala buia
          abbaglia chi balla). Vedi la nota in testa al componente. */
       .frame {
-        fill: #2a1a20;
-        stroke: rgba(224, 184, 79, 0.35);
+        fill: #2b1d36;
+        stroke: rgba(196, 149, 227, 0.35);
         stroke-width: 1;
       }
       .screen {
-        fill: rgb(var(--mirada-black));
+        fill: rgb(var(--mirada-night));
       }
       .speaker {
-        fill: rgba(243, 233, 220, 0.18);
+        fill: rgba(245, 241, 247, 0.18);
       }
       .rule {
-        stroke: rgba(243, 233, 220, 0.14);
+        stroke: rgba(245, 241, 247, 0.14);
         stroke-width: 1;
       }
 
       .t-eyebrow {
-        fill: rgba(243, 233, 220, 0.5);
+        fill: rgba(245, 241, 247, 0.5);
         font-size: 8px;
         letter-spacing: 0.16em;
         font-weight: 600;
       }
       .t-huge {
-        fill: rgb(var(--mirada-gold));
+        fill: rgb(var(--mirada-lilac));
         font-size: 30px;
         font-weight: 600;
       }
       .t-mid {
-        fill: rgb(var(--mirada-ivory));
+        fill: rgb(var(--mirada-snow));
         font-size: 17px;
         font-weight: 600;
       }
       .t-body {
-        fill: rgba(243, 233, 220, 0.82);
+        fill: rgba(245, 241, 247, 0.82);
         font-size: 11px;
       }
       .t-small {
-        fill: rgba(243, 233, 220, 0.55);
+        fill: rgba(245, 241, 247, 0.55);
         font-size: 9px;
       }
       .t-stat {
-        fill: rgb(var(--mirada-gold));
+        fill: rgb(var(--mirada-lilac));
         font-size: 24px;
         font-weight: 600;
       }
       .t-count {
-        fill: rgb(var(--mirada-gold));
+        fill: rgb(var(--mirada-lilac));
         font-size: 11px;
         font-weight: 600;
       }
       .t-hub {
-        fill: rgb(var(--mirada-gold));
+        fill: rgb(var(--mirada-lilac));
         font-size: 8px;
         letter-spacing: 0.14em;
         font-weight: 600;
@@ -482,111 +482,111 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
       }
 
       .chip {
-        fill: rgba(224, 184, 79, 0.16);
-        stroke: rgba(224, 184, 79, 0.4);
+        fill: rgba(196, 149, 227, 0.16);
+        stroke: rgba(196, 149, 227, 0.4);
         stroke-width: 0.8;
       }
       .t-chip {
-        fill: rgb(var(--mirada-gold));
+        fill: rgb(var(--mirada-lilac));
         font-size: 8px;
         letter-spacing: 0.1em;
         font-weight: 600;
       }
       .chip-soft {
-        fill: rgba(243, 233, 220, 0.08);
+        fill: rgba(245, 241, 247, 0.08);
       }
       .t-chip-soft {
-        fill: rgba(243, 233, 220, 0.6);
+        fill: rgba(245, 241, 247, 0.6);
         font-size: 8px;
         letter-spacing: 0.1em;
       }
 
       .bar-on {
-        fill: rgb(var(--mirada-gold));
+        fill: rgb(var(--mirada-lilac));
       }
       .bar-off {
-        fill: rgba(243, 233, 220, 0.16);
+        fill: rgba(245, 241, 247, 0.16);
       }
 
       .cta {
-        fill: rgba(106, 26, 45, 0.85);
-        stroke: rgba(224, 184, 79, 0.45);
+        fill: rgba(148, 75, 187, 0.85);
+        stroke: rgba(196, 149, 227, 0.45);
         stroke-width: 1;
       }
       .cta-tick {
-        stroke: rgb(var(--mirada-gold));
+        stroke: rgb(var(--mirada-lilac));
       }
       .t-cta {
-        fill: rgb(var(--mirada-ivory));
+        fill: rgb(var(--mirada-snow));
         font-size: 12px;
         font-weight: 600;
       }
 
       .toast {
-        fill: rgba(243, 233, 220, 0.07);
-        stroke: rgba(243, 233, 220, 0.14);
+        fill: rgba(245, 241, 247, 0.07);
+        stroke: rgba(245, 241, 247, 0.14);
         stroke-width: 1;
       }
       .toast-mark {
-        fill: rgba(106, 26, 45, 0.9);
+        fill: rgba(148, 75, 187, 0.9);
       }
       .toast-cross {
-        stroke: rgb(var(--mirada-gold));
+        stroke: rgb(var(--mirada-lilac));
       }
       .t-toast-title {
-        fill: rgb(var(--mirada-ivory));
+        fill: rgb(var(--mirada-snow));
         font-size: 9.5px;
         font-weight: 600;
       }
       .t-toast {
-        fill: rgba(243, 233, 220, 0.72);
+        fill: rgba(245, 241, 247, 0.72);
         font-size: 9px;
       }
       .t-toast-dim {
-        fill: rgba(243, 233, 220, 0.4);
+        fill: rgba(245, 241, 247, 0.4);
         font-size: 8px;
       }
 
       .pass {
-        fill: rgba(243, 233, 220, 0.05);
-        stroke: rgba(224, 184, 79, 0.3);
+        fill: rgba(245, 241, 247, 0.05);
+        stroke: rgba(196, 149, 227, 0.3);
         stroke-width: 1;
       }
       .pass-head {
-        fill: rgba(106, 26, 45, 0.75);
+        fill: rgba(148, 75, 187, 0.75);
       }
       .t-pass-title {
-        fill: rgb(var(--mirada-ivory));
+        fill: rgb(var(--mirada-snow));
         font-size: 11px;
         font-weight: 600;
       }
       .t-pass-label {
-        fill: rgba(243, 233, 220, 0.45);
+        fill: rgba(245, 241, 247, 0.45);
         font-size: 7.5px;
         letter-spacing: 0.12em;
       }
       .t-pass-value {
-        fill: rgb(var(--mirada-ivory));
+        fill: rgb(var(--mirada-snow));
         font-size: 11px;
       }
       .qr-bg {
-        fill: rgb(var(--mirada-ivory));
+        fill: rgb(var(--mirada-snow));
       }
       .qr-ink rect {
-        fill: #14090d;
+        fill: #120817;
       }
 
       .arcs {
-        stroke: rgba(224, 184, 79, 0.45);
+        stroke: rgba(196, 149, 227, 0.45);
       }
       .node {
-        fill: rgba(243, 233, 220, 0.6);
+        fill: rgba(245, 241, 247, 0.6);
       }
       .hub {
-        fill: rgb(var(--mirada-gold));
+        fill: rgb(var(--mirada-lilac));
       }
       .hub-halo {
-        fill: rgba(224, 184, 79, 0.18);
+        fill: rgba(196, 149, 227, 0.18);
       }
 
       /* --- I cinque punti -------------------------------------------------- */

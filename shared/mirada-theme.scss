@@ -11,94 +11,167 @@
    =========================================================================== */
 
 /* ===========================================================================
-   Mirada Tango — due temi.
+   Mirada Tango — due temi, prugna e viola.
 
-   **scuro** — la palette calda ereditata dalla wall (§5, `RF-WALL-31`): nero e
-   bordeaux come superficie, oro e avorio come testo. Per la wall non è una
-   scelta estetica ma di sicurezza — un maxischermo chiaro abbaglia chi balla in
-   una sala buia — e il back-office la eredita per identità.
+   Dal 24 settembre 2026 l'identità è quella di **slesh.it**, su richiesta del
+   committente: superfici chiare e perlate, testo prugna quasi nero, un viola
+   come unico accento, raggi morbidi, **Sora** come carattere. La tavolozza
+   precedente — nero e bordeaux, oro e avorio, Poppins — è nella storia di git.
 
-   **chiaro** — per il back-office usato di giorno, spesso su schermi non
-   calibrati. Non è un grigio freddo: resta caldo, avorio e bordeaux, così i due
-   temi sono lo stesso prodotto in due luci diverse.
+   **chiaro** — il tema di partenza: pagina grigio perla `#F7F7F7`, riquadri
+   bianchi, testo `#170B1E`, accento `#944BBB`.
 
-   Il tema si sceglie con `data-theme` su `<html>`; senza attributo vale lo
-   scuro. **Le regole di questo file non sono duplicate**: sono scritte in
+   **scuro** — lo stesso prodotto di notte: il prugna della testata di Slesh
+   `#170B1E` come fondo, e il viola schiarito `#C495E3` perché quello pieno sul
+   prugna non si legge. Resta la luce giusta per la wall e per la sala buia.
+
+   Il tema si sceglie con `data-theme` su `<html>`; **senza attributo vale il
+   chiaro**. Le regole di questo file non sono duplicate: sono scritte in
    termini di variabili semantiche, e sono quelle a ribaltarsi.
 
-   Ogni coppia testo/fondo è verificata **WCAG 2.1 AA** (≥ 4,5:1 per il testo
-   normale) e il rapporto misurato è annotato a fianco.
+   Ogni coppia testo/fondo è verificata **WCAG 2.1 AA** (≥ 4,5:1 per il testo,
+   ≥ 3:1 per i confini) e il rapporto misurato è annotato a fianco.
    =========================================================================== */
 
 :root {
   /* --- Costanti di marca: non dipendono dal tema ------------------------- */
-  --mirada-black: 15, 10, 12; /* #0F0A0C */
-  --mirada-surface: 32, 16, 21; /* #201015 */
-  --mirada-bordeaux: 106, 26, 45; /* #6A1A2D */
-  --mirada-gold: 224, 184, 79; /* #E0B84F */
-  --mirada-ivory: 243, 233, 220; /* #F3E9DC */
+  --mirada-night: 23, 11, 30; /* #170B1E — prugna notte, testo e fondo scuro */
+  --mirada-plum: 34, 21, 43; /* #22152B — superficie sollevata dello scuro */
+  --mirada-violet: 148, 75, 187; /* #944BBB — l'accento */
+  --mirada-lilac: 196, 149, 227; /* #C495E3 — l'accento leggibile sul prugna */
+  --mirada-pearl: 247, 247, 247; /* #F7F7F7 — fondo pagina del chiaro */
+  --mirada-snow: 245, 241, 247; /* #F5F1F7 — il testo dello scuro */
+
+  /* Il raggio dei riquadri e dei pulsanti a pillola di Slesh. */
+  --mirada-radius: 20px;
+  --mirada-radius-sm: 12px;
 }
 
 /* ---------------------------------------------------------------------------
-   TEMA SCURO — predefinito, e quello che vale anche senza attributo.
+   TEMA CHIARO — predefinito, e quello che vale anche senza attributo.
+
+   Due scelte che non si vedono a colpo d'occhio:
+
+   · **L'accento ha due toni.** `#944BBB` pieno fa da fondo ai pulsanti, con il
+     bianco sopra a 5,3:1. Come *testo* su una tinta pallida scende sotto il
+     limite, e lì diventa `#7A3A9E` (6,2:1): lo stesso viola, più scuro.
+   · **La pill «filled»** — il riferimento a un'altra entità, che deve saltare
+     all'occhio — è il prugna pieno con testo bianco, come i pulsanti scuri di
+     Slesh: 19:1.
    --------------------------------------------------------------------------- */
 :root,
-:root[data-theme='dark'] {
+:root[data-theme='light'] {
   /* Variabili semantiche: è su queste che è scritto tutto il resto del file.
      `--text-rgb` è «il testo corrente», `--accent-rgb` «l'accento leggibile». */
-  --text-rgb: var(--mirada-ivory);
-  --accent-rgb: var(--mirada-gold);
-  --scheme: dark;
+  --text-rgb: var(--mirada-night);
+  --accent-rgb: 122, 58, 158; /* #7A3A9E — 7,2:1 su bianco */
+  --scheme: light;
 
-  --background-color: var(--mirada-black);
-  --foreground-color: var(--mirada-surface);
-  --primary-color: var(--mirada-ivory); /* avorio su #201015 → 15,1:1 */
+  --background-color: var(--mirada-pearl);
+  --foreground-color: 255, 255, 255; /* riquadri e sidebar */
+  --primary-color: var(--mirada-night); /* #170B1E su #FFF → 19:1 */
 
-  --keijo-accent: var(--mirada-gold);
-  --keijo-accent-light: 42, 26, 18;
-  --keijo-error: 255, 138, 128;
-  --keijo-error-light: 44, 17, 19;
-  --keijo-warning: 240, 184, 96;
-  --keijo-warning-light: 44, 32, 19;
-  --keijo-success: 123, 214, 160;
-  --keijo-success-light: 18, 36, 26;
+  --keijo-accent: var(--mirada-violet); /* fondo dei pulsanti: bianco sopra 5,3:1 */
+  --keijo-accent-light: 244, 236, 248;
+  --keijo-error: 178, 38, 30;
+  --keijo-error-light: 253, 236, 234;
+  --keijo-warning: 138, 90, 0;
+  --keijo-warning-light: 255, 246, 229;
+  --keijo-success: 27, 110, 60;
+  --keijo-success-light: 232, 245, 236;
 
   /* `.pill-remove` (bottone distruttivo della modale) ha il testo **bianco
-     cablato** (`color: #ffffffe5`). Un rosso chiaro come fondo darebbe 2,2:1:
-     qui il fondo è un rosso profondo, e il bianco torna a 8,8:1.
-     Vale identico nei due temi, appunto perché il testo è cablato. */
+     cablato**: il fondo dev'essere un rosso profondo, 8,8:1. */
   --modal-remove-element: #8e1f2e;
 
-  /* Pill, info-box, banner e bottoni: fondo scuro tinto + testo saturo */
-  --color-accent-light: #2a1a12;
-  --color-accent: #e0b84f; /* 8,9:1 */
-  --color-error-light: #2c1113;
-  --color-error: #ff8a80; /* 7,7:1 */
-  --color-warning-light: #2c2013;
-  --color-warning: #f0b860; /* 8,9:1 */
-  --color-success-light: #12241a;
-  --color-success: #7bd6a0; /* 9,6:1 */
-  --color-info-light: #241a1e;
-  --color-info: #5a4048;
-  --color-info-text: #f3e9dc; /* 14,4:1 */
-  --color-default-light: #241a1e;
-  --color-default-border: #7a6058;
-  --color-default-text: #f3e9dc; /* 14,4:1 */
-  --color-draft-light: #221a2c;
-  --color-draft: #c9a7f5; /* 8,4:1 */
-  /* `filled` = pill di riferimento a un'altra entità, cliccabile: bordeaux pieno */
-  --color-filled-light: #6a1a2d;
-  --color-filled: #f3e9dc; /* 9,8:1 */
-  --color-circle-button-light: #2a1a20;
-  --color-circle-button: #f3e9dc;
-  --color-white: #201015;
+  /* Pill, info-box, banner e bottoni: tinta pallida + testo saturo */
+  --color-accent-light: #f4ecf8;
+  --color-accent: #7a3a9e; /* 6,2:1 */
+  --color-error-light: #fdecea;
+  --color-error: #b2261e; /* 5,8:1 */
+  --color-warning-light: #fff6e5;
+  --color-warning: #8a5a00; /* 5,5:1 */
+  --color-success-light: #e8f5ec;
+  --color-success: #1b6e3c; /* 5,6:1 */
+  --color-info-light: #f2eff4;
+  --color-info: #e6e1ea;
+  --color-info-text: #170b1e; /* 16,7:1 */
+  --color-default-light: #f2eff4;
+  --color-default-border: #8f8496; /* 3,6:1 su bianco */
+  --color-default-text: #170b1e; /* 16,7:1 */
+  /* La bozza era viola, e ora il viola è l'accento: due significati sullo
+     stesso colore si confondono. Diventa un blu ardesia. */
+  --color-draft-light: #eaf1f8;
+  --color-draft: #2f5b8c; /* 6,2:1 */
+  --color-filled-light: #170b1e;
+  --color-filled: #ffffff; /* 19:1 */
+  --color-circle-button-light: #f2eff4;
+  --color-circle-button: #170b1e;
+  --color-white: #ffffff;
   /* `.keijo-tooltip` legge `--color-white-rgb` con ripiego a `255,255,255`, e
-     **nessuno la definiva** — né noi né la libreria. Sul tema scuro il pannello
-     diventava quindi bianco al 75% con sopra il testo avorio del tema: bianco
-     su bianco. Qui la superficie del tooltip torna quella del tema. */
-  --color-white-rgb: 32, 16, 21;
+     la libreria non la definisce: qui torna la superficie del tema. */
+  --color-white-rgb: 255, 255, 255;
 
-  /* Le ombre chiare non si vedono sul nero: servono ombre più profonde */
+  /* Le ombre di Slesh: larghe e leggerissime, tinte di prugna invece che nere. */
+  --keijo-shadow-sm: 0 1px 2px 0 rgba(23, 11, 30, 0.06);
+  --keijo-shadow: 0 2px 12px 0 rgba(23, 11, 30, 0.06);
+  --keijo-shadow-md: 0 4px 24px 0 rgba(23, 11, 30, 0.07);
+  --keijo-shadow-lg: 0 4px 40px 0 rgba(23, 11, 30, 0.08);
+  --keijo-shadow-xl: 0 8px 48px 0 rgba(23, 11, 30, 0.1);
+  --keijo-shadow-2xl: 0 16px 64px 0 rgba(23, 11, 30, 0.14);
+}
+
+/* ---------------------------------------------------------------------------
+   TEMA SCURO.
+
+   Il viola pieno `#944BBB` sul prugna misura 2,9:1: come testo non si legge.
+   Qui l'accento è il lilla `#C495E3` (7,2:1), e i pulsanti lo usano come fondo
+   con il testo prugna sopra.
+   --------------------------------------------------------------------------- */
+:root[data-theme='dark'] {
+  --text-rgb: var(--mirada-snow);
+  --accent-rgb: var(--mirada-lilac); /* 7,2:1 su superficie */
+  --scheme: dark;
+
+  --background-color: var(--mirada-night);
+  --foreground-color: var(--mirada-plum);
+  --primary-color: var(--mirada-snow); /* 15,5:1 su superficie */
+
+  --keijo-accent: var(--mirada-lilac);
+  --keijo-accent-light: 50, 31, 64;
+  --keijo-error: 255, 138, 128;
+  --keijo-error-light: 50, 20, 25;
+  --keijo-warning: 240, 184, 96;
+  --keijo-warning-light: 51, 38, 26;
+  --keijo-success: 123, 214, 160;
+  --keijo-success-light: 21, 39, 31;
+
+  --modal-remove-element: #8e1f2e;
+
+  --color-accent-light: #321f40;
+  --color-accent: #c495e3; /* 6,2:1 */
+  --color-error-light: #321419;
+  --color-error: #ff8a80; /* 7,4:1 */
+  --color-warning-light: #33261a;
+  --color-warning: #f0b860; /* 8,2:1 */
+  --color-success-light: #15271f;
+  --color-success: #7bd6a0; /* 8,9:1 */
+  --color-info-light: #2b1d36;
+  --color-info: #4a3857;
+  --color-info-text: #f5f1f7; /* 9,4:1 */
+  --color-default-light: #2b1d36;
+  --color-default-border: #7c6a88; /* 3,5:1 */
+  --color-default-text: #f5f1f7; /* 14,1:1 */
+  --color-draft-light: #1c2233;
+  --color-draft: #8fb8e8; /* 7,7:1 */
+  --color-filled-light: #944bbb;
+  --color-filled: #ffffff; /* 5,3:1 */
+  --color-circle-button-light: #2b1d36;
+  --color-circle-button: #f5f1f7;
+  --color-white: #22152b;
+  --color-white-rgb: 34, 21, 43;
+
+  /* Le ombre chiare non si vedono sul prugna: servono ombre più profonde */
   --keijo-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
   --keijo-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.6), 0 1px 2px 0 rgba(0, 0, 0, 0.45);
   --keijo-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.65), 0 2px 4px -1px rgba(0, 0, 0, 0.5);
@@ -108,90 +181,22 @@
 }
 
 /* ---------------------------------------------------------------------------
-   TEMA CHIARO.
-
-   Due avvertenze che il tema scuro non aveva:
-
-   · **L'oro non regge sul chiaro.** `#E0B84F` su bianco dà 1,9:1 — invisibile.
-     L'accento diventa perciò un bronzo scuro `#8A600C` (6,4:1), che è lo stesso
-     colore visto in un'altra luce, non un colore diverso.
-   · **Il testo non è nero.** È un prugna profondo `#2A1219`, così la pagina
-     resta calda e imparentata con il tema scuro invece di diventare un
-     grigio d'ufficio.
-   --------------------------------------------------------------------------- */
-:root[data-theme='light'] {
-  --text-rgb: 42, 18, 25; /* #2A1219 — prugna profondo, il «testo corrente» */
-  --accent-rgb: 138, 96, 12; /* #8A600C — bronzo, l'oro leggibile sul chiaro */
-  --scheme: light;
-
-  --background-color: 250, 246, 241; /* #FAF6F1 — avorio pallido, fondo pagina */
-  --foreground-color: 255, 255, 255; /* #FFFFFF — superficie di card e sidebar */
-  --primary-color: 42, 18, 25; /* #2A1219 su #FFF → 15,4:1 */
-
-  --keijo-accent: 138, 96, 12;
-  --keijo-accent-light: 250, 243, 227;
-  --keijo-error: 178, 38, 30;
-  --keijo-error-light: 253, 236, 234;
-  --keijo-warning: 138, 90, 0;
-  --keijo-warning-light: 255, 246, 229;
-  --keijo-success: 27, 110, 60;
-  --keijo-success-light: 232, 245, 236;
-
-  --modal-remove-element: #8e1f2e;
-
-  --color-accent-light: #faf3e3;
-  --color-accent: #8a600c; /* 6,4:1 su bianco */
-  --color-error-light: #fdecea;
-  --color-error: #b2261e; /* 6,5:1 */
-  --color-warning-light: #fff6e5;
-  --color-warning: #8a5a00; /* 6,1:1 */
-  --color-success-light: #e8f5ec;
-  --color-success: #1b6e3c; /* 6,0:1 */
-  --color-info-light: #f3edef;
-  --color-info: #e3d7db;
-  --color-info-text: #2a1219; /* 15,4:1 */
-  --color-default-light: #f3edef;
-  --color-default-border: #c9b6bc;
-  --color-default-text: #2a1219; /* 15,4:1 */
-  --color-draft-light: #f1ecf9;
-  --color-draft: #5b3e86; /* 7,4:1 */
-  /* `filled` resta il bordeaux pieno con testo avorio: è l'unica superficie che
-     non si schiarisce, perché la pill di riferimento a un'altra entità deve
-     saltare all'occhio in entrambi i temi. */
-  --color-filled-light: #6a1a2d;
-  --color-filled: #f3e9dc; /* 9,8:1 */
-  --color-circle-button-light: #f3edef;
-  --color-circle-button: #2a1219;
-  --color-white: #ffffff;
-  --color-white-rgb: 255, 255, 255;
-
-  /* Sul chiaro le ombre profonde sporcano: qui tornano quelle di serie */
-  --keijo-shadow-sm: 0 1px 2px 0 rgba(42, 18, 25, 0.08);
-  --keijo-shadow: 0 1px 3px 0 rgba(42, 18, 25, 0.12), 0 1px 2px 0 rgba(42, 18, 25, 0.08);
-  --keijo-shadow-md: 0 4px 6px -1px rgba(42, 18, 25, 0.12), 0 2px 4px -1px rgba(42, 18, 25, 0.07);
-  --keijo-shadow-lg: 0 10px 15px -3px rgba(42, 18, 25, 0.12), 0 4px 6px -2px rgba(42, 18, 25, 0.06);
-  --keijo-shadow-xl: 0 20px 25px -5px rgba(42, 18, 25, 0.12), 0 10px 10px -5px rgba(42, 18, 25, 0.05);
-  --keijo-shadow-2xl: 0 25px 50px -12px rgba(42, 18, 25, 0.2);
-}
-
-/* ---------------------------------------------------------------------------
    `--color-info` fa due mestieri in `@keijo/ui`: è la **superficie** della pill
    informativa e, tramite `.border-ui-info`, il **contorno** del pulsante di
-   variante `default`. Sul tema scuro una tinta media serve bene a entrambi; sul
-   chiaro no — una superficie pallida come bordo dà 1,4:1 su bianco, e il
-   pulsante risulta senza contorno.
-
-   Le icone restano leggibilissime (17,5:1), quindi il contenuto si vede: è il
-   *bordo del controllo* a mancare, e `WCAG 1.4.11` chiede 3:1 per quello. Qui
-   il solo bordo viene irrobustito, lasciando la pill al suo tono chiaro.
+   variante `default`. Una superficie pallida come bordo dà 1,3:1 su bianco, e il
+   pulsante risulta senza contorno: `WCAG 1.4.11` chiede 3:1 per il confine di
+   un controllo. Qui il solo bordo viene irrobustito, nei due temi.
    --------------------------------------------------------------------------- */
-:root[data-theme='light'] .border-ui-info {
-  border-color: #9b8189 !important; /* 3,6:1 su bianco */
+.border-ui-info {
+  border-color: var(--color-default-border) !important; /* 3,6 · 3,5:1 */
 }
 
+/* Sora, come Slesh. Il font è **incluso nel bundle** (`@fontsource-variable/sora`,
+   importato dallo `styles.scss` di ciascuna app): nessun font da CDN.
+   `@keijo/ui` dichiara Poppins sul `body`, e questa regola viene dopo. */
 body {
   margin: 0;
-  font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Sora Variable', 'Sora', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   background-color: rgb(var(--background-color));
   color: rgb(var(--primary-color));
 }
@@ -432,9 +437,6 @@ select:focus {
 /* Classi di appoggio delle pagine — nessuna palette parallela, solo alias */
 .mirada-muted {
   color: rgba(var(--text-rgb), 0.72); /* 10,3:1 */
-}
-.mirada-gold {
-  color: rgb(var(--accent-rgb)); /* 8,9:1 su superficie */
 }
 .mirada-label {
   font-size: 0.75rem;

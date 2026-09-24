@@ -23,7 +23,7 @@
  * Le direttive morte sono rimosse e il reset è scritto qui. `www` non usa una
  * sola utility Tailwind né un componente `@keijo/ui`, quindi non c'è nulla da
  * recuperare installando il pacchetto; l'import qui sopra resta perché porta i
- * `@font-face` di Poppins e Space Mono.
+ * `@font-face` di Space Mono (il testo è in Sora, importato qui sotto).
  *
  * Volutamente **solo** `box-sizing`: le spaziature di questo foglio sono state
  * tarate a occhio sopra i margini di serie del browser, e un reset dei margini
@@ -34,6 +34,7 @@
   box-sizing: border-box;
 }
 
+@import '@fontsource-variable/sora';
 @import 'mirada-theme';
 
 /* ===========================================================================
@@ -47,8 +48,8 @@
    =========================================================================== */
 
 :root {
-  --www-radius: 14px;
-  --www-radius-sm: 9px;
+  --www-radius: var(--mirada-radius);
+  --www-radius-sm: var(--mirada-radius-sm);
   --www-max: 76rem;
   --www-line: rgba(var(--text-rgb), 0.14);
   --www-panel: rgba(var(--text-rgb), 0.04);
@@ -154,22 +155,16 @@ html {
 }
 
 .www-btn {
-  background: rgb(var(--accent-rgb));
-  color: rgb(var(--mirada-black));
+  /* Come i pulsanti di Slesh: la pillola viola piena, testo bianco (5,3:1). */
+  background: rgb(var(--mirada-violet));
+  color: #fff;
 }
 
-/* Il testo del pulsante principale cambia con il tema, e non per gusto.
- *
- * L'accento non è lo stesso colore nei due temi: sullo scuro è oro chiaro e il
- * testo nero ci si legge bene; sul chiaro è **bronzo** (#8A600C), e il nero
- * sopra misurava **3.52:1** — sotto il 4.5 richiesto, proprio sul pulsante che
- * porta all'iscrizione. Il bianco sullo stesso bronzo misura **5.59:1**.
- *
- * L'alternativa sarebbe stata schiarire il bronzo, ma allora sarebbe stato lui
- * a non staccare più dal fondo chiaro della pagina: il colore va lasciato dov'è
- * e cambiato ciò che ci sta sopra. */
-:root[data-theme='light'] .www-btn {
-  color: rgb(var(--mirada-ivory));
+/* Sul prugna il viola pieno non stacca (2,9:1 sul fondo): lo scuro usa il
+ * lilla, e sopra il lilla il testo torna prugna — 7,9:1. */
+:root[data-theme='dark'] .www-btn {
+  background: rgb(var(--mirada-lilac));
+  color: rgb(var(--mirada-night));
 }
 .www-btn:hover:not(:disabled) {
   filter: brightness(1.08);

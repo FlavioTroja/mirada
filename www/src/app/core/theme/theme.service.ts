@@ -4,24 +4,29 @@ import { isPlatformBrowser } from '@angular/common';
 export type ThemeChoice = 'auto' | 'dark' | 'light';
 
 /**
- * **Il tema di partenza è lo scuro**, non «segui il sistema»: è il tema di
- * marca, e una scheda evento vista per la prima volta deve avere l'aspetto che
+ * **Il tema di partenza è il chiaro**, non «segui il sistema»: dal 24 settembre
+ * 2026 è il tema di marca (l'identità di slesh.it, `shared/mirada-theme.scss`),
+ * e una scheda evento vista per la prima volta deve avere l'aspetto che
  * l'organizzatore si aspetta. `auto` resta una scelta esplicita.
  */
-const DEFAULT_CHOICE: ThemeChoice = 'dark';
+const DEFAULT_CHOICE: ThemeChoice = 'light';
 export type ResolvedTheme = 'dark' | 'light';
 
 const KEY = 'mirada.theme';
 
 /**
  * Tema dell'interfaccia — `data-theme` su `<html>`, letto da
- * `shared/mirada-theme.scss`. Senza attributo vale lo **scuro**, quindi una
- * pagina servita dal server non lampeggia mai in bianco prima dell'idratazione.
+ * `shared/mirada-theme.scss`. Senza attributo vale il **chiaro**, lo stesso che
+ * porta il marcatore reso dal server.
+ *
+ * ⚠️ Chi ha scelto lo scuro vede un istante di chiaro prima dell'idratazione:
+ * il server non conosce la preferenza, che vive in `localStorage`. Prima era il
+ * contrario — lampeggiava chi aveva scelto il chiaro.
  *
  * **SSR.** `localStorage` e `matchMedia` non esistono sul server: la lettura
  * della preferenza e l'ascolto del sistema avvengono in `afterNextRender`, che
  * sul server non viene eseguito. Il marcatore reso dal server porta sempre il
- * tema scuro, che è quello di marca.
+ * tema chiaro, che è quello di marca.
  */
 @Injectable({ providedIn: 'root' })
 export class ThemeService {

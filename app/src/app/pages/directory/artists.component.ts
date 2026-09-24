@@ -227,7 +227,7 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
         height: 2rem;
         border-radius: 50%;
         object-fit: cover;
-        border: 1px solid rgba(var(--mirada-ivory), 0.16);
+        border: 1px solid rgba(var(--text-rgb), 0.16);
       }
       .title {
         font-weight: 600;

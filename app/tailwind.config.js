@@ -18,7 +18,17 @@ module.exports = {
     'flex-col', 'md:flex-row', 'md:flex-wrap',
   ],
   theme: {
-    extend: {},
+    extend: {
+      // I raggi morbidi di slesh.it (`shared/mirada-theme.scss`). @keijo/ui
+      // disegna riquadri, campi e pulsanti con `rounded` e `rounded-md`: è da
+      // qui che cambiano tutti insieme, senza toccare la libreria.
+      borderRadius: {
+        DEFAULT: '0.75rem',
+        md: '0.625rem',
+        lg: '1rem',
+        xl: '1.25rem',
+      },
+    },
   },
   plugins: [],
 };
