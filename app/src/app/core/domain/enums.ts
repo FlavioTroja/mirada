@@ -8,9 +8,11 @@ import {
   check,
   checkCircle,
   checklist,
+  confirmationNumber,
   contentCopy,
   creditCard,
   description,
+  doorFront,
   doneAll,
   draft,
   editNote,
@@ -31,9 +33,12 @@ import {
   pending,
   percent,
   person,
+  personSearch,
   playArrow,
   publish,
   qrCode,
+  qrCodeScanner,
+  receiptLong,
   restaurant,
   rule,
   scale,
@@ -351,6 +356,36 @@ export const REQUIREMENT_OUTCOME_STATUS_UI: Record<RequirementOutcomeStatus, Sta
   VALID: { label: 'Valido', variant: 'success', icon: checkCircle },
   REJECTED: { label: 'Respinto', variant: 'error', icon: cancel },
   EXPIRED: { label: 'Scaduto', variant: 'error', icon: schedule },
+};
+
+// ---------------------------------------------------------------------------
+// Biglietto e ingresso — la porta (§4.12, §4.13)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lo stato del biglietto emesso.
+ *
+ * ⚠️ **Non esiste «usato», e non deve esistere** (`09` §7): l'utilizzo è una
+ * riga di `CheckIn` sulla coppia biglietto-sessione, e un Full Pass scansionato
+ * dodici volte resta `VALID`. Chi cerca «è entrato?» lo legge dai check-in.
+ */
+export type TicketStatus = 'VALID' | 'TRANSFERRED' | 'CANCELLED' | 'REFUNDED';
+
+export const TICKET_STATUS_UI: Record<TicketStatus, StatusUi> = {
+  VALID: { label: 'Valido', variant: 'success', icon: confirmationNumber },
+  TRANSFERRED: { label: 'Trasferito', variant: 'info', icon: swapHoriz },
+  CANCELLED: { label: 'Annullato', variant: 'error', icon: block },
+  REFUNDED: { label: 'Rimborsato', variant: 'error', icon: receiptLong },
+};
+
+/** Come l'ingresso è stato registrato alla porta. */
+export type CheckInKind = 'OPERATOR' | 'MANUAL_SEARCH' | 'EXTERNAL_ENTRY';
+
+export const CHECK_IN_KIND_UI: Record<CheckInKind, StatusUi> = {
+  OPERATOR: { label: 'Scansione del QR', variant: 'default', icon: qrCodeScanner },
+  MANUAL_SEARCH: { label: 'Ricerca per nome', variant: 'default', icon: personSearch },
+  // `RF-CHK-15`: chi ha comprato fuori dalla piattaforma entra in lista senza QR.
+  EXTERNAL_ENTRY: { label: 'Ingresso da canale esterno', variant: 'default', icon: doorFront },
 };
 
 // ---------------------------------------------------------------------------

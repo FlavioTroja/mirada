@@ -3,6 +3,7 @@ import { OrgMemberRole } from '../auth/roles';
 import {
   ArtistKind,
   BalanceSettlementMethod,
+  CheckInKind,
   DanceRole,
   DeclaredDanceRole,
   EventStatus,
@@ -16,9 +17,11 @@ import {
   RegistrationStatus,
   RequirementBlocking,
   RequirementKind,
+  RequirementOutcomeStatus,
   RequirementVerification,
   SaleUnit,
   SalesCloseCriterion,
+  TicketStatus,
   TicketTypeVisibility,
 } from './enums';
 
@@ -484,6 +487,59 @@ export interface OrphanSessionResolution {
 }
 
 /**
+ * Un biglietto emesso — `Ticket` del backend (§4.12).
+ *
+ * Nasce da una di tre provenienze, e ne porta una sola: la riga d'ordine di
+ * una vendita online, l'emissione manuale di un pass, la vendita dichiarata da
+ * un negozio esterno. Un'iscrizione a listino (`15` §3.4) **non ha biglietto**.
+ *
+ * ⚠️ `code` è il contenuto del QR, e `POST /tickets/verify` lo accetta anche
+ * nudo: è una chiave d'ingresso. Il back-office non lo mostra dove non serve.
+ */
+export interface Ticket extends Entity {
+  eventId: number;
+  ticketTypeId: number;
+  /** Popolabile con `populate=ticketType`. */
+  ticketType?: TicketType | null;
+  registrationId?: number | null;
+  orderLineId?: number | null;
+  passIssuanceId?: number | null;
+  externalSaleId?: number | null;
+  code: string;
+  status: TicketStatus;
+  holderName: string;
+  holderSurname: string;
+  holderEmail?: string | null;
+  /** Pass al portatore: senza nominativo, non trasferibile. */
+  bearer: boolean;
+  qrIssuedAt: string;
+  /** Valorizzato quando il QR è invalidato per sempre (rimborso, annullamento). */
+  qrRevokedAt?: string | null;
+}
+
+/**
+ * L'esito di un requisito dell'evento per un'iscrizione — `RequirementOutcome`
+ * (§4.10).
+ *
+ * ⚠️ `value` è il **contenuto** dichiarato, e il back-office non lo mostra: lo
+ * staff vede l'esito, non ciò che la persona ha scritto (`RB12`). Il campo è nel
+ * tipo solo perché il server lo spedisce.
+ */
+export interface RequirementOutcome extends Entity {
+  registrationId: number;
+  eventRequirementId: number;
+  /** Popolabile con `populate=eventRequirement`. */
+  eventRequirement?: EventRequirement | null;
+  status: RequirementOutcomeStatus;
+  value?: unknown;
+  acceptedAt?: string | null;
+  acceptedVersion?: string | null;
+  reviewedByUserId?: number | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+}
+
+/**
  * Un ingresso registrato alla porta — `CheckIn` del backend (`RF-CHK-*`).
  *
  * ── Due momenti, e non sono lo stesso ───────────────────────────────────────
@@ -504,7 +560,7 @@ export interface CheckIn extends Entity {
   /** Popolabile con `populate=registration`: e da qui che si prende il nome. */
   registration?: Registration | null;
   operatorUserId: number;
-  kind: 'OPERATOR' | 'MANUAL_SEARCH' | 'EXTERNAL_ENTRY';
+  kind: CheckInKind;
   scannedAt: string;
   /** Nullo sugli ingressi registrati online. */
   syncedAt?: string | null;

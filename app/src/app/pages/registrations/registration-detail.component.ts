@@ -18,8 +18,17 @@ import {
   SelectOption,
 } from '@keijo/ui';
 import {
+  badge,
+  block,
   calendarMonth,
   cancel as cancelIcon,
+  confirmationNumber,
+  doorFront,
+  factCheck,
+  sell,
+  storefront,
+  taskAlt,
+  thumbDown,
   eventBusy,
   celebration,
   check,
@@ -46,6 +55,8 @@ import {
   BALANCE_SETTLEMENT_METHOD_OPTIONS,
   BALANCE_SETTLEMENT_METHOD_UI,
   BalanceSettlementMethod,
+  CHECK_IN_KIND_UI,
+  CheckInKind,
   DANCE_ROLE_UI,
   DECLARED_DANCE_ROLE_OPTIONS,
   DECLARED_DANCE_ROLE_UI,
@@ -56,12 +67,19 @@ import {
   REGISTRATION_CHANNEL_UI,
   REGISTRATION_STATUS_UI,
   RegistrationChannel,
+  REQUIREMENT_OUTCOME_STATUS_UI,
+  RequirementOutcomeStatus,
+  TICKET_STATUS_UI,
+  TicketStatus,
 } from '../../core/domain/enums';
 import {
   BalanceSettlement,
+  CheckIn,
   PaymentInstalment,
   QuotaConsumption,
   RegistrationBalance,
+  RequirementOutcome,
+  Ticket,
 } from '../../core/domain/models';
 import {
   centsToEuroInput,
@@ -73,8 +91,11 @@ import { LocaleService, i18nPlain } from '../../core/i18n/i18n-text';
 import { ApiClient } from '../../core/api/api.client';
 import { ApiError } from '../../core/api/api-error';
 import { BalanceSettlementStore } from '../../stores/balance-settlement.store';
+import { CheckInStore } from '../../stores/check-in.store';
 import { CoupleStore } from '../../stores/couple.store';
 import { RegistrationStore } from '../../stores/registration.store';
+import { RequirementOutcomeStore } from '../../stores/requirement-outcome.store';
+import { TicketStore } from '../../stores/ticket.store';
 import { ConfirmService } from '../../shared/confirm.service';
 import { DomainErrorComponent } from '../../shared/domain-error.component';
 import { I18nTextComponent } from '../../shared/i18n-text.component';
@@ -84,14 +105,13 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
 /**
  * `/registrations/:id` — la scheda dell'iscrizione (§4.3).
  *
- * Mostra ciò che il contratto API espone oggi: anagrafica, ruolo dichiarato e
- * ruolo assegnato **distinti**, canale, stato, coppia e i **consumi di quota**,
- * cioè cosa questa iscrizione occupa davvero.
+ * Anagrafica, ruolo dichiarato e ruolo assegnato **distinti**, canale, stato,
+ * coppia, saldo e rate, i **consumi di quota** — cosa questa iscrizione occupa
+ * davvero — e poi la porta: biglietti, esiti dei requisiti, check-in.
  *
- * Ordine di provenienza, biglietti, servizi acquistati, esiti dei requisiti e
- * check-in per sessione fanno parte del §4.3 ma richiedono `Order`, `Ticket`,
- * `RequirementOutcome` e `CheckIn`: nessuna di queste basi REST è attiva, e la
- * scheda lo dichiara invece di mostrare sezioni vuote.
+ * Restano fuori l'ordine di provenienza e i servizi acquistati, e non per una
+ * rotta mancante: un ordine appartiene a chi compra, non all'iscrizione, e ci
+ * si arriva solo attraversando i biglietti. La scheda lo dichiara.
  */
 @Component({
   selector: 'app-registration-detail',
@@ -513,36 +533,203 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
           </keijo-list-items-wrapper>
         </keijo-page-section-wrapper>
 
+        <keijo-page-section-wrapper title="Biglietti">
+          <keijo-list-items-wrapper>
+            @for (ticket of tickets(); track ticket.id) {
+              <keijo-list-item-wrapper direction="row">
+                <div class="settlement">
+                  <span class="mirada-value">
+                    @if (ticket.ticketType) {
+                      <app-i18n-text [value]="ticket.ticketType.name" />
+                    } @else {
+                      Titolo #{{ ticket.ticketTypeId }}
+                    }
+                  </span>
+                  <div class="row">
+                    <app-status-pill [status]="ticketUi(ticket.status)" />
+                    <keijo-pill variant="default" [icon]="originOf(ticket).icon">
+                      {{ originOf(ticket).label }}
+                    </keijo-pill>
+                    @if (ticket.bearer) {
+                      <keijo-pill variant="info" [icon]="bearerIcon">al portatore</keijo-pill>
+                    }
+                    <keijo-pill variant="default" [icon]="clockIcon">
+                      emesso il {{ when(ticket.qrIssuedAt) }}
+                    </keijo-pill>
+                    @if (ticket.qrRevokedAt) {
+                      <keijo-pill variant="error" [icon]="revokedIcon">
+                        QR revocato il {{ when(ticket.qrRevokedAt) }}
+                      </keijo-pill>
+                    }
+                  </div>
+                </div>
+              </keijo-list-item-wrapper>
+            } @empty {
+              <keijo-info-box [icon]="ticketIcon" title="Nessun biglietto" variant="info">
+                <span>
+                  Un biglietto nasce da una vendita online, da un pass emesso a mano o da una
+                  vendita di un negozio esterno. Un’iscrizione a listino fatta dalla segreteria non
+                  ne ha, ed è previsto: alla porta si trova per nome.
+                </span>
+              </keijo-info-box>
+            }
+          </keijo-list-items-wrapper>
+        </keijo-page-section-wrapper>
+
+        <keijo-page-section-wrapper
+          title="Requisiti"
+          [buttons]="rejecting() ? rejectButtons : []"
+          (buttonClick)="onRejectAction($event)"
+        >
+          <p class="mirada-hint">
+            Qui si vede l’esito di ciò che l’evento chiede, non il contenuto di ciò che la persona
+            ha dichiarato: allo staff serve sapere se è in regola, non cosa ha scritto.
+          </p>
+
+          @if (rejecting()) {
+            @if (rejectErrors().length) {
+              <p class="mirada-error">{{ rejectErrors().join(' ') }}</p>
+            }
+            <keijo-form-wrapper [formGroup]="rejectForm">
+              <keijo-form-row [cols]="1">
+                <keijo-input
+                  [formControl]="rejectForm.controls.reason"
+                  label="motivo del rifiuto"
+                  id="rejectReason"
+                  type="text"
+                  placeholder="Il certificato è scaduto il 3 settembre…"
+                />
+              </keijo-form-row>
+            </keijo-form-wrapper>
+            <p class="mirada-hint">
+              Il motivo arriva alla persona: è ciò che le serve per rimettersi in regola.
+            </p>
+          }
+
+          <keijo-list-items-wrapper>
+            @for (outcome of outcomes(); track outcome.id) {
+              <keijo-list-item-wrapper direction="row">
+                <div class="settlement">
+                  <span class="mirada-value">
+                    @if (outcome.eventRequirement) {
+                      <app-i18n-text [value]="outcome.eventRequirement.label" />
+                    } @else {
+                      Requisito #{{ outcome.eventRequirementId }}
+                    }
+                  </span>
+                  <div class="row">
+                    <app-status-pill [status]="outcomeUi(outcome.status)" />
+                    @if (outcome.acceptedAt) {
+                      <keijo-pill variant="default" [icon]="clockIcon">
+                        dichiarato il {{ when(outcome.acceptedAt) }}
+                      </keijo-pill>
+                    }
+                    @if (outcome.reviewedAt) {
+                      <keijo-pill variant="default" [icon]="operatorIcon">
+                        deciso il {{ when(outcome.reviewedAt) }}
+                      </keijo-pill>
+                    }
+                    @if (outcome.status === 'REJECTED' && outcome.rejectionReason) {
+                      <keijo-pill variant="error" [icon]="conflictIcon">
+                        {{ outcome.rejectionReason }}
+                      </keijo-pill>
+                    }
+                    @if (canWrite() && outcome.status === 'UNDER_REVIEW') {
+                      <keijo-button
+                        variant="accent"
+                        [icon]="approveIcon"
+                        tooltip="Approva"
+                        (action)="approve(outcome)"
+                      />
+                      <keijo-button
+                        variant="error"
+                        [icon]="rejectIcon"
+                        tooltip="Respingi"
+                        (action)="startReject(outcome)"
+                      />
+                    }
+                  </div>
+                </div>
+              </keijo-list-item-wrapper>
+            } @empty {
+              <keijo-info-box [icon]="requirementIcon" title="Nessun requisito" variant="info">
+                <span>
+                  L’evento non chiede dichiarazioni né campi da compilare a questa persona.
+                </span>
+              </keijo-info-box>
+            }
+          </keijo-list-items-wrapper>
+        </keijo-page-section-wrapper>
+
+        <keijo-page-section-wrapper title="Check-in">
+          <p class="mirada-hint">
+            Un ingresso per sessione. L’ora è quella della scansione alla porta, anche quando la
+            postazione era senza rete e l’ingresso è arrivato al server più tardi.
+          </p>
+          <keijo-list-items-wrapper>
+            @for (entry of checkIns(); track entry.id) {
+              <keijo-list-item-wrapper direction="row">
+                <div class="settlement">
+                  <span class="mirada-value" [class.revoked]="entry.revokedAt">
+                    @if (entry.session) {
+                      <app-i18n-text [value]="entry.session.name" />
+                    } @else {
+                      Sessione #{{ entry.sessionId }}
+                    }
+                  </span>
+                  <div class="row">
+                    <keijo-pill variant="default" [icon]="clockIcon">
+                      {{ when(entry.scannedAt) }}
+                    </keijo-pill>
+                    <app-status-pill [status]="kindUi(entry.kind)" />
+                    <keijo-pill [isID]="true" [icon]="copyIcon">{{ entry.deviceId }}</keijo-pill>
+                    @if (entry.offline) {
+                      <keijo-pill variant="info" [icon]="offlineIcon">dalla coda offline</keijo-pill>
+                    }
+                    @if (entry.conflictWithId && !entry.revokedAt) {
+                      <keijo-pill variant="error" [icon]="conflictIcon">
+                        doppio ingresso, da risolvere
+                      </keijo-pill>
+                    }
+                    @if (entry.revokedAt) {
+                      <keijo-pill variant="default" [icon]="revokedIcon">
+                        annullato il {{ when(entry.revokedAt) }}
+                      </keijo-pill>
+                    }
+                  </div>
+                </div>
+              </keijo-list-item-wrapper>
+            } @empty {
+              <keijo-info-box [icon]="doorIcon" title="Nessun ingresso registrato" variant="info">
+                <span>La persona non è ancora passata dalla porta in nessuna sessione.</span>
+              </keijo-info-box>
+            }
+          </keijo-list-items-wrapper>
+        </keijo-page-section-wrapper>
+
+        @if (doorError(); as guasto) {
+          <keijo-page-section-wrapper title="Biglietti, requisiti e check-in">
+            <keijo-info-box [icon]="conflictIcon" title="Dati non leggibili" variant="error">
+              <span>
+                {{ guasto }} Le sezioni qui sopra potrebbero essere incomplete: una lista vuota
+                non significa che non c’è nulla. Ricarica la scheda.
+              </span>
+            </keijo-info-box>
+          </keijo-page-section-wrapper>
+        }
+
         <!--
-          ⚠️ Questo riquadro diceva che le basi REST di Order, Ticket,
-          RequirementOutcome e CheckIn «non sono ancora esposte dal contratto
-          condiviso». Era falso, e lo era **dal primo commit**: i quattro
-          controller nascono lo stesso giorno di questo testo, e tre dei quattro
-          filtrano già per iscrizione. Ciò che manca è qui, non di là.
+          Qui c’era un riquadro «Non ancora costruito» su biglietti, requisiti e
+          check-in. Le tre sezioni sopra lo sostituiscono. Resta l’ordine, che è
+          un caso diverso e non si risolve costruendo una sezione.
           (Niente apici inversi in questo commento: chiudono il template literal
           e il compilatore riporta un errore che parla di tipi — app/CLAUDE.md.)
-
-          La differenza non è di parole: la vecchia versione diceva «stiamo
-          aspettando qualcun altro», e chi la leggeva non andava a controllare.
         -->
-        <keijo-page-section-wrapper title="Non ancora costruito">
-          <keijo-info-box
-            [icon]="pendingIcon"
-            title="Biglietti, requisiti e check-in"
-            variant="info"
-          >
+        <keijo-page-section-wrapper title="Ordine di provenienza">
+          <keijo-info-box [icon]="pendingIcon" title="Non si raggiunge da qui" variant="info">
             <span>
-              Il §4.3 prevede in questa scheda anche i biglietti emessi, gli esiti dei requisiti e
-              i check-in per sessione. Il backend li espone già, e tutti e tre si filtrano per
-              iscrizione: <strong>mancano le sezioni in questo back-office</strong>, non le
-              rotte.
-            </span>
-          </keijo-info-box>
-          <keijo-info-box [icon]="pendingIcon" title="L’ordine di provenienza" variant="info">
-            <span>
-              Questo è un caso diverso, e non si risolve costruendo una sezione. Un ordine non
-              appartiene a un’iscrizione: appartiene a chi compra, e contiene righe — una persona
-              può comprare per tre. Il legame passa quindi dai biglietti, e oggi
+              Un ordine non appartiene a un’iscrizione: appartiene a chi compra, e contiene
+              righe — una persona può comprare per tre. Il legame passa quindi dai biglietti, e oggi
               <strong>non esiste un modo di chiedere «l’ordine di questa iscrizione»</strong>
               senza attraversarli.
             </span>
@@ -581,6 +768,9 @@ import { applyZodIssues, clearServerErrors, controlError } from '../../shared/fo
       .settlement .row {
         flex-wrap: wrap;
       }
+      .revoked {
+        text-decoration: line-through;
+      }
     `,
   ],
 })
@@ -596,6 +786,9 @@ export class RegistrationDetailComponent implements OnInit {
   private readonly couples = inject(CoupleStore);
   private readonly api = inject(ApiClient);
   private readonly settlements = inject(BalanceSettlementStore);
+  private readonly ticketStore = inject(TicketStore);
+  private readonly outcomeStore = inject(RequirementOutcomeStore);
+  private readonly checkInStore = inject(CheckInStore);
 
   readonly store = inject(RegistrationStore);
 
@@ -615,6 +808,14 @@ export class RegistrationDetailComponent implements OnInit {
   readonly offlineIcon = cloudOff;
   /** Una scadenza è una data, non un momento: l'orologio è del versamento. */
   readonly calendarIcon = calendarMonth;
+  readonly ticketIcon = confirmationNumber;
+  readonly bearerIcon = badge;
+  /** QR revocato e ingresso annullato: una cosa che valeva e ora non vale più. */
+  readonly revokedIcon = block;
+  readonly requirementIcon = factCheck;
+  readonly approveIcon = taskAlt;
+  readonly rejectIcon = thumbDown;
+  readonly doorIcon = doorFront;
 
   private readonly registrationId = signal(0);
   readonly editing = signal(false);
@@ -644,6 +845,21 @@ export class RegistrationDetailComponent implements OnInit {
   readonly planErrors = signal<string[]>([]);
   readonly settleErrors = signal<string[]>([]);
 
+  /**
+   * La porta: biglietti, esiti dei requisiti e ingressi di questa persona.
+   *
+   * Signal della pagina, non la collezione dello store: sono le righe di
+   * **un'iscrizione**, e la lista condivisa dello store resta di chi la sfoglia.
+   */
+  readonly tickets = signal<Ticket[]>([]);
+  readonly outcomes = signal<RequirementOutcome[]>([]);
+  readonly checkIns = signal<CheckIn[]>([]);
+  /** Il guasto su una delle tre letture: una lista vuota per errore si legge «non c'è nulla». */
+  readonly doorError = signal<string | null>(null);
+  /** L'esito che si sta respingendo: il rifiuto chiede un motivo, quindi apre un modulo. */
+  readonly rejecting = signal<RequirementOutcome | null>(null);
+  readonly rejectErrors = signal<string[]>([]);
+
   readonly declaredRoleOptions: SelectOption[] = DECLARED_DANCE_ROLE_OPTIONS.map((o) => ({
     label: o.label,
     value: o.value,
@@ -672,6 +888,11 @@ export class RegistrationDetailComponent implements OnInit {
   ];
   readonly planButtons: SectionActionButton[] = [
     { id: 'plan', icon: check, label: 'Genera piano', variant: 'accent' },
+    { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
+  ];
+
+  readonly rejectButtons: SectionActionButton[] = [
+    { id: 'reject', icon: thumbDown, label: 'Respingi', variant: 'error' },
     { id: 'cancel', icon: close, label: 'Annulla', variant: 'default' },
   ];
 
@@ -706,6 +927,10 @@ export class RegistrationDetailComponent implements OnInit {
     firstDueAt: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
   });
 
+  readonly rejectForm = new FormGroup({
+    reason: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+  });
+
   readonly settleForm = new FormGroup({
     amount: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     method: new FormControl<BalanceSettlementMethod>('CASH', { nonNullable: true }),
@@ -717,7 +942,7 @@ export class RegistrationDetailComponent implements OnInit {
     this.headerTitle.set('Iscrizione');
     this.registrationId.set(Number(this.route.snapshot.paramMap.get('id')));
     await this.store.loadOne(this.registrationId());
-    await this.loadBalance();
+    await Promise.all([this.loadBalance(), this.loadDoor()]);
     this.registerActions();
   }
 
@@ -1045,6 +1270,109 @@ export class RegistrationDetailComponent implements OnInit {
         unmatched.length ? unmatched : [(err as Error).message || 'Incasso non registrato.'],
       );
     }
+  }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // La porta — biglietti, requisiti, check-in (§4.3)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Legge le tre sezioni insieme, e **non propaga**: è attesa in `ngOnInit`, e
+   * un'eccezione lì lascerebbe la scheda senza comandi (stessa ragione di
+   * `loadBalance`). Tutti i ruoli che aprono questa pagina leggono le tre
+   * risorse, quindi un errore qui è un guasto vero, e si dice.
+   */
+  private async loadDoor(): Promise<void> {
+    const id = this.registrationId();
+    const [tickets, outcomes, checkIns] = await Promise.allSettled([
+      this.ticketStore.ofRegistration(id),
+      this.outcomeStore.ofRegistration(id),
+      this.checkInStore.ofRegistration(id),
+    ]);
+    this.tickets.set(tickets.status === 'fulfilled' ? tickets.value : []);
+    this.outcomes.set(outcomes.status === 'fulfilled' ? outcomes.value : []);
+    this.checkIns.set(checkIns.status === 'fulfilled' ? checkIns.value : []);
+
+    const guasti = [tickets, outcomes, checkIns].filter(
+      (r): r is PromiseRejectedResult => r.status === 'rejected',
+    );
+    this.doorError.set(
+      guasti.length
+        ? guasti.map((r) => (r.reason as Error)?.message || 'Lettura non riuscita.').join(' ')
+        : null,
+    );
+  }
+
+  ticketUi(status: TicketStatus) {
+    return TICKET_STATUS_UI[status];
+  }
+  outcomeUi(status: RequirementOutcomeStatus) {
+    return REQUIREMENT_OUTCOME_STATUS_UI[status];
+  }
+  kindUi(kind: CheckInKind) {
+    return CHECK_IN_KIND_UI[kind];
+  }
+
+  /** Da dove viene il biglietto: una sola delle tre provenienze è valorizzata. */
+  originOf(ticket: Ticket) {
+    if (ticket.orderLineId) return { label: 'vendita online', icon: sell };
+    if (ticket.passIssuanceId) return { label: 'pass emesso a mano', icon: badge };
+    if (ticket.externalSaleId) return { label: 'negozio esterno', icon: storefront };
+    // Tutte e tre sono `SetNull`: se l'origine è stata riorganizzata il biglietto
+    // resta valido, e la scheda dice che la provenienza non si legge più.
+    return { label: 'provenienza non registrata', icon: confirmationNumber };
+  }
+
+  async approve(outcome: RequirementOutcome): Promise<void> {
+    try {
+      const updated = await this.outcomeStore.approve(outcome.id);
+      this.replaceOutcome(updated);
+      this.toast.show('SUCCESS', 'Requisito approvato.');
+    } catch {
+      // Il messaggio lo presenta già l'intercettore.
+    }
+  }
+
+  startReject(outcome: RequirementOutcome): void {
+    this.rejectForm.reset({ reason: '' });
+    this.rejectErrors.set([]);
+    this.rejecting.set(outcome);
+  }
+
+  async onRejectAction(button: SectionActionButton): Promise<void> {
+    const outcome = this.rejecting();
+    if (button.id === 'cancel' || !outcome) {
+      this.rejecting.set(null);
+      return;
+    }
+    const reason = this.rejectForm.controls.reason.value.trim();
+    if (!reason) {
+      this.rejectErrors.set(['Scrivi il motivo: è ciò che la persona leggerà.']);
+      return;
+    }
+    try {
+      const updated = await this.outcomeStore.reject(outcome.id, reason);
+      this.replaceOutcome(updated);
+      this.rejecting.set(null);
+      this.toast.show('SUCCESS', 'Requisito respinto.');
+    } catch (err) {
+      const unmatched = applyZodIssues(this.rejectForm, err);
+      this.rejectErrors.set(
+        unmatched.length ? unmatched : [(err as Error)?.message || 'Rifiuto non registrato.'],
+      );
+    }
+  }
+
+  /**
+   * La risposta del `PATCH` non porta il requisito popolato: si tiene quello già
+   * letto, altrimenti la riga perderebbe il nome appena approvata.
+   */
+  private replaceOutcome(updated: RequirementOutcome): void {
+    this.outcomes.update((rows) =>
+      rows.map((row) =>
+        row.id === updated.id ? { ...updated, eventRequirement: row.eventRequirement } : row,
+      ),
+    );
   }
 
   describeQuota(row: QuotaConsumption): string {

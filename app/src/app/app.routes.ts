@@ -5,11 +5,12 @@ import { authGuard, landingRedirect, requireCapability } from './core/auth/auth.
 /**
  * Rotte dell'applicazione `app`.
  *
- * Sette rotte di sidebar (§2, limitato a ciò che ha un endpoint vivo):
- * `/dashboard`, `/events`, `/registrations`, `/reports`, `/directory`,
- * `/organization`, `/platform`. Restano fuori `/tickets`, `/orders` e
- * `/check-in`: le basi REST di `Ticket`, `Order` e `CheckIn` non sono ancora
- * esposte.
+ * Sette rotte di sidebar (§2): `/dashboard`, `/events`, `/registrations`,
+ * `/reports`, `/directory`, `/organization`, `/platform`. Restano fuori
+ * `/tickets`, `/orders` e `/check-in` perché **queste pagine non sono ancora
+ * costruite** — non per il backend: i controller di `Ticket`, `Order` e
+ * `CheckIn` sono in `server.ts`, e la scheda dell'iscrizione li legge già.
+ * (Questo commento diceva il contrario, ed era falso dal primo giorno.)
  *
  * `/login` e `/settings` non sono voci di sidebar: la prima è fuori sessione,
  * la seconda vive nel menu utente (`KEIJO-SIDEBAR-NO-SETTINGS`).
