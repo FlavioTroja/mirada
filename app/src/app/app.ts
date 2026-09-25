@@ -108,6 +108,7 @@ import { OidcService } from './core/auth/oidc.service';
   styles: [
     `
       .app-shell {
+        --header-row-height: calc(50px + 1.25rem);
         position: relative;
         width: 100vw;
         height: 100vh;
@@ -166,15 +167,20 @@ import { OidcService } from './core/auth/oidc.service';
            margin and padding-left drops to 0 so the content sits flush
            against the sidebar boundary. Vertical paddings are safe-zone
            offsets for the absolute header (top) and the mobile bottom
-           navbar (bottom). */
-        padding: 3.725rem 0.625rem calc(66px + 12rem) 0.625rem;
+           navbar (bottom).
+
+           The top offset is the header row's real height: keijo-header
+           (50px) plus the row's own 0.625rem above and below. It used to be
+           3.725rem, about 10px short: harmless while the row was transparent,
+           but since the row is painted plum it covers the top of every page. */
+        padding: var(--header-row-height) 0.625rem calc(66px + 12rem) 0.625rem;
         overflow-y: auto;
         height: 100vh;
         position: relative;
       }
       @media (min-width: 768px) {
         .page-scroll {
-          padding: 3.725rem 0.625rem 1rem 0;
+          padding: var(--header-row-height) 0.625rem 1rem 0;
         }
       }
       /* When a child <keijo-page-wrapper [scrollable]="false"> is present (e.g.
