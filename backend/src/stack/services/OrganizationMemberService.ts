@@ -13,21 +13,7 @@ import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { OrganizationMemberCreateDTO } from "@DTOs/organization_member/OrganizationMemberCreateDTO";
 import { OrganizationMemberUpdateDTO } from "@DTOs/organization_member/OrganizationMemberUpdateDTO";
 import { OrganizationMemberQueryDTO } from "@DTOs/organization_member/OrganizationMemberQueryDTO";
-
-/**
- * La corrispondenza fra i due enum, scritta a mano invece che con un cast.
- * Hanno gli stessi nomi **oggi**: se `OrgMemberRole` ne guadagnasse uno, un cast
- * lo lascerebbe passare in silenzio e questa mappa fa fallire la compilazione.
- */
-const ROLE_OF_MEMBERSHIP: Record<OrgMemberRole, RoleName> = {
-    [OrgMemberRole.OWNER]: RoleName.OWNER,
-    [OrgMemberRole.EVENT_MANAGER]: RoleName.EVENT_MANAGER,
-    [OrgMemberRole.BOX_OFFICE]: RoleName.BOX_OFFICE,
-    [OrgMemberRole.CHECKIN_OPERATOR]: RoleName.CHECKIN_OPERATOR,
-};
-
-/** I soli ruoli che una membership giustifica: gli altri non si toccano. */
-const MEMBERSHIP_ROLES: RoleName[] = Object.values(ROLE_OF_MEMBERSHIP);
+import { MEMBERSHIP_ROLES, ROLE_OF_MEMBERSHIP } from "@utils/helpers/membershipRole";
 
 @Service()
 export class OrganizationMemberService {

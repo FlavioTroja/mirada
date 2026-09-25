@@ -204,6 +204,7 @@ export class APIServer {
             requestStorage.enterWith({
                 actorId: user?.id,
                 actorUsername: user?.username,
+                permissions: request.declaredPermissions,
             });
             done();
         });

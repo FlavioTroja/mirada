@@ -1,7 +1,10 @@
 import { Service } from "fastify-decorators";
 import httpErrors from "http-errors";
 import { OrganizationMemberRepository } from "@repositories/OrganizationMemberRepository";
-import { isGod } from "@utils/adapters/permission";
+import { isGod, rolesGranting } from "@utils/adapters/permission";
+import { currentActor } from "@utils/adapters/requestContext";
+import { Log } from "@utils/adapters/log";
+import { ROLE_OF_MEMBERSHIP } from "@utils/helpers/membershipRole";
 import { isWritableOrganization, OrganizationScope } from "@utils/helpers/organizationScope";
 
 /**
@@ -15,12 +18,53 @@ import { isWritableOrganization, OrganizationScope } from "@utils/helpers/organi
 export class OrganizationScopeService {
     constructor(private readonly organizationMemberRepository: OrganizationMemberRepository) {}
 
-    /** `null` = nessuna restrizione (GOD). Array vuoto = nessuna appartenenza, quindi nessuna riga. */
+    /**
+     * `null` = nessuna restrizione (GOD). Array vuoto = nessuna appartenenza, quindi nessuna riga.
+     *
+     * ── Un ruolo vale nell'organizzazione in cui è stato dato ───────────────
+     * I ruoli di un'appartenenza sono copiati in `RoleToUser`, che è globale, e
+     * `HasPermission` li legge da lì. Da solo quel controllo dice «questo
+     * utente può modificare eventi **da qualche parte**», non **dove**. Se lo
+     * scope fosse l'insieme di tutte le organizzazioni dell'utente, chi è
+     * `OWNER` di A e `CHECKIN_OPERATOR` di B modificherebbe gli eventi di B con
+     * i poteri che ha in A — ed era così (`RuoloPerOrganizzazione.test.ts`).
+     *
+     * Per questo, dentro una richiesta, lo scope tiene solo le organizzazioni in
+     * cui il ruolo dell'appartenenza concede **ogni** permesso dichiarato dalla
+     * rotta. Il permesso lo dichiara la rotta e non chi chiama: nessuno dei
+     * servizi che risolvono lo scope deve ricordarsene.
+     *
+     * Fuori da una richiesta con permessi dichiarati — prove di servizio, lavori
+     * pianificati — resta l'insieme di tutte le appartenenze: lì non c'è una
+     * rotta che dica quale permesso si sta esercitando.
+     */
     public async resolve(principalId: number): Promise<OrganizationScope> {
         if (await isGod(principalId)) {
             return null;
         }
-        return this.organizationMemberRepository.findOrganizationIdsByUser(principalId);
+
+        const memberships = await this.organizationMemberRepository.findByUser(principalId);
+        const context = currentActor();
+        const permissions = context?.actorId === principalId ? context.permissions : undefined;
+
+        if (!permissions?.length) {
+            return [...new Set(memberships.map(m => m.organizationId))];
+        }
+
+        const granting = await Promise.all(permissions.map(p => rolesGranting(p)));
+        const scope = [...new Set(
+            memberships
+                .filter(m => granting.every(roles => roles.includes(ROLE_OF_MEMBERSHIP[m.role])))
+                .map(m => m.organizationId),
+        )];
+
+        if (scope.length < new Set(memberships.map(m => m.organizationId)).size) {
+            Log.debug(
+                `[OrganizationScope Service]: scope of user (id ${principalId}) narrowed to [${scope.join(", ")}] ` +
+                `by the role held in each organization`,
+            );
+        }
+        return scope;
     }
 
     /**

@@ -39,6 +39,27 @@ export async function isGod(userId: number): Promise<boolean> {
     return userRoles.includes(RoleName.GOD);
 }
 
+/**
+ * I ruoli che concedono **esattamente** questo permesso — la stessa uguaglianza
+ * di terna di `hasPermission`, letta dall'altro lato.
+ *
+ * Serve a `OrganizationScopeService.resolve`: sapere che un utente *ha* un
+ * permesso non basta, bisogna sapere **da quale ruolo** gli viene, per tenere
+ * solo le organizzazioni in cui ricopre quel ruolo.
+ */
+export async function rolesGranting(permission: PermissionRequestDTO): Promise<RoleName[]> {
+    let rows;
+    try {
+        rows = await getPrismaClient().permissionConfig.findMany({
+            where: { action: permission.action, entity: permission.entity, scope: permission.scope },
+            select: { roleName: true },
+        });
+    } catch (err) {
+        throw mapPrismaErrorToHttpError(err as PrismaClientKnownRequestError);
+    }
+    return rows.map(row => row.roleName);
+}
+
 async function extractRolesFromUser(userId: number) {
 
     let roles;
