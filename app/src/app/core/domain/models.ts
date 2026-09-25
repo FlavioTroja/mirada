@@ -292,7 +292,13 @@ export interface Session extends Entity {
   cancelledAt?: string | null;
   cancellationReason?: string | null;
   sortOrder: number;
+  /** `OPEN_DAY` solo sui corsi (`20-calendario.md` §4.1). */
+  kind?: SessionKind;
+  /** Le occorrenze nate dalla stessa ripetizione. Nullo = sessione singola. */
+  seriesId?: string | null;
 }
+
+export type SessionKind = 'REGULAR' | 'OPEN_DAY';
 
 export interface EventCast extends Entity {
   eventId: number;

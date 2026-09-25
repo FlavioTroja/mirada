@@ -3,6 +3,7 @@ import { KeijoSidebarRoute } from '@keijo/ui';
 import {
   adminPanelSettings,
   badge,
+  calendarMonth,
   celebration,
   dashboard,
   domain,
@@ -66,6 +67,12 @@ export function sidebarRoutesFor(can: Capabilities): KeijoSidebarRoute[] {
 
   if (can.dashboard) {
     routes.push({ icon: dashboard, label: 'Cruscotto', path: '/dashboard' });
+  }
+
+  if (can.calendar) {
+    // Subito dopo il cruscotto: è la risposta a «che cosa c'è questa
+    // settimana?», e la porta e la cassa la leggono quanto chi organizza.
+    routes.push({ icon: calendarMonth, label: 'Calendario', path: '/calendar' });
   }
 
   if (can.events) {

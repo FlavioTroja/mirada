@@ -95,6 +95,14 @@ export interface Capabilities {
    * non hanno ragione di leggere il telefono di un contatto.
    */
   prospects: boolean;
+  /**
+   * `/calendar` — la settimana dell'organizzazione (`20-calendario.md`): lezioni,
+   * open day, eventi, appuntamenti dello staff. Tutto lo staff la legge: la
+   * porta e la cassa devono sapere che giovedì la sala è chiusa.
+   */
+  calendar: boolean;
+  /** Creare e modificare dal calendario: chi costruisce corsi ed eventi. */
+  calendarWrite: boolean;
 }
 
 const NONE: Capabilities = {
@@ -113,6 +121,8 @@ const NONE: Capabilities = {
   refunds: false,
   boxOffice: false,
   prospects: false,
+  calendar: false,
+  calendarWrite: false,
 };
 
 export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
@@ -146,6 +156,8 @@ export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
       refunds: true,
       boxOffice: true,
       prospects: true,
+      calendar: true,
+      calendarWrite: true,
     };
   }
 
@@ -163,6 +175,8 @@ export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
       registrationsWrite: true,
       boxOffice: true,
       prospects: true,
+      calendar: true,
+      calendarWrite: true,
     };
   }
 
@@ -170,12 +184,12 @@ export function capabilitiesOf(roles: readonly AppRole[]): Capabilities {
     // La cassa vede la porta **più** il registro dei saldi: gli iscritti in sola
     // lettura, e il permesso di incassare. Non costruisce eventi, e non deve —
     // è la ragione per cui il ruolo esiste separato dal responsabile eventi.
-    return { ...NONE, registrations: true, boxOffice: true };
+    return { ...NONE, registrations: true, boxOffice: true, calendar: true };
   }
 
   if (has('CHECKIN_OPERATOR')) {
     // `/check-in` e `/registrations` in sola lettura — e nient'altro (§1).
-    return { ...NONE, registrations: true };
+    return { ...NONE, registrations: true, calendar: true };
   }
 
   // `DANCER` non entra in questa applicazione: la sua superficie è `www`.

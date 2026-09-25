@@ -30,6 +30,8 @@ export const REALTIME_EVENTS = {
   registrationCreated: 'registration/created',
   registrationUpdated: 'registration/updated',
   checkinRegistered: 'checkin/registered',
+  /** Il calendario di un'organizzazione è cambiato (`20-calendario.md` §6.1). */
+  calendarChanged: 'calendar/changed',
 } as const;
 
 export interface OrganizationScopedPayload {
@@ -56,6 +58,14 @@ export interface OrganizationScopedPayload {
    * ascolta decide se il frame lo riguarda senza dover rileggere.
    */
   change?: 'CONFIRMED' | 'DECLINED' | 'ROLE_REASSIGNED' | 'UPDATED' | 'DELETED';
+  /**
+   * `calendar/changed`: il periodo toccato, in ISO. Il calendario rilegge solo
+   * se interseca quello che mostra.
+   */
+  from?: string;
+  to?: string;
+  /** `calendar/changed`: quale delle tre letture è cambiata. */
+  source?: 'SESSION' | 'EVENT' | 'APPOINTMENT';
 }
 
 type Listener = (envelope: EventEnvelope<OrganizationScopedPayload>) => void;

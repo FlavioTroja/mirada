@@ -66,6 +66,14 @@ export const routes: Routes = [
       import('./pages/dashboard/dashboard.component').then((m) => m.DashboardComponent),
   },
 
+  // -------------------------------------------------------------- /calendar
+  {
+    path: 'calendar',
+    canActivate: [requireCapability('calendar')],
+    loadComponent: () =>
+      import('./pages/calendar/calendar.component').then((m) => m.CalendarComponent),
+  },
+
   // --------------------------------------------------------------- /reports
   {
     path: 'reports',
