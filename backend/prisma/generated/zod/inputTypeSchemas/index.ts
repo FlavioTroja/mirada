@@ -52,6 +52,7 @@ export { ExternalSaleEventScalarFieldEnumSchema } from './ExternalSaleEventScala
 export { PaymentInstalmentScalarFieldEnumSchema } from './PaymentInstalmentScalarFieldEnumSchema';
 export { BalanceSettlementScalarFieldEnumSchema } from './BalanceSettlementScalarFieldEnumSchema';
 export { ProspectScalarFieldEnumSchema } from './ProspectScalarFieldEnumSchema';
+export { AppointmentScalarFieldEnumSchema } from './AppointmentScalarFieldEnumSchema';
 export { SortOrderSchema } from './SortOrderSchema';
 export { NullableJsonNullValueInputSchema } from './NullableJsonNullValueInputSchema';
 export { JsonNullValueInputSchema } from './JsonNullValueInputSchema';
@@ -93,6 +94,7 @@ export { ExternalSaleEventOrderByRelevanceFieldEnumSchema } from './ExternalSale
 export { PaymentInstalmentOrderByRelevanceFieldEnumSchema } from './PaymentInstalmentOrderByRelevanceFieldEnumSchema';
 export { BalanceSettlementOrderByRelevanceFieldEnumSchema } from './BalanceSettlementOrderByRelevanceFieldEnumSchema';
 export { ProspectOrderByRelevanceFieldEnumSchema } from './ProspectOrderByRelevanceFieldEnumSchema';
+export { AppointmentOrderByRelevanceFieldEnumSchema } from './AppointmentOrderByRelevanceFieldEnumSchema';
 export { RoleNameSchema } from './RoleNameSchema';
 export { UiScopeSchema } from './UiScopeSchema';
 export { ValueTypeSchema } from './ValueTypeSchema';
@@ -115,6 +117,7 @@ export { RequirementVerificationSchema } from './RequirementVerificationSchema';
 export { SaleUnitSchema } from './SaleUnitSchema';
 export { TicketTypeVisibilitySchema } from './TicketTypeVisibilitySchema';
 export { PriceTierKindSchema } from './PriceTierKindSchema';
+export { SessionKindSchema } from './SessionKindSchema';
 export { QuotaScopeSchema } from './QuotaScopeSchema';
 export { QuotaReservedForSchema } from './QuotaReservedForSchema';
 export { DeclaredDanceRoleSchema } from './DeclaredDanceRoleSchema';

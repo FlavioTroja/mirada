@@ -68,6 +68,7 @@ export const ModelNameItalian: Record<Prisma.ModelName, string> = {
     BalanceSettlement: "incasso del saldo",
     PaymentInstalment: "rata",
     Prospect: "prospect",
+    Appointment: "appuntamento",
 };
 
 export const italianModelName = (name: Prisma.ModelName): string => ModelNameItalian[name];

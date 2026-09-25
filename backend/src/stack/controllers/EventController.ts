@@ -17,6 +17,7 @@ import { EventExportRequestDTO, EventExportRequestSchema } from "@DTOs/event/Eve
 import { EventCreateDTO, EventCreateSchema } from "@DTOs/event/EventCreateDTO";
 import { EventUpdateDTO, EventUpdateSchema } from "@DTOs/event/EventUpdateDTO";
 import { EventPaginateBodyInputSchema, EventPaginateDTO } from "@DTOs/event/EventQueryDTO";
+import { CalendarRangeDTO, CalendarRangeSchema } from "@DTOs/calendar/CalendarRangeDTO";
 import {
     EventCancelDTO,
     EventCancelSchema,
@@ -63,6 +64,26 @@ export class EventController {
         reply: FastifyReply,
     ) {
         reply.status(200).send(await this.eventService.save(+req.user.id, req.body));
+    }
+
+    @POST("/calendar", {
+        schema: {
+            operationId: "findEventsCalendar",
+            summary: "Events in a calendar period",
+            description: "Multi-day events (family EVENT, never courses) that overlap [from, to), for the all-day band of the organizer's calendar. At most 45 days per call. Courses appear through their lessons in POST /sessions/calendar.",
+            body: CalendarRangeSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.READ, PermissionResource.EVENT, PermissionScope.ALL),
+        ],
+    })
+    async calendar(
+        req: FastifyRequest<{ Body: CalendarRangeDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(await this.eventService.findCalendar(+req.user.id, req.body));
     }
 
     @GET("/:id", {

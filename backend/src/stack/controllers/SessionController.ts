@@ -12,6 +12,10 @@ import { SessionCreateDTO, SessionCreateSchema } from "@DTOs/session/SessionCrea
 import { SessionUpdateDTO, SessionUpdateSchema } from "@DTOs/session/SessionUpdateDTO";
 import { SessionCancelDTO, SessionCancelSchema } from "@DTOs/session/SessionCancelDTO";
 import { SessionPaginateBodyInputSchema, SessionPaginateDTO } from "@DTOs/session/SessionQueryDTO";
+import { SessionScheduleDTO, SessionScheduleSchema } from "@DTOs/session/SessionScheduleDTO";
+import { SessionSeriesUpdateDTO, SessionSeriesUpdateSchema } from "@DTOs/session/SessionSeriesUpdateDTO";
+import { SeriesScopeQueryDTO, SeriesScopeQuerySchema } from "@DTOs/calendar/SeriesScopeDTO";
+import { CalendarRangeDTO, CalendarRangeSchema } from "@DTOs/calendar/CalendarRangeDTO";
 
 /**
  * Sessioni dell'evento (§4.6) — tutte le rotte sono `#OWN` (§3.8): la terna dichiarata è quella
@@ -43,6 +47,88 @@ export class SessionController {
         reply: FastifyReply,
     ) {
         reply.status(200).send(await this.sessionService.save(+req.user.id, req.body));
+    }
+
+    @POST("/schedule", {
+        schema: {
+            operationId: "scheduleSessions",
+            summary: "Schedule Sessions from the calendar",
+            description: "Creates one session or a weekly series (recurrence: weekdays + until or count, computed in local time so DST never shifts the clock). New course lessons join every ticket type that already covered all the course's live lessons; the response lists them. OPEN_DAY is accepted only on courses. At most 104 occurrences.",
+            body: SessionScheduleSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.CREATE, PermissionResource.SESSION, PermissionScope.ALL),
+        ],
+    })
+    async schedule(
+        req: FastifyRequest<{ Body: SessionScheduleDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(await this.sessionService.schedule(+req.user.id, req.body));
+    }
+
+    @POST("/calendar", {
+        schema: {
+            operationId: "findSessionsCalendar",
+            summary: "Sessions in a calendar period",
+            description: "Sessions of every family (course lessons, open days, festival and milonga sessions, cancelled ones included) that overlap [from, to), with their event's title, status, venue and family. At most 45 days per call.",
+            body: CalendarRangeSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.READ, PermissionResource.SESSION, PermissionScope.ALL),
+        ],
+    })
+    async calendar(
+        req: FastifyRequest<{ Body: CalendarRangeDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(await this.sessionService.findCalendar(+req.user.id, req.body));
+    }
+
+    @PATCH("/:id/series", {
+        schema: {
+            operationId: "updateSessionSeries",
+            summary: "Update a Session series",
+            description: "Applies the change to this occurrence and the following ones (FOLLOWING) or to the whole series (ALL). New times are those of this occurrence: each occurrence keeps its own day and gets the same clock time and duration. Moving the day is refused.",
+            params: exz.pathId,
+            body: SessionSeriesUpdateSchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.UPDATE, PermissionResource.SESSION, PermissionScope.SINGLE),
+        ],
+    })
+    async updateSeries(
+        req: FastifyRequest<{ Params: { id: string }, Body: SessionSeriesUpdateDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(await this.sessionService.updateSeries(+req.user.id, +req.params.id, req.body));
+    }
+
+    @DELETE("/:id/series", {
+        schema: {
+            operationId: "deleteSessionSeries",
+            summary: "Delete a Session series",
+            description: "Soft-deletes this occurrence and the following ones (FOLLOWING) or the whole series (ALL). Occurrences already over, and those with at least one check-in, are skipped; the response counts them.",
+            params: exz.pathId,
+            querystring: SeriesScopeQuerySchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.DELETE, PermissionResource.SESSION, PermissionScope.SINGLE),
+        ],
+    })
+    async deleteSeries(
+        req: FastifyRequest<{ Params: { id: string }, Querystring: SeriesScopeQueryDTO }>,
+        reply: FastifyReply,
+    ) {
+        reply.status(200).send(await this.sessionService.deleteSeries(+req.user.id, +req.params.id, req.query.scope));
     }
 
     @GET("/:id", {

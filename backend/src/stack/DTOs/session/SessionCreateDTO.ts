@@ -9,12 +9,16 @@ import { I18nTextSchema } from "@utils/helpers/i18nText";
  * `capMultiSession = false`. `cancelledAt`/`cancellationReason` passano da
  * `cancelSession`. `allocationWeight` resta facoltativo: in sua assenza il
  * servizio applica il default uniforme (`RF-EVT-36`).
+ *
+ * `seriesId` non si scrive: una serie nasce solo da `POST /sessions/schedule`,
+ * che ne genera tutte le occorrenze insieme (`20-calendario.md` §5).
  */
 export const SessionCreateSchema = withoutMetadata(SessionOptionalDefaultsSchema)
     .omit({
         isImplicit: true,
         cancelledAt: true,
         cancellationReason: true,
+        seriesId: true,
     })
     .extend({
         name: I18nTextSchema,

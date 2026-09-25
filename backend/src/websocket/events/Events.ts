@@ -89,6 +89,18 @@ export const Events = {
      * ha per giunta un permesso suo (`RB27`).
      */
     BALANCE_SETTLED: "balance/settled",
+    /**
+     * Qualcosa è cambiato sul calendario di un'organizzazione (`20-calendario.md`):
+     * una lezione, un open day, una sessione, un evento o un appuntamento è nato,
+     * si è spostato, è stato annullato o eliminato. Ai MEMBRI dell'organizzazione.
+     *
+     * Invito a rileggere, mai un canale di dati: porta il periodo toccato, così
+     * chi guarda un'altra settimana non ricarica nulla. Chi scrive riceve il
+     * proprio segnale come tutti: ricaricare quel che si è appena salvato è
+     * innocuo, e distinguere il mittente complicherebbe il fan-out senza
+     * guadagno quando l'utente ha lo stesso calendario aperto su due schede.
+     */
+    CALENDAR_CHANGED: "calendar/changed",
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

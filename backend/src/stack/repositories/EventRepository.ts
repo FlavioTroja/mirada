@@ -1,5 +1,5 @@
 import { Service } from "fastify-decorators";
-import { Event, EventStatus, Prisma } from "@prisma/client";
+import { Event, EventStatus, EventTypeFamily, Prisma } from "@prisma/client";
 import { getPrismaClient } from "@utils/adapters/prisma";
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
@@ -320,5 +320,39 @@ export class EventRepository extends BaseRepository<"event"> {
             `;
             return rows.map(r => r.id);
         });
+    }
+
+    /**
+     * Gli eventi (famiglia `EVENT`) che toccano `[from, to)`, per la fascia
+     * «tutto il giorno» del calendario. Leggeri di proposito: la griglia vuole
+     * titolo, date, stato e sede, e una vista del mese ne chiede decine.
+     */
+    async findCalendarInScope(scope: OrganizationScope, from: Date, to: Date, tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: {
+                    AND: [
+                        {
+                            deleted: false,
+                            startAt: { lt: to },
+                            endAt: { gt: from },
+                            eventType: { family: EventTypeFamily.EVENT },
+                        },
+                        organizationScopeWhere(scope),
+                    ],
+                },
+                select: {
+                    id: true,
+                    organizationId: true,
+                    title: true,
+                    startAt: true,
+                    endAt: true,
+                    status: true,
+                    cancelledAt: true,
+                    venue: { select: { id: true, name: true } },
+                },
+                orderBy: { startAt: "asc" },
+            })
+        );
     }
 }

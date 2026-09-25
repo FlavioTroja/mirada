@@ -147,6 +147,7 @@ model User {
   ticketTransfersTo           TicketTransfer[]     @relation("TicketTransferTo")
   checkIns                    CheckIn[]            @relation("CheckInOperator")
   balanceSettlements          BalanceSettlement[]  @relation("BalanceSettlementOperator")
+  appointmentsCreated         Appointment[]        @relation("AppointmentCreatedBy")
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -564,6 +565,7 @@ model Organization {
   fiscalDeclarations FiscalDeclaration[]
   salesChannels      SalesChannel[]
   prospects          Prospect[]
+  appointments       Appointment[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -734,7 +736,8 @@ model Venue {
   accessibility   String?
   notes           String?
 
-  events Event[]
+  events       Event[]
+  appointments Appointment[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -1005,6 +1008,15 @@ model FiscalDeclaration {
 // Passo 9 — Session (§4.6)
 // -----------------------------------------------------------------------------
 
+/// Che cosa è una sessione, oltre che quando (`20-calendario.md` §4.1).
+enum SessionKind {
+  REGULAR
+  /// Lezione di prova aperta a chi non è iscritto. **Solo sui corsi**
+  /// (`19-prospect.md`): un festival non ha open day. Non entra mai da sola in un
+  /// titolo, e non conta quando si chiede se un titolo «comprende tutte le lezioni».
+  OPEN_DAY
+}
+
 model Session {
   id Int @id @default(autoincrement())
 
@@ -1032,6 +1044,14 @@ model Session {
   cancellationReason String?
   sortOrder          Int       @default(0)
 
+  kind SessionKind @default(REGULAR)
+
+  /// Le occorrenze nate dalla stessa ripetizione del calendario («ogni martedì
+  /// alle 20:30»). **Nullo = sessione singola.** Non esiste una regola di
+  /// ricorrenza nello schema (`15-corsi.md` §2.3): la ripetizione genera righe
+  /// vere, e questo è solo ciò che le tiene insieme per modificarle in blocco.
+  seriesId String? @db.Uuid
+
   ticketTypeSessions TicketTypeSession[]
   checkIns           CheckIn[]
 
@@ -1041,6 +1061,7 @@ model Session {
 
   @@index([eventId])
   @@index([eventId, startAt])
+  @@index([seriesId])
 }
 
 // -----------------------------------------------------------------------------
@@ -2702,4 +2723,48 @@ model Prospect {
   @@index([organizationId, status])
   @@index([sourceEventId])
   @@index([convertedRegistrationId])
+}
+
+// -----------------------------------------------------------------------------
+// Il calendario dell'organizzatore — `20-calendario.md`
+// -----------------------------------------------------------------------------
+
+/// **Un impegno dello staff che non è una lezione né un evento**: la riunione,
+/// le prove, la sala chiusa per pulizie (`20-calendario.md` §4.2).
+///
+/// Non va mai in pubblico, ed è per questo che `title` è testo semplice e non
+/// `I18nText`. Come le sessioni, una ripetizione genera righe vere legate da
+/// `seriesId`.
+model Appointment {
+  id Int @id @default(autoincrement())
+
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  title String
+  note  String?
+
+  startAt DateTime
+  endAt   DateTime
+  /// Tutto il giorno: `startAt`/`endAt` sono la mezzanotte locale del primo
+  /// giorno e quella successiva all'ultimo, e la griglia li mette nella fascia alta.
+  allDay  Boolean  @default(false)
+
+  /// La sede, facoltativa, dalla rubrica dell'organizzazione o di piattaforma.
+  venueId Int?
+  venue   Venue?  @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  room    String?
+
+  seriesId String? @db.Uuid
+
+  createdById Int
+  createdBy   User @relation("AppointmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, startAt])
+  @@index([seriesId])
+  @@index([venueId])
 }

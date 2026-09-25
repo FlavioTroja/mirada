@@ -40,6 +40,8 @@ import { EventUpdateDTO } from "@DTOs/event/EventUpdateDTO";
 import { EventQueryDTO } from "@DTOs/event/EventQueryDTO";
 import { EventCancelDTO, OrphanSessionsResolutionDTO, OrphanSessionsResolveDTO } from "@DTOs/event/EventLifecycleDTO";
 import { I18nText } from "@utils/helpers/i18nText";
+import { CalendarBroadcastService } from "@services/CalendarBroadcastService";
+import { CalendarRangeDTO } from "@DTOs/calendar/CalendarRangeDTO";
 
 /** Nome della sessione implicita creata su un evento non multi-sessione (§4.6). */
 const IMPLICIT_SESSION_NAME: I18nText = { it: "Evento", en: "Event" };
@@ -62,7 +64,73 @@ export class EventService {
         private readonly ticketIssuanceGuardService: TicketIssuanceGuardService,
         private readonly capacityEngineService: CapacityEngineService,
         private readonly capacityQuotaService: CapacityQuotaService,
+        private readonly calendarBroadcastService: CalendarBroadcastService,
     ) {}
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Le scritture che il calendario deve vedere (`20-calendario.md`)
+    //
+    // Ogni scrittura che sposta, crea, annulla o toglie un evento avvisa i membri
+    // dell'organizzazione **dopo** essersi conclusa. Il corpo vive nel metodo
+    // `…Unannounced` accanto: separarli tiene la notifica fuori dalle
+    // transazioni, dove un socket lento non deve poter entrare (§3.9).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public async save(principalId: number, dto: EventCreateDTO): Promise<Event> {
+        const event = await this.saveUnannounced(principalId, dto);
+        await this.announce(event);
+        return event;
+    }
+
+    public async updateById(principalId: number, id: number, dto: EventUpdateDTO): Promise<Event> {
+        const before = await this.findByIdOrThrow(principalId, id);
+        const event = await this.updateByIdUnannounced(principalId, id, dto);
+        await this.announce(event, before);
+        return event;
+    }
+
+    public async safeDeleteById(principalId: number, id: number): Promise<Event> {
+        const event = await this.safeDeleteByIdUnannounced(principalId, id);
+        await this.announce(event);
+        return event;
+    }
+
+    public async publish(principalId: number, id: number, context: FiscalDeclarationServerContext): Promise<Event> {
+        const event = await this.publishUnannounced(principalId, id, context);
+        await this.announce(event);
+        return event;
+    }
+
+    public async cancel(principalId: number, id: number, dto: EventCancelDTO): Promise<Event> {
+        const event = await this.cancelUnannounced(principalId, id, dto);
+        await this.announce(event);
+        return event;
+    }
+
+    public async duplicate(principalId: number, id: number): Promise<Event> {
+        const event = await this.duplicateUnannounced(principalId, id);
+        await this.announce(event);
+        return event;
+    }
+
+    private async announce(event: Event, before?: Event): Promise<void> {
+        await this.calendarBroadcastService.publishChanged(
+            event.organizationId,
+            "EVENT",
+            [event, ...(before ? [before] : [])],
+        );
+    }
+
+    /**
+     * **Gli eventi su più giorni nel periodo** (`20-calendario.md` §3): festival,
+     * marathon, milonghe — mai i corsi, le cui dodici settimane nella fascia
+     * «tutto il giorno» non direbbero niente. Le loro sessioni arrivano da
+     * `POST /sessions/calendar`.
+     */
+    public async findCalendar(principalId: number, range: CalendarRangeDTO) {
+        const scope = await this.organizationScopeService.resolve(principalId);
+        return this.eventRepository.findCalendarInScope(scope, range.from, range.to);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // CRUD del dialetto (§3.2)
@@ -74,7 +142,7 @@ export class EventService {
      * milonga singola gira sullo stesso codice di quello di un festival. Sono due
      * scritture, quindi una `$transaction` (regola 1 di transactions.md).
      */
-    public async save(principalId: number, dto: EventCreateDTO): Promise<Event> {
+    private async saveUnannounced(principalId: number, dto: EventCreateDTO): Promise<Event> {
         const scope = await this.organizationScopeService.resolve(principalId);
         // L'organizzazione la DERIVA il server (§OrganizationScopeService).
         const organizationId = this.organizationScopeService.resolveRequiredOwner(scope, dto.organizationId);
@@ -127,7 +195,7 @@ export class EventService {
         return this.eventRepository.paginateInScope(scope, this.createQueryFromPayload(query), options);
     }
 
-    public async updateById(principalId: number, id: number, dto: EventUpdateDTO): Promise<Event> {
+    private async updateByIdUnannounced(principalId: number, id: number, dto: EventUpdateDTO): Promise<Event> {
         const event = await this.findByIdOrThrow(principalId, id);
         const scope = await this.organizationScopeService.resolve(principalId);
         this.organizationScopeService.assertWritable(scope, dto.organizationId ?? event.organizationId);
@@ -141,7 +209,7 @@ export class EventService {
         return this.eventRepository.update({ id }, dto as any);
     }
 
-    public async safeDeleteById(principalId: number, id: number): Promise<Event> {
+    private async safeDeleteByIdUnannounced(principalId: number, id: number): Promise<Event> {
         const event = await this.findByIdOrThrow(principalId, id);
         const scope = await this.organizationScopeService.resolve(principalId);
         this.organizationScopeService.assertWritable(scope, event.organizationId);
@@ -183,7 +251,7 @@ export class EventService {
      * `EVENT_ATTESTATION` a nome di chi compie l'atto (`RF-ORG-8`): stessa
      * transazione, o valgono entrambe o nessuna delle due.
      */
-    public async publish(principalId: number, id: number, context: FiscalDeclarationServerContext): Promise<Event> {
+    private async publishUnannounced(principalId: number, id: number, context: FiscalDeclarationServerContext): Promise<Event> {
         const event = await this.findByIdOrThrow(principalId, id);
         const scope = await this.organizationScopeService.resolve(principalId);
         this.organizationScopeService.assertWritable(scope, event.organizationId);
@@ -346,7 +414,7 @@ export class EventService {
      * passi 13 e 16 del §2 e non esistono ancora: il rilascio si innesta qui in
      * fase C, dentro questa stessa transazione.
      */
-    public async cancel(principalId: number, id: number, dto: EventCancelDTO): Promise<Event> {
+    private async cancelUnannounced(principalId: number, id: number, dto: EventCancelDTO): Promise<Event> {
         const event = await this.assertWritableEvent(principalId, id);
 
         if (event.status === EventStatus.CANCELLED) {
@@ -393,7 +461,7 @@ export class EventService {
      * clonazione prescritta dal §4.5 ma appartengono al passo 13: si aggiungono
      * in fase C dentro questa stessa transazione.
      */
-    public async duplicate(principalId: number, id: number): Promise<Event> {
+    private async duplicateUnannounced(principalId: number, id: number): Promise<Event> {
         const source = await this.assertWritableEvent(principalId, id);
         const slug = await this.buildDuplicateSlug(source.slug);
 

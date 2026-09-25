@@ -506,6 +506,21 @@ const MATRIX: ResourceMatrix[] = [
             own(RoleName.EVENT_MANAGER, ALL_ACTIONS),
         ],
     },
+
+    // ─── Il calendario dell'organizzatore (`20-calendario.md`) ──────────────
+    {
+        // | APPOINTMENT | ∀ | ∀#OWN | ∀#OWN | READ#OWN | – |
+        //
+        // Chi fa la porta e la cassa legge il calendario dello staff — la sala
+        // chiusa per pulizie o le prove lo riguardano — ma non lo scrive. La
+        // cassa lo eredita dalla porta, come il resto (sotto).
+        resource: PermissionResource.APPOINTMENT,
+        grants: [
+            own(RoleName.OWNER, ALL_ACTIONS),
+            own(RoleName.EVENT_MANAGER, ALL_ACTIONS),
+            own(RoleName.CHECKIN_OPERATOR, READ_ONLY),
+        ],
+    },
 ];
 
 /**

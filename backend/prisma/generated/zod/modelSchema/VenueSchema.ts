@@ -5,6 +5,8 @@ import { AddressWithRelationsSchema, AddressPartialWithRelationsSchema, AddressO
 import type { AddressWithRelations, AddressPartialWithRelations, AddressOptionalDefaultsWithRelations } from './AddressSchema'
 import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptionalDefaultsWithRelationsSchema } from './EventSchema'
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
+import { AppointmentWithRelationsSchema, AppointmentPartialWithRelationsSchema, AppointmentOptionalDefaultsWithRelationsSchema } from './AppointmentSchema'
+import type { AppointmentWithRelations, AppointmentPartialWithRelations, AppointmentOptionalDefaultsWithRelations } from './AppointmentSchema'
 
 /////////////////////////////////////////
 // VENUE SCHEMA
@@ -67,6 +69,7 @@ export type VenueRelations = {
   organization?: OrganizationWithRelations | null;
   address: AddressWithRelations;
   events: EventWithRelations[];
+  appointments: AppointmentWithRelations[];
 };
 
 export type VenueWithRelations = z.infer<typeof VenueSchema> & VenueRelations
@@ -75,6 +78,7 @@ export const VenueWithRelationsSchema: z.ZodType<VenueWithRelations> = VenueSche
   organization: z.lazy(() => OrganizationWithRelationsSchema).nullish(),
   address: z.lazy(() => AddressWithRelationsSchema),
   events: z.lazy(() => EventWithRelationsSchema).array(),
+  appointments: z.lazy(() => AppointmentWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -85,6 +89,7 @@ export type VenueOptionalDefaultsRelations = {
   organization?: OrganizationOptionalDefaultsWithRelations | null;
   address: AddressOptionalDefaultsWithRelations;
   events: EventOptionalDefaultsWithRelations[];
+  appointments: AppointmentOptionalDefaultsWithRelations[];
 };
 
 export type VenueOptionalDefaultsWithRelations = z.infer<typeof VenueOptionalDefaultsSchema> & VenueOptionalDefaultsRelations
@@ -93,6 +98,7 @@ export const VenueOptionalDefaultsWithRelationsSchema: z.ZodType<VenueOptionalDe
   organization: z.lazy(() => OrganizationOptionalDefaultsWithRelationsSchema).nullish(),
   address: z.lazy(() => AddressOptionalDefaultsWithRelationsSchema),
   events: z.lazy(() => EventOptionalDefaultsWithRelationsSchema).array(),
+  appointments: z.lazy(() => AppointmentOptionalDefaultsWithRelationsSchema).array(),
 }))
 
 /////////////////////////////////////////
@@ -103,6 +109,7 @@ export type VenuePartialRelations = {
   organization?: OrganizationPartialWithRelations | null;
   address?: AddressPartialWithRelations;
   events?: EventPartialWithRelations[];
+  appointments?: AppointmentPartialWithRelations[];
 };
 
 export type VenuePartialWithRelations = z.infer<typeof VenuePartialSchema> & VenuePartialRelations
@@ -111,6 +118,7 @@ export const VenuePartialWithRelationsSchema: z.ZodType<VenuePartialWithRelation
   organization: z.lazy(() => OrganizationPartialWithRelationsSchema).nullish(),
   address: z.lazy(() => AddressPartialWithRelationsSchema),
   events: z.lazy(() => EventPartialWithRelationsSchema).array(),
+  appointments: z.lazy(() => AppointmentPartialWithRelationsSchema).array(),
 })).partial()
 
 export type VenueOptionalDefaultsWithPartialRelations = z.infer<typeof VenueOptionalDefaultsSchema> & VenuePartialRelations
@@ -119,6 +127,7 @@ export const VenueOptionalDefaultsWithPartialRelationsSchema: z.ZodType<VenueOpt
   organization: z.lazy(() => OrganizationPartialWithRelationsSchema).nullish(),
   address: z.lazy(() => AddressPartialWithRelationsSchema),
   events: z.lazy(() => EventPartialWithRelationsSchema).array(),
+  appointments: z.lazy(() => AppointmentPartialWithRelationsSchema).array(),
 }).partial())
 
 export type VenueWithPartialRelations = z.infer<typeof VenueSchema> & VenuePartialRelations
@@ -127,6 +136,7 @@ export const VenueWithPartialRelationsSchema: z.ZodType<VenueWithPartialRelation
   organization: z.lazy(() => OrganizationPartialWithRelationsSchema).nullish(),
   address: z.lazy(() => AddressPartialWithRelationsSchema),
   events: z.lazy(() => EventPartialWithRelationsSchema).array(),
+  appointments: z.lazy(() => AppointmentPartialWithRelationsSchema).array(),
 }).partial())
 
 export default VenueSchema;

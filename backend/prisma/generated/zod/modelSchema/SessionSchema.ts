@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { JsonValueSchema } from '../inputTypeSchemas/JsonValueSchema'
+import { SessionKindSchema } from '../inputTypeSchemas/SessionKindSchema'
 import { EventWithRelationsSchema, EventPartialWithRelationsSchema, EventOptionalDefaultsWithRelationsSchema } from './EventSchema'
 import type { EventWithRelations, EventPartialWithRelations, EventOptionalDefaultsWithRelations } from './EventSchema'
 import { TicketTypeSessionWithRelationsSchema, TicketTypeSessionPartialWithRelationsSchema, TicketTypeSessionOptionalDefaultsWithRelationsSchema } from './TicketTypeSessionSchema'
@@ -12,6 +13,7 @@ import type { CheckInWithRelations, CheckInPartialWithRelations, CheckInOptional
 /////////////////////////////////////////
 
 export const SessionSchema = z.object({
+  kind: SessionKindSchema,
   id: z.number().int(),
   eventId: z.number().int(),
   /**
@@ -35,6 +37,13 @@ export const SessionSchema = z.object({
   cancelledAt: z.coerce.date().nullish(),
   cancellationReason: z.string().nullish(),
   sortOrder: z.number().int(),
+  /**
+   * Le occorrenze nate dalla stessa ripetizione del calendario («ogni martedì
+   * alle 20:30»). **Nullo = sessione singola.** Non esiste una regola di
+   * ricorrenza nello schema (`15-corsi.md` §2.3): la ripetizione genera righe
+   * vere, e questo è solo ciò che le tiene insieme per modificarle in blocco.
+   */
+  seriesId: z.string().nullish(),
   deleted: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -55,6 +64,7 @@ export type SessionPartial = z.infer<typeof SessionPartialSchema>
 /////////////////////////////////////////
 
 export const SessionOptionalDefaultsSchema = SessionSchema.merge(z.object({
+  kind: SessionKindSchema.optional(),
   id: z.number().int().optional(),
   /**
    * Peso di ripartizione (`RF-EVT-36`): default uniforme calcolato dal servizio.

@@ -51,3 +51,4 @@ export * from './ExternalSaleEventSchema';
 export * from './PaymentInstalmentSchema';
 export * from './BalanceSettlementSchema';
 export * from './ProspectSchema';
+export * from './AppointmentSchema';
