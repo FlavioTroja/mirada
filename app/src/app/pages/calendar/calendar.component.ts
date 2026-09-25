@@ -219,6 +219,7 @@ const dayFmt = new Intl.DateTimeFormat(LOCALE, {
 
     @if (editor(); as open) {
       <div
+        #editorLayer
         class="editor-layer"
         role="dialog"
         aria-label="Nuova voce del calendario"
@@ -313,6 +314,7 @@ export class CalendarComponent implements OnInit {
   readonly card = signal<{ item: CalendarItem; left: number; top: number } | null>(null);
 
   private readonly cardElement = viewChild<ElementRef<HTMLElement>>('card');
+  private readonly editorLayer = viewChild<ElementRef<HTMLElement>>('editorLayer');
 
   /** I giorni della griglia: uno, sette, o le sei settimane del mese. */
   readonly days = computed<DayKey[]>(() => {
@@ -368,6 +370,27 @@ export class CalendarComponent implements OnInit {
           replaceUrl: true,
         });
       });
+    });
+
+    // Il popup si allunga mentre lo si usa — la ripetizione aggiunge tre campi.
+    // Posizionato una volta sola, all'apertura, vicino al bordo dello schermo
+    // finiva con «Salva» fuori dalla vista. Ogni volta che cambia altezza lo si
+    // riporta dentro: si alza quanto serve, e oltre l'altezza dello schermo
+    // scorre al suo interno (max-height del popup).
+    effect((onCleanup) => {
+      const element = this.editorLayer()?.nativeElement;
+      if (!element) return;
+      const keepOnScreen = () => {
+        const open = untracked(() => this.editor());
+        if (!open) return;
+        const margin = 16;
+        const height = element.getBoundingClientRect().height;
+        const top = Math.max(margin, Math.min(open.top, window.innerHeight - height - margin));
+        if (top !== open.top) this.editor.set({ ...open, top });
+      };
+      const observer = new ResizeObserver(keepOnScreen);
+      observer.observe(element);
+      onCleanup(() => observer.disconnect());
     });
 
     // In tempo reale: si rilegge solo se il periodo toccato interseca quello

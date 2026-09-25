@@ -358,7 +358,13 @@ interface CourseRow {
       .preview { margin: 0; font-size: 0.86rem; padding: 0.5rem 0.75rem; border-radius: 10px; background: rgba(var(--accent-rgb), 0.1); }
       .preview.bad, .error { color: var(--color-error); background: var(--color-error-light); }
       .error { margin: 0; font-size: 0.86rem; padding: 0.5rem 0.75rem; border-radius: 10px; }
-      .actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; margin-top: 0.25rem; }
+      /* «Salva» resta in vista anche quando il popup, più alto dello schermo,
+         scorre: la riga è incollata al fondo, sopra il contenuto. */
+      .actions {
+        position: sticky; bottom: -1rem; z-index: 1; display: flex; justify-content: flex-end; align-items: center;
+        gap: 0.75rem; margin: 0.25rem -1.25rem -1rem; padding: 0.75rem 1.25rem 1rem;
+        background: rgb(var(--foreground-color)); border-top: 1px solid var(--color-default-border);
+      }
       .more {
         font: inherit; font-size: 0.88rem; font-weight: 600; color: var(--color-accent); background: none;
         border: 0; padding: 0.5rem 0.75rem; border-radius: 999px; cursor: pointer;
