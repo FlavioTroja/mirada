@@ -73,6 +73,11 @@ export class ApiClient {
     return this.run(firstValueFrom(this.http.patch<T>(this.url(`/${base}/${id}`), patch)));
   }
 
+  /** `DELETE <path>` — per le cancellazioni che non sono `/{plural}/:id`, come `…/:id/series?scope=ALL`. */
+  deletePath<T>(path: string): Promise<T> {
+    return this.run(firstValueFrom(this.http.delete<T>(this.url(path))));
+  }
+
   /** `DELETE /{plural}/:id` — cancellazione soft. */
   remove<T>(base: string, id: number): Promise<T> {
     return this.run(firstValueFrom(this.http.delete<T>(this.url(`/${base}/${id}`))));

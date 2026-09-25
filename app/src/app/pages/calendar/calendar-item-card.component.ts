@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { PillComponent } from '@keijo/ui';
-import { celebration, close, eventRepeat, locationOn, meetingRoom, notes, school, schedule } from '@keijo/ui/icons';
+import { ButtonComponent, PillComponent } from '@keijo/ui';
+import { celebration, close, edit, eventRepeat, iconDelete, locationOn, meetingRoom, notes, school, schedule } from '@keijo/ui/icons';
 import { IconComponent } from '@keijo/ui';
 import { CalendarItem } from '../../core/domain/calendar';
 import { formatDayLabel, formatTime } from '../../core/i18n/format';
@@ -25,7 +25,7 @@ const KIND_LABEL: Record<CalendarItem['kind'], string> = {
   selector: 'app-calendar-item-card',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PillComponent, IconComponent],
+  imports: [PillComponent, IconComponent, ButtonComponent],
   template: `
     @let it = item();
     <header>
@@ -91,6 +91,26 @@ const KIND_LABEL: Record<CalendarItem['kind'], string> = {
         </keijo-pill>
       </div>
     }
+
+    @if (editable()) {
+      <div class="actions">
+        @if (deletable()) {
+          <keijo-button
+            variant="error"
+            [icon]="deleteIcon"
+            label="Elimina"
+            [tooltip]="it.seriesId ? 'Elimina questa voce o la serie' : 'Elimina questa voce'"
+            (action)="remove.emit()"
+          />
+        }
+        <keijo-button
+          [icon]="editIcon"
+          label="Modifica"
+          [tooltip]="it.seriesId ? 'Modifica questa voce o la serie' : 'Modifica questa voce'"
+          (action)="edit.emit()"
+        />
+      </div>
+    }
   `,
   styles: [
     CALENDAR_PALETTE,
@@ -121,15 +141,34 @@ const KIND_LABEL: Record<CalendarItem['kind'], string> = {
       .reason { color: var(--color-error); }
       .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
       .link { display: flex; }
+      .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
     `,
   ],
 })
 export class CalendarItemCardComponent {
   readonly item = input.required<CalendarItem>();
+  /** Chi può scrivere sul calendario (`calendarWrite`). */
+  readonly canWrite = input(false);
+
   readonly closed = output<void>();
   readonly navigate = output<string>();
+  readonly edit = output<void>();
+  readonly remove = output<void>();
+
+  /**
+   * Si modificano dal calendario lezioni, sessioni e appuntamenti. Un evento su
+   * più giorni no: si apre la sua scheda, dove c'è il contesto per deciderlo.
+   */
+  readonly editable = computed(() => this.canWrite() && this.item().ref.type !== 'event');
+  /** La sessione implicita di una milonga singola è il contenitore del check-in: si sposta, non si toglie. */
+  readonly deletable = computed(() => {
+    const ref = this.item().ref;
+    return ref.type === 'appointment' || (ref.type === 'session' && !ref.isImplicit);
+  });
 
   readonly closeIcon = close;
+  readonly editIcon = edit;
+  readonly deleteIcon = iconDelete;
   readonly scheduleIcon = schedule;
   readonly repeatIcon = eventRepeat;
   readonly roomIcon = meetingRoom;

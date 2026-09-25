@@ -4,7 +4,7 @@ import { formatTime } from '../../core/i18n/format';
 import { DayKey } from '../../core/i18n/zoned';
 import { itemsOfDay, monthDays } from './calendar-layout';
 import { CALENDAR_PALETTE } from './calendar-palette';
-import { CalendarItemClick } from './calendar-time-grid.component';
+import { CalendarItemClick, CalendarSlot } from './calendar-time-grid.component';
 
 const WEEKDAY_SHORT = ['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'];
 /** Voci per giorno prima del «+N altri»: tre, come Google, perché la cella resti leggibile. */
@@ -26,7 +26,13 @@ const VISIBLE_PER_DAY = 3;
     </div>
     <div class="cells">
       @for (cell of cells(); track cell.day) {
-        <div class="cell" [class.out]="!cell.inMonth" [class.today]="cell.day === today()">
+        <div
+          class="cell"
+          [class.out]="!cell.inMonth"
+          [class.today]="cell.day === today()"
+          [class.writable]="writable()"
+          (click)="pickDay($event, cell.day)"
+        >
           <button
             type="button"
             class="num"
@@ -77,6 +83,7 @@ const VISIBLE_PER_DAY = 3;
         border-top: 1px solid var(--color-default-border); border-left: 1px solid var(--color-default-border);
       }
       .cell:nth-child(7n + 1) { border-left: 0; }
+      .cell.writable { cursor: cell; }
       .num {
         align-self: center; width: 1.7rem; height: 1.7rem; border-radius: 999px; border: 0; background: none;
         font: inherit; font-size: 0.8rem; font-weight: 600; color: rgb(var(--text-rgb)); cursor: pointer;
@@ -120,8 +127,11 @@ export class CalendarMonthGridComponent {
   readonly items = input.required<CalendarItem[]>();
   readonly today = input.required<DayKey>();
 
+  readonly writable = input(false);
+
   readonly itemClick = output<CalendarItemClick>();
   readonly dayClick = output<DayKey>();
+  readonly slotSelect = output<CalendarSlot>();
 
   readonly weekdays = WEEKDAY_SHORT;
 
@@ -133,6 +143,22 @@ export class CalendarMonthGridComponent {
       return { day, inMonth: day.startsWith(month), shown, more: all.length - shown.length };
     });
   });
+
+  /**
+   * Un clic sul vuoto di un giorno propone una voce in quel giorno. Nel mese non
+   * c'è un'ora da cui partire: si propone la sera, quando una scuola di tango
+   * fa lezione — l'orario si corregge nel popup.
+   */
+  pickDay(event: MouseEvent, day: DayKey): void {
+    if (!this.writable()) return;
+    event.stopPropagation();
+    this.slotSelect.emit({
+      day,
+      startMinute: 20 * 60 + 30,
+      endMinute: 22 * 60,
+      anchor: (event.currentTarget as HTMLElement).getBoundingClientRect(),
+    });
+  }
 
   time(item: CalendarItem): string {
     return formatTime(item.startAt);

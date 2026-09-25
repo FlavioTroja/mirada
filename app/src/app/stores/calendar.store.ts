@@ -19,6 +19,45 @@ interface Rows {
 
 const EMPTY: Rows = { sessions: [], events: [], appointments: [] };
 
+export type SeriesScope = 'FOLLOWING' | 'ALL';
+
+export interface RecurrenceBody {
+  weekdays: number[];
+  until?: string;
+  count?: number;
+}
+
+export interface SessionScheduleBody {
+  eventId: number;
+  name: { it: string; en?: string };
+  kind: 'REGULAR' | 'OPEN_DAY';
+  startAt: string;
+  endAt: string;
+  room: string | null;
+  recurrence?: RecurrenceBody;
+}
+
+export interface SessionScheduleResult {
+  sessions: { id: number }[];
+  extendedTicketTypes: { id: number; name: { it: string; en?: string }; addedSessions: number }[];
+}
+
+export interface AppointmentScheduleBody {
+  title: string;
+  note: string | null;
+  room: string | null;
+  allDay: boolean;
+  startAt: string;
+  endAt: string;
+  recurrence?: RecurrenceBody;
+}
+
+export interface SeriesDeletion {
+  deleted: number;
+  skippedPast: number;
+  skippedWithCheckIns: number;
+}
+
 /**
  * Il periodo visibile del calendario (`20-calendario.md` §6).
  *
@@ -86,6 +125,41 @@ export class CalendarStore {
   reload(): Promise<void> {
     const range = this._range();
     return range ? this.load(range.from, range.to) : Promise.resolve();
+  }
+
+  // ── Scritture (`20-calendario.md` §5, §6) ──────────────────────────────
+  // Ognuna rilegge il periodo appena conclusa: chi ha scritto vede subito il
+  // risultato, senza aspettare il proprio segnale `calendar/changed`.
+
+  async scheduleSessions(body: SessionScheduleBody): Promise<SessionScheduleResult> {
+    return this.andReload(this.api.post<SessionScheduleResult>('/sessions/schedule', body));
+  }
+
+  async scheduleAppointments(body: AppointmentScheduleBody): Promise<unknown[]> {
+    return this.andReload(this.api.post<unknown[]>('/appointments/schedule', body));
+  }
+
+  /** «Solo questo»: la riga cambia da sola, e con `seriesId: null` esce dalla serie. */
+  async updateOne(ref: 'sessions' | 'appointments', id: number, patch: object): Promise<unknown> {
+    return this.andReload(this.api.update(ref, id, patch));
+  }
+
+  async updateSeries(ref: 'sessions' | 'appointments', id: number, body: object): Promise<unknown> {
+    return this.andReload(this.api.patchPath(`/${ref}/${id}/series`, body));
+  }
+
+  async deleteOne(ref: 'sessions' | 'appointments', id: number): Promise<unknown> {
+    return this.andReload(this.api.remove(ref, id));
+  }
+
+  async deleteSeries(ref: 'sessions' | 'appointments', id: number, scope: SeriesScope): Promise<SeriesDeletion> {
+    return this.andReload(this.api.deletePath<SeriesDeletion>(`/${ref}/${id}/series?scope=${scope}`));
+  }
+
+  private async andReload<T>(request: Promise<T>): Promise<T> {
+    const result = await request;
+    void this.reload();
+    return result;
   }
 
   /** True quando `[from, to]` tocca il periodo visibile. */

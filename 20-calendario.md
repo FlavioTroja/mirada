@@ -213,29 +213,42 @@ Voce di menu **Calendario** (`calendarMonth`), subito dopo la Dashboard. Capacit
 
 ### 7.2 Creare
 
-**Clic** su uno spazio vuoto: popup ancorato sulla mezz'ora (`OverlayService`). **Trascinare**
-verticalmente definisce l'intervallo. Quattro schede:
+Come Google Calendar. Un **clic** su uno spazio vuoto apre subito il popup accanto alla mezz'ora
+cliccata; **trascinare** in verticale sceglie l'intervallo. Nella griglia compare un blocco
+provvisorio, «(Senza titolo) 15:00 – 16:00», che prende titolo, orario e colore mentre si scrive.
+«Nuovo» nella testata fa lo stesso sulla prossima mezz'ora di oggi.
 
-| scheda | campi |
-|---|---|
-| **Lezione** | corso · nome (predefinito dal lessico del corso, `sessionsLabel`) · inizio/fine · sala · **ripeti** |
-| **Open day** | corso · inizio/fine · sala. Niente ripetizione: si fa una volta |
-| **Appuntamento** | titolo · inizio/fine o tutto il giorno · sede/sala · note · **ripeti** |
-| **Evento** | nessun campo: porta a `/events/new?startAt=…&endAt=…` (K4) |
+Il popup, dall'alto:
 
-**Ripeti**: `Non si ripete` · `Ogni settimana di martedì` (il giorno del clic) · `Personalizza…`
-(giorni della settimana, «fino al» oppure «per N volte»). Sotto, in chiaro:
-«*12 lezioni, dal 29 settembre al 15 dicembre*».
+1. **Il titolo**, grande e con il cursore già dentro. Per una lezione o un open day il titolo è il
+   **corso**, e al suo posto c'è la scelta del corso.
+2. **Le schede**: Lezione · Open day · Appuntamento · Evento. Senza corsi aperti si parte
+   dall'appuntamento.
+3. **Una riga «quando»**: «Venerdì 9 ottobre 15:00 – 16:00 · Non si ripete». Un clic, o «Altre
+   opzioni», la apre in campi: giorno, inizio e fine (una fine che precede l'inizio è il giorno
+   dopo), «tutto il giorno» per gli appuntamenti, e la **ripetizione**.
+4. Nome della lezione, sala, note.
+5. **Salva**; Invio nel titolo salva.
 
-Etichette in minuscolo, campi dentro `keijo-form-wrapper`, date con `keijo-datetime-picker`.
+**Ripeti**: «Non si ripete» · «Ogni settimana di giovedì» (il giorno scelto) · «Personalizza…»
+(giorni della settimana; quello scelto è sempre compreso, altrimenti il server rifiuterebbe la
+serie). Termina «fino al» una data oppure «per N volte». Sotto, in chiaro: «*12 lezioni, dall'8
+ottobre al 24 dicembre*». L'open day non si ripete. La scheda **Evento** non ha campi: porta a
+`/events/new?startAt=…&endAt=…`, che li legge e li precompila (K4).
+
+**I campi hanno il riquadro del tema, non la sola riga di Google**: `shared/mirada-theme.scss`
+impone con `!important` un confine a 3:1 su ogni campo (WCAG 1.4.11). Un campo senza confine non
+si distingue dallo sfondo, e quella regola vince apposta.
 
 ### 7.3 Vedere, modificare, eliminare
 
 **Clic** su una voce: scheda compatta come in Google, con titolo, orario, ripetizione in chiaro
 e sala. Il corso o l'evento compare come pill `filled` cliccabile che porta alla sua scheda
 sessioni (`/courses/:id/sessions`, `/events/:id/sessions`). Pulsanti in ordine
-**elimina → modifica**. Su una serie, entrambi chiedono prima «solo questo / questo e i
-successivi / tutti» (`ModalService`).
+**elimina → modifica**, solo per chi può scrivere. Su una serie, entrambi chiedono prima «solo
+questa / questa e le successive / tutte» (`ModalService`); «solo questa» fa uscire la voce dalla
+serie. La sessione implicita di una milonga singola si sposta ma non si elimina: è il contenitore
+del check-in. Un evento su più giorni non si modifica da qui: si apre la sua scheda.
 
 Le sessioni di un **evento** si modificano dal calendario solo per l'orario e la sala. Tutto il
 resto sta nella scheda dell'evento, dove c'è il contesto per deciderlo.

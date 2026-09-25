@@ -4,7 +4,9 @@ import {
   DestroyRef,
   ElementRef,
   HostListener,
+  Injector,
   OnInit,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -17,10 +19,28 @@ import {
   ButtonComponent,
   ChipComponent,
   InfoBoxComponent,
+  ModalComponent,
+  ModalDialogData,
+  ModalRef,
+  ModalService,
   PageSectionWrapperComponent,
   PageWrapperComponent,
 } from '@keijo/ui';
-import { chevronLeft, chevronRight, today as todayIcon, warning } from '@keijo/ui/icons';
+import {
+  add,
+  chevronLeft,
+  chevronRight,
+  close,
+  eventRepeat,
+  iconDelete,
+  today as todayIcon,
+  warning,
+} from '@keijo/ui/icons';
+import { AuthService } from '../../core/auth/auth.service';
+import { ApiError } from '../../core/api/api-error';
+import { PageActionsService } from '../../services/page-actions.service';
+import { ToastService } from '../../services/toast.service';
+import { ConfirmService } from '../../shared/confirm.service';
 import { HeaderTitleService } from '../../services/header-title.service';
 import { CALENDAR_KINDS, CalendarItem, CalendarKind } from '../../core/domain/calendar';
 import { LOCALE, TIMEZONE } from '../../core/i18n/format';
@@ -36,10 +56,11 @@ import {
 } from '../../core/i18n/zoned';
 import { liveOn } from '../../core/realtime/live';
 import { REALTIME_EVENTS } from '../../core/realtime/realtime.service';
-import { CalendarStore } from '../../stores/calendar.store';
+import { CalendarStore, SeriesScope } from '../../stores/calendar.store';
 import { monthDays } from './calendar-layout';
 import { CALENDAR_PALETTE } from './calendar-palette';
-import { CalendarItemClick, CalendarTimeGridComponent } from './calendar-time-grid.component';
+import { CalendarItemClick, CalendarSlot, CalendarTimeGridComponent } from './calendar-time-grid.component';
+import { CalendarDraft, CalendarEditorComponent, EditorRequest } from './calendar-editor.component';
 import { CalendarMonthGridComponent } from './calendar-month-grid.component';
 import { CalendarItemCardComponent } from './calendar-item-card.component';
 
@@ -90,6 +111,7 @@ const dayFmt = new Intl.DateTimeFormat(LOCALE, {
     CalendarTimeGridComponent,
     CalendarMonthGridComponent,
     CalendarItemCardComponent,
+    CalendarEditorComponent,
   ],
   template: `
     <keijo-page-wrapper>
@@ -153,8 +175,10 @@ const dayFmt = new Intl.DateTimeFormat(LOCALE, {
               [anchor]="anchor()"
               [items]="visibleItems()"
               [today]="today()"
+              [writable]="canWrite()"
               (itemClick)="openCard($event)"
               (dayClick)="openDay($event)"
+              (slotSelect)="openCreate($event)"
             />
           } @else {
             <app-calendar-time-grid
@@ -162,8 +186,11 @@ const dayFmt = new Intl.DateTimeFormat(LOCALE, {
               [items]="visibleItems()"
               [today]="today()"
               [nowMinute]="nowMinute()"
+              [writable]="canWrite()"
+              [draft]="draft()"
               (itemClick)="openCard($event)"
               (dayClick)="openDay($event)"
+              (slotSelect)="openCreate($event)"
             />
           }
         </div>
@@ -181,8 +208,28 @@ const dayFmt = new Intl.DateTimeFormat(LOCALE, {
       >
         <app-calendar-item-card
           [item]="open.item"
+          [canWrite]="canWrite()"
           (closed)="closeCard()"
           (navigate)="follow($event)"
+          (edit)="editItem(open.item, open.left, open.top)"
+          (remove)="removeItem(open.item)"
+        />
+      </div>
+    }
+
+    @if (editor(); as open) {
+      <div
+        class="editor-layer"
+        role="dialog"
+        aria-label="Nuova voce del calendario"
+        [style.left.px]="open.left"
+        [style.top.px]="open.top"
+      >
+        <app-calendar-editor
+          [request]="open.request"
+          (draft)="draft.set($event)"
+          (finished)="onSaved($event)"
+          (cancelled)="closeEditor()"
         />
       </div>
     }
@@ -224,6 +271,7 @@ const dayFmt = new Intl.DateTimeFormat(LOCALE, {
       .surface { margin: -0.25rem; }
 
       .card-layer { position: fixed; z-index: 60; }
+      .editor-layer { position: fixed; z-index: 70; }
 
       @media (max-width: 640px) {
         .views { margin-left: 0; }
@@ -238,6 +286,17 @@ export class CalendarComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly auth = inject(AuthService);
+  private readonly pageActions = inject(PageActionsService);
+  private readonly toast = inject(ToastService);
+  private readonly confirm = inject(ConfirmService);
+  private readonly modal = inject(ModalService);
+
+  /** Creare e modificare: chi costruisce corsi ed eventi. La porta e la cassa leggono. */
+  readonly canWrite = computed(() => this.auth.can().calendarWrite);
+  readonly editor = signal<{ request: EditorRequest; left: number; top: number } | null>(null);
+  readonly draft = signal<CalendarDraft | null>(null);
 
   readonly todayIcon = todayIcon;
   readonly prevIcon = chevronLeft;
@@ -301,6 +360,7 @@ export class CalendarComponent implements OnInit {
       const anchor = this.anchor();
       untracked(() => {
         this.closeCard();
+        this.closeEditor();
         void this.store.load(fromWallClock(days[0]!), fromWallClock(addDays(days[days.length - 1]!, 1)));
         void this.router.navigate([], {
           relativeTo: this.route,
@@ -335,6 +395,17 @@ export class CalendarComponent implements OnInit {
 
   ngOnInit(): void {
     this.headerTitle.set('Calendario');
+    if (this.canWrite()) {
+      this.pageActions.set([
+        {
+          id: 'new',
+          icon: add,
+          label: 'Nuovo',
+          tooltip: 'Nuova lezione, open day, appuntamento o evento',
+          run: () => this.openCreate(this.defaultSlot()),
+        },
+      ]);
+    }
     const params = this.route.snapshot.queryParamMap;
     const view = params.get('view');
     const date = params.get('date');
@@ -384,13 +455,25 @@ export class CalendarComponent implements OnInit {
   /** La scheda si apre accanto alla voce, a destra se c'è posto, altrimenti a sinistra. */
   openCard({ item, anchor }: CalendarItemClick): void {
     const width = Math.min(352, window.innerWidth - 32);
-    const height = 260;
+    const height = this.canWrite() ? 320 : 260;
     const gap = 8;
     let left = anchor.right + gap;
     if (left + width > window.innerWidth - 16) left = anchor.left - width - gap;
     if (left < 16) left = Math.max(16, (window.innerWidth - width) / 2);
     const top = Math.max(16, Math.min(anchor.top, window.innerHeight - height - 16));
     this.card.set({ item, left, top });
+    // L'altezza vera si conosce solo disegnata: se la scheda esce dallo schermo
+    // la si alza, invece di lasciare fuori i pulsanti.
+    afterNextRender(
+      () => {
+        const element = this.cardElement()?.nativeElement;
+        const open = this.card();
+        if (!element || !open) return;
+        const overflow = element.getBoundingClientRect().bottom - (window.innerHeight - 16);
+        if (overflow > 0) this.card.set({ ...open, top: Math.max(16, open.top - overflow) });
+      },
+      { injector: this.injector },
+    );
   }
 
   closeCard(): void {
@@ -402,10 +485,146 @@ export class CalendarComponent implements OnInit {
     void this.router.navigateByUrl(path);
   }
 
+  // ── Scrivere dal calendario (`20-calendario.md` §7.2–7.3) ──────────────
+
+  /** «Nuovo» dalla testata: oggi alla prossima mezz'ora, se oggi è visibile; altrimenti la sera del primo giorno. */
+  private defaultSlot(): CalendarSlot {
+    const today = this.today();
+    if (this.days().includes(today)) {
+      const next = Math.min(Math.ceil((this.nowMinute() + 1) / 30) * 30, 22 * 60 + 30);
+      return { day: today, startMinute: next, endMinute: Math.min(next + 60, 24 * 60 - 1), anchor: null };
+    }
+    return { day: this.days()[0]!, startMinute: 20 * 60 + 30, endMinute: 22 * 60, anchor: null };
+  }
+
+  openCreate(slot: CalendarSlot): void {
+    this.closeCard();
+    const request: EditorRequest = { mode: 'create', day: slot.day, startMinute: slot.startMinute, endMinute: slot.endMinute };
+    this.editor.set({ request, ...this.placeEditor(slot.anchor) });
+  }
+
+  closeEditor(): void {
+    this.editor.set(null);
+    this.draft.set(null);
+  }
+
+  onSaved(message: string): void {
+    this.closeEditor();
+    if (message) this.toast.show('SUCCESS', message);
+  }
+
+  async editItem(item: CalendarItem, left: number, top: number): Promise<void> {
+    this.closeCard();
+    const scope = item.seriesId ? await this.askScope('edit') : 'ONE';
+    if (!scope) return;
+    this.editor.set({
+      request: { mode: 'edit', item, scope },
+      ...this.placeEditor(new DOMRect(left, top, 0, 0)),
+    });
+  }
+
+  async removeItem(item: CalendarItem): Promise<void> {
+    this.closeCard();
+    const ref = item.ref;
+    if (ref.type === 'event') return;
+    const base = ref.type === 'session' ? 'sessions' : 'appointments';
+
+    let scope: 'ONE' | SeriesScope | null = 'ONE';
+    if (item.seriesId) {
+      scope = await this.askScope('delete');
+    } else {
+      const ok = await this.confirm.ask({
+        title: 'Eliminare questa voce?',
+        message: `«${item.title}» sparisce dal calendario.` + (ref.type === 'session'
+          ? ' Chi ha già un titolo d’ingresso che la comprende non la vedrà più fra le sessioni incluse.'
+          : ''),
+        confirmLabel: 'Elimina',
+        destructive: true,
+      });
+      scope = ok ? 'ONE' : null;
+    }
+    if (!scope) return;
+
+    try {
+      if (scope === 'ONE') {
+        await this.store.deleteOne(base, ref.id);
+        this.toast.show('SUCCESS', 'Voce eliminata.');
+        return;
+      }
+      const result = await this.store.deleteSeries(base, ref.id, scope);
+      const skipped = [
+        result.skippedPast ? `${result.skippedPast} già passate` : '',
+        result.skippedWithCheckIns ? `${result.skippedWithCheckIns} con ingressi registrati` : '',
+      ].filter(Boolean);
+      this.toast.show(
+        'SUCCESS',
+        `${result.deleted === 1 ? 'Eliminata 1 voce' : `Eliminate ${result.deleted} voci`}.`
+          + (skipped.length ? ` Restano ${skipped.join(' e ')}: la storia non si cancella.` : ''),
+      );
+    } catch (err) {
+      this.toast.show('ERROR', err instanceof ApiError ? err.message : 'Non è stato possibile eliminare.');
+    }
+  }
+
+  /**
+   * «Solo questa · questa e le successive · tutte», come Google, prima di
+   * modificare o eliminare una voce che fa parte di una serie.
+   */
+  private async askScope(action: 'edit' | 'delete'): Promise<'ONE' | SeriesScope | null> {
+    let chosen: 'ONE' | SeriesScope | null = null;
+    const destructive = action === 'delete';
+    const pick = (scope: 'ONE' | SeriesScope) => (): void => {
+      chosen = scope;
+      ref.close(true);
+    };
+    const ref: ModalRef<boolean> = this.modal.open<ModalDialogData, boolean>(ModalComponent, {
+      backdropClass: 'blur-filter',
+      data: {
+        title: destructive ? 'Eliminare la voce ricorrente?' : 'Modificare la voce ricorrente?',
+        content: destructive
+          ? 'Le voci già passate e le lezioni con ingressi registrati non vengono eliminate.'
+          : 'Cambiano ora, durata, nome e sala. Il giorno di una serie non si sposta.',
+        buttons: [
+          { iconName: close, label: 'Annulla', onClick: (): void => ref.close(false) },
+          { iconName: destructive ? iconDelete : eventRepeat, label: 'Solo questa', onClick: pick('ONE') },
+          { iconName: eventRepeat, label: 'Questa e le successive', onClick: pick('FOLLOWING') },
+          {
+            iconName: destructive ? iconDelete : eventRepeat,
+            label: 'Tutte',
+            bgColor: destructive ? 'remove' : 'confirm',
+            onClick: pick('ALL'),
+          },
+        ],
+      },
+    });
+    await ref.afterClosed();
+    return chosen;
+  }
+
+  /** Accanto allo spazio scelto, a destra se c'è posto; senza àncora, al centro. */
+  private placeEditor(anchor: DOMRect | null): { left: number; top: number } {
+    const width = Math.min(448, window.innerWidth - 32);
+    const height = 480;
+    if (!anchor || window.innerWidth < 640) {
+      return { left: Math.max(16, (window.innerWidth - width) / 2), top: Math.max(16, (window.innerHeight - height) / 3) };
+    }
+    const gap = 12;
+    let left = anchor.right + gap;
+    if (left + width > window.innerWidth - 16) left = anchor.left - width - gap;
+    if (left < 16) left = Math.max(16, (window.innerWidth - width) / 2);
+    const top = Math.max(16, Math.min(anchor.top - 40, window.innerHeight - height - 16));
+    return { left, top };
+  }
+
   @HostListener('document:keydown', ['$event'])
   onKey(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    // Con il popup aperto le lettere si scrivono, non cambiano vista.
+    if (this.editor()) {
+      if (event.key === 'Escape') this.closeEditor();
+      return;
+    }
     if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
 
     switch (event.key) {

@@ -38,7 +38,7 @@ import {
   MiradaEvent,
   StoredFile,
 } from '../../core/domain/models';
-import { toIso } from '../../core/i18n/format';
+import { toDateValue, toIso } from '../../core/i18n/format';
 import { LocaleService, buildI18n, i18nPlain } from '../../core/i18n/i18n-text';
 import { EventStore } from '../../stores/event.store';
 import { basePathFor, entityLabelFor, familyFromUrl } from './event-family';
@@ -528,6 +528,14 @@ export class EventDetailComponent implements OnInit {
 
   private async prepareNew(): Promise<void> {
     this.store.clearCurrent();
+    // Dal calendario (`20-calendario.md` K4): chi clicca «Evento» su uno spazio
+    // vuoto arriva qui con quel giorno e quell'orario già scelti.
+    const params = this.route.snapshot.queryParamMap;
+    const startAt = toDateValue(params.get('startAt'));
+    const endAt = toDateValue(params.get('endAt'));
+    if (startAt && endAt && endAt > startAt) {
+      this.form.patchValue({ startAt, endAt });
+    }
   }
 
   private async loadEvent(id: number): Promise<void> {

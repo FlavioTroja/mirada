@@ -98,7 +98,23 @@ export interface CalendarItem {
   seriesId: string | null;
   /** Dove porta la pill del corso o dell'evento. Nullo = nessun collegamento. */
   link: { label: string; path: string } | null;
+  /** Da quale riga viene: è ciò che la modifica e l'eliminazione devono toccare. */
+  ref: CalendarRef;
 }
+
+export type CalendarRef =
+  | {
+      type: 'session';
+      id: number;
+      eventId: number;
+      /** Lezione od open day di un corso, invece che sessione di un festival. */
+      course: boolean;
+      /** La sessione implicita di una milonga singola: non si elimina, si sposta. */
+      isImplicit: boolean;
+      name: I18nText;
+    }
+  | { type: 'event'; id: number }
+  | { type: 'appointment'; id: number; allDay: boolean };
 
 /** L'ultimo giorno toccato: una fine a mezzanotte appartiene al giorno prima. */
 function lastDayOf(startAt: Date, endAt: Date): DayKey {
@@ -138,6 +154,14 @@ export function sessionToItem(row: CalendarSessionRow, lang: UiLang): CalendarIt
       label: eventTitle,
       path: course ? `/courses/${row.eventId}/sessions` : `/events/${row.eventId}/sessions`,
     },
+    ref: {
+      type: 'session',
+      id: row.id,
+      eventId: row.eventId,
+      course,
+      isImplicit: row.isImplicit,
+      name: row.name,
+    },
   };
 }
 
@@ -163,6 +187,7 @@ export function eventToItem(row: CalendarEventRow, lang: UiLang): CalendarItem |
     note: null,
     seriesId: null,
     link: { label: title, path: `/events/${row.id}` },
+    ref: { type: 'event', id: row.id },
   };
 }
 
@@ -182,5 +207,6 @@ export function appointmentToItem(row: CalendarAppointmentRow): CalendarItem {
     note: row.note,
     seriesId: row.seriesId,
     link: null,
+    ref: { type: 'appointment', id: row.id, allDay: row.allDay },
   };
 }
