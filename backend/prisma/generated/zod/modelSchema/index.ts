@@ -52,3 +52,4 @@ export * from './PaymentInstalmentSchema';
 export * from './BalanceSettlementSchema';
 export * from './ProspectSchema';
 export * from './AppointmentSchema';
+export * from './ActivitySchema';

@@ -15,6 +15,7 @@ import { ProspectCreateDTO } from "@DTOs/prospect/ProspectCreateDTO";
 import { ProspectUpdateDTO } from "@DTOs/prospect/ProspectUpdateDTO";
 import { ProspectQueryDTO } from "@DTOs/prospect/ProspectQueryDTO";
 import { ProspectMarkContactedDTO } from "@DTOs/prospect/ProspectMarkContactedDTO";
+import { ActivityService } from "@services/ActivityService";
 
 /**
  * **I prospect dell'open day** — `19-prospect.md`.
@@ -30,6 +31,7 @@ export class ProspectService {
         private readonly eventRepository: EventRepository,
         private readonly registrationRepository: RegistrationRepository,
         private readonly organizationScopeService: OrganizationScopeService,
+        private readonly activityService: ActivityService,
     ) {}
 
     public async save(principalId: number, dto: ProspectCreateDTO): Promise<Prospect> {
@@ -55,6 +57,7 @@ export class ProspectService {
             consentAt: new Date(),
         });
         Log.info(`[Prospect Service]: prospect recorded (id ${prospect.id}) for organization (id ${prospect.organizationId})`);
+        await this.activityService.prospect(prospect);
         return prospect;
     }
 

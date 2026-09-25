@@ -566,6 +566,7 @@ model Organization {
   salesChannels      SalesChannel[]
   prospects          Prospect[]
   appointments       Appointment[]
+  activities         Activity[]
 
   deleted   Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -2767,4 +2768,56 @@ model Appointment {
   @@index([organizationId, startAt])
   @@index([seriesId])
   @@index([venueId])
+}
+
+// -----------------------------------------------------------------------------
+// La Dashboard — `21-dashboard.md` §4
+// -----------------------------------------------------------------------------
+
+enum ActivityKind {
+  CHECK_IN
+  REGISTRATION
+  PAYMENT
+  CALENDAR
+  PROSPECT
+}
+
+enum ActivitySeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+/// **Che cosa è successo, per un'organizzazione** — la colonna «In tempo reale»
+/// e il «Registro di oggi» della Dashboard (`21-dashboard.md` §4).
+///
+/// Esiste perché `Log` non ha organizzazione e `log/notification` va a tutta la
+/// piattaforma per ruolo: usarlo mostrerebbe a una scuola le azioni di un'altra.
+///
+/// È la cronaca recente, non l'archivio: le righe oltre 30 giorni si cancellano.
+/// Il testo è già in italiano e già composto, perché una riga d'attività non
+/// cambia significato dopo: «Ingresso di Sara Pugliese · Milonga di gala».
+model Activity {
+  id Int @id @default(autoincrement())
+
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  kind     ActivityKind
+  severity ActivitySeverity @default(INFO)
+  text     String
+
+  /// Chi l'ha fatto, quando è una persona dello staff: «Marco T.».
+  actorName String?
+  /// Un'azione dello staff (una lezione aggiunta, un evento pubblicato): il
+  /// «Registro di oggi» mostra solo queste.
+  staff     Boolean @default(false)
+  /// Centesimi, solo per gli incassi.
+  amount    Int?
+  eventId   Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([createdAt])
 }

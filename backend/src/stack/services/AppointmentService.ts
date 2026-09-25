@@ -15,6 +15,7 @@ import { AppointmentUpdateDTO } from "@DTOs/appointment/AppointmentUpdateDTO";
 import { AppointmentSeriesUpdateDTO } from "@DTOs/appointment/AppointmentSeriesUpdateDTO";
 import { SeriesDeletionDTO, SeriesScope } from "@DTOs/calendar/SeriesScopeDTO";
 import { CalendarRangeDTO } from "@DTOs/calendar/CalendarRangeDTO";
+import { ActivityService, titleText, whenText } from "@services/ActivityService";
 
 /**
  * **Gli impegni dello staff** che non sono né lezioni né eventi: la riunione, le
@@ -30,6 +31,7 @@ export class AppointmentService {
         private readonly venueRepository: VenueRepository,
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly calendarBroadcastService: CalendarBroadcastService,
+        private readonly activityService: ActivityService,
     ) {}
 
     public async schedule(principalId: number, dto: AppointmentScheduleDTO): Promise<Appointment[]> {
@@ -72,6 +74,12 @@ export class AppointmentService {
         });
 
         Log.info(`[Appointment Service]: ${created.length} appointment(s) created (first id ${created[0]?.id})`);
+        await this.activityService.calendar(
+            organizationId,
+            created.length === 1
+                ? `Appuntamento «${base.title}» aggiunto, ${whenText(created[0]!.startAt)}`
+                : `${created.length} appuntamenti «${base.title}» aggiunti, dal ${whenText(created[0]!.startAt)}`,
+        );
         await this.announce(organizationId, created);
         return created;
     }
@@ -103,6 +111,7 @@ export class AppointmentService {
 
         Log.info(`[Appointment Service]: soft deleting appointment (id ${id})`);
         const deleted = await this.appointmentRepository.safeDeleteById(id);
+        await this.activityService.calendar(appointment.organizationId, `Appuntamento «${appointment.title}» eliminato`);
         await this.announce(appointment.organizationId, [appointment]);
         return deleted;
     }

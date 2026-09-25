@@ -42,6 +42,7 @@ import {
     CheckInManifestPayloadDTO,
 } from "@DTOs/check_in/CheckInManifestDTO";
 import { TicketVerifyDTO, TicketVerifyResponseDTO } from "@DTOs/ticket/TicketVerifyDTO";
+import { ActivityService } from "@services/ActivityService";
 
 /**
  * # `CheckIn` — backend-brief §4.13, `09-titoli-e-pass.md` §7
@@ -79,6 +80,7 @@ export class CheckInService {
         private readonly ticketQrService: TicketQrService,
         private readonly organizationAudienceService: OrganizationAudienceService,
         private readonly wsPublisher: WsPublisherService,
+        private readonly activityService: ActivityService,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -620,6 +622,9 @@ export class CheckInService {
         sessionId: number,
         detail: { reason: CheckInReason; checkInId?: number; count?: number },
     ): Promise<void> {
+        // La riga della Dashboard, senza aspettarla: la porta non attende la
+        // Dashboard, e `ActivityService` non lancia (`21-dashboard.md` §4).
+        void this.activityService.checkIn(eventId, sessionId, detail);
         try {
             const event = await this.eventRepository.findOne({ id: eventId });
             if (!event) {

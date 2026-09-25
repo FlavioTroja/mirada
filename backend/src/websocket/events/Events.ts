@@ -101,6 +101,13 @@ export const Events = {
      * guadagno quando l'utente ha lo stesso calendario aperto su due schede.
      */
     CALENDAR_CHANGED: "calendar/changed",
+    /**
+     * Una riga d'attività è stata scritta per un'organizzazione (`21-dashboard.md`
+     * §4). Ai MEMBRI dell'organizzazione: la Dashboard rilegge la colonna «In
+     * tempo reale». Senza testo, come ogni segnale: il testo nomina persone e
+     * importi, e un fotogramma non passa dal controllo di permesso della rotta.
+     */
+    ACTIVITY_RECORDED: "activity/recorded",
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

@@ -37,6 +37,7 @@ import { TicketDeliveryService } from "@services/TicketDeliveryService";
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
 import { Events } from "@websocket/events/Events";
 import { PaymentSucceededPayloadDTO } from "@websocket/dtos/PaymentSucceededPayloadDTO";
+import { ActivityService } from "@services/ActivityService";
 
 /**
  * Ciò che un prestatore di pagamento dichiara quando l'incasso è avvenuto.
@@ -110,6 +111,7 @@ export class OrderFulfilmentService {
         private readonly ticketService: TicketService,
         private readonly wsPublisher: WsPublisherService,
         private readonly ticketDeliveryService: TicketDeliveryService,
+        private readonly activityService: ActivityService,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -469,6 +471,8 @@ export class OrderFulfilmentService {
     }
 
     private async publishPaymentSucceeded(order: OrderWithContext): Promise<void> {
+        // Allo staff, con una riga d'attività: `payment/succeeded` avvisa solo chi compra.
+        void this.activityService.orderPaid({ id: order.id, organizationId: order.organizationId, eventId: order.eventId, total: order.total });
         try {
             const buyer = await this.userRepository.findOne({ id: order.purchase.buyerUserId });
             if (!buyer?.wsCode) {

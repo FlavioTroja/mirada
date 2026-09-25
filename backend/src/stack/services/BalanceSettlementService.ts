@@ -35,6 +35,7 @@ import { splitCents } from "@utils/helpers/splitCents";
 import { euro } from "@utils/helpers/euro";
 import { PaymentInstalmentRepository } from "@repositories/PaymentInstalmentRepository";
 import { UserRepository } from "@repositories/UserRepository";
+import { ActivityService } from "@services/ActivityService";
 
 /** Ciò che una riga di incasso ha bisogno di sapere, comunque sia arrivata. */
 type SettlementInput = {
@@ -94,6 +95,7 @@ export class BalanceSettlementService {
         private readonly organizationScopeService: OrganizationScopeService,
         private readonly organizationAudienceService: OrganizationAudienceService,
         private readonly wsPublisher: WsPublisherService,
+        private readonly activityService: ActivityService,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -743,6 +745,7 @@ export class BalanceSettlementService {
         amount: number,
         conflict: boolean,
     ): Promise<void> {
+        void this.activityService.balanceSettled(registration, amount, conflict);
         try {
             const event = await this.eventRepository.findOne({ id: registration.eventId });
             if (!event) {

@@ -42,6 +42,7 @@ import { EventCancelDTO, OrphanSessionsResolutionDTO, OrphanSessionsResolveDTO }
 import { I18nText } from "@utils/helpers/i18nText";
 import { CalendarBroadcastService } from "@services/CalendarBroadcastService";
 import { CalendarRangeDTO } from "@DTOs/calendar/CalendarRangeDTO";
+import { ActivityService, titleText } from "@services/ActivityService";
 
 /** Nome della sessione implicita creata su un evento non multi-sessione (§4.6). */
 const IMPLICIT_SESSION_NAME: I18nText = { it: "Evento", en: "Event" };
@@ -65,6 +66,7 @@ export class EventService {
         private readonly capacityEngineService: CapacityEngineService,
         private readonly capacityQuotaService: CapacityQuotaService,
         private readonly calendarBroadcastService: CalendarBroadcastService,
+        private readonly activityService: ActivityService,
     ) {}
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -98,12 +100,14 @@ export class EventService {
     public async publish(principalId: number, id: number, context: FiscalDeclarationServerContext): Promise<Event> {
         const event = await this.publishUnannounced(principalId, id, context);
         await this.announce(event);
+        await this.activityService.calendar(event.organizationId, `«${titleText(event.title)}» pubblicato`, event.id);
         return event;
     }
 
     public async cancel(principalId: number, id: number, dto: EventCancelDTO): Promise<Event> {
         const event = await this.cancelUnannounced(principalId, id, dto);
         await this.announce(event);
+        await this.activityService.calendar(event.organizationId, `«${titleText(event.title)}» annullato: ${dto.reason}`, event.id);
         return event;
     }
 

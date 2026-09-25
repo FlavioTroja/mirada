@@ -4,6 +4,7 @@ import { OrganizationAudienceService } from "@services/OrganizationAudienceServi
 import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
 import { Events } from "@websocket/events/Events";
 import { RegistrationCreatedPayloadDTO } from "@websocket/dtos/RegistrationCreatedPayloadDTO";
+import { ActivityService } from "@services/ActivityService";
 import {
     RegistrationChange,
     RegistrationUpdatedPayloadDTO,
@@ -38,6 +39,7 @@ export class RegistrationNotifierService {
     constructor(
         private readonly organizationAudienceService: OrganizationAudienceService,
         private readonly wsPublisher: WsPublisherService,
+        private readonly activityService: ActivityService,
     ) {}
 
     /**
@@ -52,6 +54,7 @@ export class RegistrationNotifierService {
         event: { id: number; organizationId: number },
         registrationIds: number[],
     ): Promise<void> {
+        void this.activityService.registrationsCreated(event, registrationIds);
         if (!registrationIds.length) {
             return;
         }
@@ -101,6 +104,7 @@ export class RegistrationNotifierService {
         registrationId: number,
         change: RegistrationChange,
     ): Promise<void> {
+        void this.activityService.registrationUpdated(event, registrationId, change);
         try {
             const wsCodes = await this.organizationAudienceService.resolveMemberWsCodes(event.organizationId);
             if (!wsCodes.length) {

@@ -28,6 +28,7 @@ import { CalendarRangeDTO } from "@DTOs/calendar/CalendarRangeDTO";
 import { TicketTypeSessionRepository } from "@repositories/TicketTypeSessionRepository";
 import { CalendarBroadcastService } from "@services/CalendarBroadcastService";
 import { expandWeekly, expansionErrorMessage, retime, sameLocalDay } from "@utils/helpers/recurrence";
+import { ActivityService, titleText, whenText } from "@services/ActivityService";
 
 /** Esito di `cancelSession` (§4.6 · `RF-EVT-35`). */
 export type SessionCancellationDTO = {
@@ -49,6 +50,7 @@ export class SessionService {
         private readonly capacityEngineService: CapacityEngineService,
         private readonly ticketTypeSessionRepository: TicketTypeSessionRepository,
         private readonly calendarBroadcastService: CalendarBroadcastService,
+        private readonly activityService: ActivityService,
     ) {}
 
     /**
@@ -135,6 +137,16 @@ export class SessionService {
             `[Session Service]: ${result.sessions.length} session(s) scheduled on event (id ${event.id}), `
             + `${result.extendedTicketTypes.length} ticket type(s) extended`,
         );
+        const first = result.sessions[0]!;
+        const n = result.sessions.length;
+        const what = base.kind === SessionKind.OPEN_DAY ? "Open day" : areLessons ? (n === 1 ? "Lezione" : "lezioni") : (n === 1 ? "Sessione" : "sessioni");
+        await this.activityService.calendar(
+            event.organizationId,
+            n === 1
+                ? `${what} aggiunt${what === "Open day" ? "o" : "a"} a ${titleText(event.title)}, ${whenText(first.startAt)}`
+                : `${n} ${what} aggiunte a ${titleText(event.title)}, dal ${whenText(first.startAt)}`,
+            event.id,
+        );
         await this.announce(event.organizationId, result.sessions);
         return result;
     }
@@ -195,6 +207,12 @@ export class SessionService {
             return out;
         });
 
+        await this.activityService.calendar(
+            event.organizationId,
+            `${updated.length} lezioni di ${titleText(event.title)} modificate`
+                + (retiming && updated[0] ? `, ora ${whenText(updated[0].startAt).replace(/^.* alle /, "alle ")}` : ""),
+            event.id,
+        );
         Log.info(`[Session Service]: series ${seriesId} updated — ${updated.length} session(s)`);
         await this.announce(event.organizationId, [...targets, ...updated]);
         return updated;
@@ -227,6 +245,13 @@ export class SessionService {
             }
         });
 
+        if (deletable.length) {
+            await this.activityService.calendar(
+                event.organizationId,
+                `${deletable.length} ${deletable.length === 1 ? "lezione" : "lezioni"} di ${titleText(event.title)} eliminat${deletable.length === 1 ? "a" : "e"}`,
+                event.id,
+            );
+        }
         await this.announce(event.organizationId, deletable);
         return { deleted: deletable.length, skippedPast: past.length, skippedWithCheckIns: withCheckIns.length };
     }
@@ -331,6 +356,11 @@ export class SessionService {
             };
         });
 
+        await this.activityService.calendar(
+            event.organizationId,
+            `«${titleText(session.name)}» di ${titleText(event.title)} annullata, ${whenText(session.startAt)}: ${reason}`,
+            event.id,
+        );
         await this.announce(event.organizationId, [session]);
         return outcome;
     }

@@ -6,6 +6,8 @@ import { PermissionAction } from "@enums/PermissionAction";
 import { PermissionResource } from "@enums/PermissionResource";
 import { PermissionScope } from "@enums/PermissionScope";
 import { DashboardTodayService } from "@services/DashboardTodayService";
+import { ActivityService } from "@services/ActivityService";
+import { DashboardActivityQueryDTO, DashboardActivityQuerySchema } from "@DTOs/dashboard/DashboardActivityQueryDTO";
 
 /**
  * La Dashboard dell'organizzazione — `21-dashboard.md`. Il cruscotto di un
@@ -16,7 +18,10 @@ import { DashboardTodayService } from "@services/DashboardTodayService";
     tags: [{ name: "Dashboard", description: "The organization's day at a glance" }],
 })
 export class DashboardController {
-    constructor(private readonly dashboardTodayService: DashboardTodayService) {}
+    constructor(
+        private readonly dashboardTodayService: DashboardTodayService,
+        private readonly activityService: ActivityService,
+    ) {}
 
     @GET("/today", {
         schema: {
@@ -32,5 +37,27 @@ export class DashboardController {
     })
     async today(req: FastifyRequest, reply: FastifyReply) {
         reply.status(200).send(await this.dashboardTodayService.today(+req.user.id));
+    }
+
+    @GET("/activity", {
+        schema: {
+            operationId: "getDashboardActivity",
+            summary: "Recent activity",
+            description: "What happened in the caller's organizations, newest first: entries, registrations, payments (in cents), calendar changes by the staff, open-day contacts. Default: the last 24 hours, at most 50 rows. staffOnly=true keeps only staff actions (the day's log). Rows older than 30 days are removed.",
+            querystring: DashboardActivityQuerySchema,
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.READ, PermissionResource.DASHBOARD, PermissionScope.ALL),
+        ],
+    })
+    async activity(req: FastifyRequest<{ Querystring: DashboardActivityQueryDTO }>, reply: FastifyReply) {
+        const { since, limit, staffOnly } = req.query;
+        reply.status(200).send(await this.activityService.recent(+req.user.id, {
+            since: since ?? new Date(Date.now() - 86_400_000),
+            limit,
+            staffOnly,
+        }));
     }
 }

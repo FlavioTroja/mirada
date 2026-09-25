@@ -38,6 +38,7 @@ import { WsPublisherService } from "@websocket/publisher/WsPublisherService";
 import { Events } from "@websocket/events/Events";
 import { ExternalSaleIngestedPayloadDTO } from "@websocket/dtos/ExternalSaleIngestedPayloadDTO";
 import { ExternalSaleQuarantinedPayloadDTO } from "@websocket/dtos/ExternalSaleQuarantinedPayloadDTO";
+import { ActivityService } from "@services/ActivityService";
 import {
     CanonicalAttribute,
     CanonicalNotification,
@@ -177,6 +178,7 @@ export class ExternalSaleIngestionService {
         private readonly registrationNotifierService: RegistrationNotifierService,
         private readonly ticketDeliveryService: TicketDeliveryService,
         private readonly wsPublisher: WsPublisherService,
+        private readonly activityService: ActivityService,
     ) {}
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -1130,6 +1132,7 @@ export class ExternalSaleIngestionService {
      * i biglietti sono emessi, e un socket lento non può disfarli.
      */
     private async notifyIngested(channel: SalesChannel, sale: ExternalSale, seats: number): Promise<void> {
+        void this.activityService.externalSaleIngested(channel, sale, seats);
         if (!sale.eventId) {
             return;
         }
@@ -1160,6 +1163,7 @@ export class ExternalSaleIngestionService {
     }
 
     private async notifyQuarantined(channel: SalesChannel, sale: ExternalSale, reason: string): Promise<void> {
+        void this.activityService.externalSaleQuarantined(channel, sale, reason);
         const payload: ExternalSaleQuarantinedPayloadDTO = {
             externalSaleId: sale.id,
             salesChannelId: channel.id,

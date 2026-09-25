@@ -53,6 +53,7 @@ export { PaymentInstalmentScalarFieldEnumSchema } from './PaymentInstalmentScala
 export { BalanceSettlementScalarFieldEnumSchema } from './BalanceSettlementScalarFieldEnumSchema';
 export { ProspectScalarFieldEnumSchema } from './ProspectScalarFieldEnumSchema';
 export { AppointmentScalarFieldEnumSchema } from './AppointmentScalarFieldEnumSchema';
+export { ActivityScalarFieldEnumSchema } from './ActivityScalarFieldEnumSchema';
 export { SortOrderSchema } from './SortOrderSchema';
 export { NullableJsonNullValueInputSchema } from './NullableJsonNullValueInputSchema';
 export { JsonNullValueInputSchema } from './JsonNullValueInputSchema';
@@ -95,6 +96,7 @@ export { PaymentInstalmentOrderByRelevanceFieldEnumSchema } from './PaymentInsta
 export { BalanceSettlementOrderByRelevanceFieldEnumSchema } from './BalanceSettlementOrderByRelevanceFieldEnumSchema';
 export { ProspectOrderByRelevanceFieldEnumSchema } from './ProspectOrderByRelevanceFieldEnumSchema';
 export { AppointmentOrderByRelevanceFieldEnumSchema } from './AppointmentOrderByRelevanceFieldEnumSchema';
+export { ActivityOrderByRelevanceFieldEnumSchema } from './ActivityOrderByRelevanceFieldEnumSchema';
 export { RoleNameSchema } from './RoleNameSchema';
 export { UiScopeSchema } from './UiScopeSchema';
 export { ValueTypeSchema } from './ValueTypeSchema';
@@ -138,5 +140,7 @@ export { ExternalSaleStatusSchema } from './ExternalSaleStatusSchema';
 export { ExternalSaleEventStatusSchema } from './ExternalSaleEventStatusSchema';
 export { BalanceSettlementMethodSchema } from './BalanceSettlementMethodSchema';
 export { ProspectStatusSchema } from './ProspectStatusSchema';
+export { ActivityKindSchema } from './ActivityKindSchema';
+export { ActivitySeveritySchema } from './ActivitySeveritySchema';
 export { InputJsonValueSchema } from './InputJsonValueSchema';
 export { JsonValueSchema } from './JsonValueSchema';
