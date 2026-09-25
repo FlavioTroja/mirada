@@ -36,6 +36,8 @@ export type DashboardTodayDTO = {
     day: string;
     generatedAt: Date;
     sessions: TodaySessionDTO[];
+    /** Gli impegni dello staff di oggi (riunioni, prove), per il programma «Oggi». */
+    appointments: { id: number; title: string; startAt: Date; endAt: Date; allDay: boolean; room: string | null }[];
     /** Entrati alle sessioni in corso adesso. Non esiste l'uscita: «in sala» vuol dire «entrati». */
     inRoom: number;
     /** Attesi alle sessioni di oggi che hanno biglietti. */

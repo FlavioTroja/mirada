@@ -59,8 +59,17 @@ export const routes: Routes = [
   },
 
   // ------------------------------------------------------------- /dashboard
+  // La giornata dell'organizzazione (`21-dashboard.md`); il cruscotto di un
+  // evento resta, come vista «Evento».
   {
     path: 'dashboard',
+    pathMatch: 'full',
+    canActivate: [requireCapability('dashboard')],
+    loadComponent: () =>
+      import('./pages/dashboard/dashboard-today.component').then((m) => m.DashboardTodayComponent),
+  },
+  {
+    path: 'dashboard/event',
     canActivate: [requireCapability('dashboard')],
     loadComponent: () =>
       import('./pages/dashboard/dashboard.component').then((m) => m.DashboardComponent),

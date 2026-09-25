@@ -32,6 +32,13 @@ export const REALTIME_EVENTS = {
   checkinRegistered: 'checkin/registered',
   /** Il calendario di un'organizzazione è cambiato (`20-calendario.md` §6.1). */
   calendarChanged: 'calendar/changed',
+  /** Un saldo incassato alla cassa (`14` §8). */
+  balanceSettled: 'balance/settled',
+  /** Una vendita esterna entrata, o ferma in quarantena (fase E). */
+  externalSaleIngested: 'external-sale/ingested',
+  externalSaleQuarantined: 'external-sale/quarantined',
+  /** Una riga d'attività nuova per l'organizzazione (`21-dashboard.md` §4). */
+  activityRecorded: 'activity/recorded',
 } as const;
 
 export interface OrganizationScopedPayload {

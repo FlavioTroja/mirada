@@ -30,13 +30,13 @@ Una lettura sola, per l'organizzazione del chiamante (`DASHBOARD` READ), nel gio
 
 | blocco | da dove |
 |---|---|
-| **Adesso / Oggi** | le sessioni di oggi (tutte le famiglie), con gli ingressi di ciascuna e gli iscritti attesi; quali sono in corso lo decide l'ora |
+| **Adesso / Oggi** | le sessioni di oggi (tutte le famiglie), con gli ingressi di ciascuna e gli iscritti attesi; quali sono in corso lo decide l'ora. Nell'agenda anche gli appuntamenti dello staff |
 | **In sala adesso** | ingressi validi (non revocati, non in conflitto) alle sessioni in corso. Non esiste l'uscita: «in sala» vuol dire «entrati» |
 | **Ingressi di stasera** | ingressi di oggi per quarto d'ora, con `date_bin` sull'indice `[sessionId, scannedAt]` |
 | **Iscrizioni oggi** | iscrizioni create oggi, per famiglia e canale, e i sette giorni precedenti |
 | **Incassato oggi** | ordini pagati oggi (`paidAt`) · saldi incassati (`collectedAt`) · vendite esterne ricevute; in centesimi. Più i saldi ancora aperti |
 | **Da sistemare** | vendite esterne in quarantena · requisiti in verifica · conflitti di ingresso aperti · saldi in doppio |
-| **Prossimo evento** | il primo evento (`EVENT`) che non è finito: si riusa `EventDashboardService.build` |
+| **Prossimo evento** | il primo evento (`EVENT`) che non è finito: si riusa `EventDashboardService.build`. Se è già cominciato, il riquadro dice «Evento in corso» |
 
 ⚠️ **Le lezioni non hanno presenze.** Un ingresso (`CheckIn`) è la scansione di un biglietto, e
 l'iscrizione a un corso non emette biglietti (`15-corsi.md` §3.4, `RF-COR-6`): il registro

@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import {
   InfoBoxComponent,
   LabeledProgressComponent,
@@ -635,6 +635,7 @@ export class DashboardComponent implements OnInit {
   private readonly pageActions = inject(PageActionsService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
   private readonly locale = inject(LocaleService);
   private readonly events = inject(EventStore);
@@ -773,7 +774,9 @@ export class DashboardComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    this.headerTitle.set('Cruscotto');
+    // La vista «Evento» della Dashboard (`21-dashboard.md` D2): la giornata
+    // dell'organizzazione sta in `/dashboard`, questa guarda un evento.
+    this.headerTitle.set('Dashboard evento');
     this.registerActions();
     await this.loadSelectable();
   }
@@ -800,7 +803,13 @@ export class DashboardComponent implements OnInit {
     );
     this.selectable.set(sorted);
     const now = Date.now();
-    const imminent = sorted.find((ev) => new Date(ev.startAt).getTime() >= now) ?? sorted[0];
+    // Dalla Dashboard si arriva con l'evento già scelto (`?id=…`, il riquadro
+    // «Prossimo evento»); senza, il più imminente come sempre.
+    const requested = Number(this.route.snapshot.queryParamMap.get('id'));
+    const imminent =
+      sorted.find((ev) => ev.id === requested) ??
+      sorted.find((ev) => new Date(ev.startAt).getTime() >= now) ??
+      sorted[0];
     if (imminent) this.eventControl.setValue(imminent.id, { emitEvent: true });
   }
 
@@ -877,7 +886,7 @@ export class DashboardComponent implements OnInit {
     if (id == null) return;
     try {
       await this.store.load(id);
-      if (notify) this.toast.show('SUCCESS', 'Cruscotto aggiornato.');
+      if (notify) this.toast.show('SUCCESS', 'Dashboard aggiornata.');
     } catch {
       if (notify) this.toast.show('WARNING', 'Il cruscotto non è al momento leggibile.');
     }

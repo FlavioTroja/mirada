@@ -66,7 +66,7 @@ export function sidebarRoutesFor(can: Capabilities): KeijoSidebarRoute[] {
   }
 
   if (can.dashboard) {
-    routes.push({ icon: dashboard, label: 'Cruscotto', path: '/dashboard' });
+    routes.push({ icon: dashboard, label: 'Dashboard', path: '/dashboard' });
   }
 
   if (can.calendar) {

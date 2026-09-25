@@ -11,6 +11,7 @@ import { BalanceSettlementRepository } from "@repositories/BalanceSettlementRepo
 import { ExternalSaleRepository } from "@repositories/ExternalSaleRepository";
 import { RequirementOutcomeRepository } from "@repositories/RequirementOutcomeRepository";
 import { EventRepository } from "@repositories/EventRepository";
+import { AppointmentRepository } from "@repositories/AppointmentRepository";
 import { OrganizationScopeService } from "@services/OrganizationScopeService";
 import { EventDashboardService } from "@services/EventDashboardService";
 import { DashboardTodayDTO, TodaySessionDTO } from "@DTOs/dashboard/DashboardTodayDTO";
@@ -43,6 +44,7 @@ export class DashboardTodayService {
         private readonly externalSaleRepository: ExternalSaleRepository,
         private readonly requirementOutcomeRepository: RequirementOutcomeRepository,
         private readonly eventRepository: EventRepository,
+        private readonly appointmentRepository: AppointmentRepository,
         private readonly eventDashboardService: EventDashboardService,
     ) {}
 
@@ -55,7 +57,7 @@ export class DashboardTodayService {
 
         Log.info(`[DashboardToday Service]: building today's dashboard (${dayStart.toISODate()}) for user (id ${principalId})`);
 
-        const [sessions, registrations, payments, settlements, externalSales, balances, todo, next] = await Promise.all([
+        const [sessions, registrations, payments, settlements, externalSales, balances, todo, next, appointments] = await Promise.all([
             this.buildSessions(scope, from, to, now),
             this.registrationRepository.findCreatedSinceInScope(scope, dayStart.minus({ days: DAYS_OF_HISTORY - 1 }).toJSDate()),
             this.paymentRepository.findSucceededForOrdersPaidBetween(scope, from, to),
@@ -64,6 +66,7 @@ export class DashboardTodayService {
             this.registrationRepository.findOpenBalancesInScope(scope, now),
             this.buildTodo(scope, now),
             this.eventRepository.findNextInScope(scope, now),
+            this.appointmentRepository.findCalendarInScope(scope, from, to),
         ]);
 
         // ── Ingressi per quarto d'ora ──────────────────────────────────────
@@ -119,6 +122,9 @@ export class DashboardTodayService {
             day: dayStart.toISODate()!,
             generatedAt: now,
             sessions: sessions.rows,
+            appointments: appointments.map(a => ({
+                id: a.id, title: a.title, startAt: a.startAt, endAt: a.endAt, allDay: a.allDay, room: a.room,
+            })),
             inRoom: sum(sessions.rows.filter(s => s.phase === "ONGOING").map(s => s.entries ?? 0)),
             expectedToday: sum(sessions.rows.filter(s => s.family === "EVENT" && !s.cancelled).map(s => s.expected)),
             entriesByQuarter,
