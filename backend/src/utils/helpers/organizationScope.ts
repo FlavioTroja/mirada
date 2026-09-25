@@ -40,6 +40,19 @@ export function relationOrganizationScopeWhere(
     return scope === null ? {} : { [relation]: { organizationId: { in: scope } } };
 }
 
+/**
+ * Come `relationOrganizationScopeWhere`, ma attraverso **più** relazioni: un
+ * incasso del saldo arriva all'organizzazione passando per l'iscrizione e poi
+ * per l'evento (`["registration", "event"]`).
+ */
+export function nestedOrganizationScopeWhere(scope: OrganizationScope, path: string[]): Record<string, unknown> {
+    if (scope === null) return {};
+    return path.reduceRight<Record<string, unknown>>(
+        (inner, relation) => ({ [relation]: inner }),
+        { organizationId: { in: scope } },
+    );
+}
+
 /** Filtro sulla `Organization` stessa, dove la colonna di tenancy è `id`. */
 export function organizationIdScopeWhere(scope: OrganizationScope): Record<string, unknown> {
     return scope === null ? {} : { id: { in: scope } };

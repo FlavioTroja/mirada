@@ -3,7 +3,7 @@ import { Prisma, RequirementOutcome, RequirementOutcomeStatus } from "@prisma/cl
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
-import { OrganizationScope } from "@utils/helpers/organizationScope";
+import { OrganizationScope, nestedOrganizationScopeWhere } from "@utils/helpers/organizationScope";
 
 /** Esiti che **non** consentono l'ingresso su un requisito bloccante (`RF-CHK-4`, `RF-REQ-7`). */
 export const BLOCKING_OUTCOME_STATUSES: RequirementOutcomeStatus[] = [
@@ -79,5 +79,22 @@ export class RequirementOutcomeRepository extends BaseRepository<"requirementOut
 
     private scopeWhere(scope: OrganizationScope): Prisma.RequirementOutcomeWhereInput {
         return scope === null ? {} : { registration: { event: { organizationId: { in: scope } } } };
+    }
+
+    /** Documenti caricati e in attesa di verifica, a eventi non ancora finiti (`21-dashboard.md` §3). */
+    async countUnderReviewInScope(scope: OrganizationScope, now: Date, tx?: Prisma.TransactionClient): Promise<number> {
+        return this.count(
+            {
+                AND: [
+                    {
+                        deleted: false,
+                        status: "UNDER_REVIEW",
+                        registration: { deleted: false, event: { endAt: { gte: now }, deleted: false } },
+                    },
+                    nestedOrganizationScopeWhere(scope, ["registration", "event"]),
+                ],
+            },
+            tx,
+        );
     }
 }

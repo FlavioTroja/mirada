@@ -1,0 +1,36 @@
+import { FastifyReply, FastifyRequest } from "fastify";
+import { Controller, GET } from "fastify-decorators";
+import { Authenticate } from "@middleware/Authenticate";
+import { HasPermission } from "@middleware/HasPermission";
+import { PermissionAction } from "@enums/PermissionAction";
+import { PermissionResource } from "@enums/PermissionResource";
+import { PermissionScope } from "@enums/PermissionScope";
+import { DashboardTodayService } from "@services/DashboardTodayService";
+
+/**
+ * La Dashboard dell'organizzazione — `21-dashboard.md`. Il cruscotto di un
+ * evento resta in `GET /events/:id/dashboard`.
+ */
+@Controller({
+    route: "/dashboard",
+    tags: [{ name: "Dashboard", description: "The organization's day at a glance" }],
+})
+export class DashboardController {
+    constructor(private readonly dashboardTodayService: DashboardTodayService) {}
+
+    @GET("/today", {
+        schema: {
+            operationId: "getDashboardToday",
+            summary: "Today's dashboard",
+            description: "The caller's organizations today (Europe/Rome day): today's sessions with expected and entries (none for course lessons, which issue no tickets), entries per quarter hour, registrations of today and the last 8 days, money cashed today in cents, open balances, things to fix, and the next event's dashboard.",
+            security: [{ apiKey: [] }],
+        },
+        onRequest: [
+            Authenticate(),
+            HasPermission(PermissionAction.READ, PermissionResource.DASHBOARD, PermissionScope.ALL),
+        ],
+    })
+    async today(req: FastifyRequest, reply: FastifyReply) {
+        reply.status(200).send(await this.dashboardTodayService.today(+req.user.id));
+    }
+}

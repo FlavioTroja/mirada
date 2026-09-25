@@ -169,4 +169,12 @@ export class TicketRepository extends BaseRepository<"ticket"> {
             this.getDelegate(tx).update({ where: { id }, data: { deleted: true } })
         );
     }
+
+    /** Biglietti validi che danno accesso alla sessione: gli attesi di una serata (`21-dashboard.md` §3). */
+    async countValidIncludingSession(sessionId: number, tx?: Prisma.TransactionClient): Promise<number> {
+        return this.count(
+            { deleted: false, status: "VALID", ticketType: { sessions: { some: { sessionId } } } },
+            tx,
+        );
+    }
 }

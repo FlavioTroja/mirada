@@ -59,6 +59,7 @@ export enum PermissionResource {
     BALANCE_SETTLEMENT = "BALANCE_SETTLEMENT",
     PROSPECT = "PROSPECT",
     APPOINTMENT = "APPOINTMENT",
+    DASHBOARD = "DASHBOARD",
 
     // People
     CONTACT = "CONTACT",

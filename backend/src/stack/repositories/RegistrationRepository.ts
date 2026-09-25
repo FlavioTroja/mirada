@@ -3,7 +3,7 @@ import { DanceRole, Prisma, Registration, RegistrationStatus } from "@prisma/cli
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
-import { OrganizationScope, relationOrganizationScopeWhere } from "@utils/helpers/organizationScope";
+import { OrganizationScope, relationOrganizationScopeWhere, nestedOrganizationScopeWhere } from "@utils/helpers/organizationScope";
 
 /** Iscrizioni ancora "vive" — le uniche che devono risultare a contatore (invariante I6). */
 export const ACTIVE_REGISTRATION_STATUSES: RegistrationStatus[] = [
@@ -195,6 +195,48 @@ export class RegistrationRepository extends BaseRepository<"registration"> {
     async safeDeleteById(id: number, tx?: Prisma.TransactionClient): Promise<Registration> {
         return this.exec(() =>
             this.getDelegate(tx).update({ where: { id }, data: { deleted: true } })
+        );
+    }
+
+    // ── Dashboard (`21-dashboard.md` §3) ──────────────────────────────────
+
+    /** Iscrizioni vive per evento: gli attesi di una lezione, che non ha biglietti (`RF-COR-6`). */
+    async countActiveByEvents(eventIds: number[], tx?: Prisma.TransactionClient): Promise<Map<number, number>> {
+        if (!eventIds.length) return new Map();
+        const rows = await this.exec(() =>
+            this.getDelegate(tx).groupBy({
+                by: ["eventId"],
+                where: { eventId: { in: eventIds }, deleted: false, status: { in: ["CONFIRMED", "TO_CONFIRM"] } },
+                _count: { _all: true },
+            })
+        );
+        return new Map(rows.map(row => [row.eventId, row._count._all]));
+    }
+
+    /** Le iscrizioni nate da `since` in poi, con canale e famiglia: il conteggio del giorno e della settimana. */
+    async findCreatedSinceInScope(scope: OrganizationScope, since: Date, tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { AND: [{
+                    deleted: false,
+                    status: { not: "DECLINED" },
+                    createdAt: { gte: since }}, nestedOrganizationScopeWhere(scope, ["event"])] },
+                select: { createdAt: true, channel: true, event: { select: { eventType: { select: { family: true } } } } },
+            })
+        );
+    }
+
+    /** Iscrizioni vive con un saldo dovuto, a eventi non ancora finiti: ciò che resta da incassare. */
+    async findOpenBalancesInScope(scope: OrganizationScope, now: Date, tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { AND: [{
+                    deleted: false,
+                    status: { in: ["CONFIRMED", "TO_CONFIRM"] },
+                    balanceDueAmount: { gt: 0 },
+                    event: { endAt: { gte: now }, deleted: false }}, nestedOrganizationScopeWhere(scope, ["event"])] },
+                select: { balanceDueAmount: true, balanceSettledAmount: true },
+            })
         );
     }
 }

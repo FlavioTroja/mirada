@@ -521,6 +521,20 @@ const MATRIX: ResourceMatrix[] = [
             own(RoleName.CHECKIN_OPERATOR, READ_ONLY),
         ],
     },
+
+    // ─── La Dashboard (`21-dashboard.md`) ────────────────────────────────────
+    {
+        // | DASHBOARD | ∀ | READ#OWN | READ#OWN | – | – |
+        //
+        // Chi vede oggi il cruscotto dell'evento: titolari e responsabili eventi.
+        // Mostra incassi e saldi, che per `RB27` non sono della porta; una vista
+        // ridotta per porta e cassa è un passo successivo (D3).
+        resource: PermissionResource.DASHBOARD,
+        grants: [
+            own(RoleName.OWNER, READ_ONLY),
+            own(RoleName.EVENT_MANAGER, READ_ONLY),
+        ],
+    },
 ];
 
 /**

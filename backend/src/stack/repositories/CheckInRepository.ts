@@ -3,7 +3,7 @@ import { CheckIn, Prisma } from "@prisma/client";
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
-import { OrganizationScope } from "@utils/helpers/organizationScope";
+import { OrganizationScope, nestedOrganizationScopeWhere } from "@utils/helpers/organizationScope";
 
 export type CheckInWithTicket = Prisma.CheckInGetPayload<{ include: { ticket: true } }>;
 
@@ -119,5 +119,31 @@ export class CheckInRepository extends BaseRepository<"checkIn"> {
 
     private scopeWhere(scope: OrganizationScope): Prisma.CheckInWhereInput {
         return scope === null ? {} : { session: { event: { organizationId: { in: scope } } } };
+    }
+
+    // ── Dashboard (`21-dashboard.md` §3) ──────────────────────────────────
+
+    /** Gli ingressi validi alle sessioni indicate, con l'ora e il ruolo di chi è entrato. */
+    async findValidForSessions(sessionIds: number[], tx?: Prisma.TransactionClient) {
+        if (!sessionIds.length) return [];
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { sessionId: { in: sessionIds }, deleted: false, revokedAt: null, conflictWithId: null },
+                select: { sessionId: true, scannedAt: true, registration: { select: { assignedRole: true } } },
+            })
+        );
+    }
+
+    /** Ingressi in conflitto (stesso biglietto, due porte) ancora aperti, nelle organizzazioni del chiamante. */
+    async countOpenConflictsInScope(scope: OrganizationScope, tx?: Prisma.TransactionClient): Promise<number> {
+        return this.count(
+            {
+                AND: [
+                    { deleted: false, revokedAt: null, conflictWithId: { not: null } },
+                    nestedOrganizationScopeWhere(scope, ["session", "event"]),
+                ],
+            },
+            tx,
+        );
     }
 }

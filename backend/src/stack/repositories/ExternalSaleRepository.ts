@@ -3,7 +3,7 @@ import { ExternalSale, ExternalSaleStatus, Prisma } from "@prisma/client";
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
-import { OrganizationScope, relationOrganizationScopeWhere } from "@utils/helpers/organizationScope";
+import { OrganizationScope, relationOrganizationScopeWhere, nestedOrganizationScopeWhere } from "@utils/helpers/organizationScope";
 
 /** Numero di vendite recuperate a ogni passata di ripresa. Vedi `ExternalSalesReconciliationJob`. */
 export const RETRY_BATCH_SIZE = 50;
@@ -86,6 +86,27 @@ export class ExternalSaleRepository extends BaseRepository<"externalSale"> {
     async countQuarantined(salesChannelId: number, tx?: Prisma.TransactionClient): Promise<number> {
         return this.count(
             { salesChannelId, status: ExternalSaleStatus.QUARANTINED, deleted: false },
+            tx,
+        );
+    }
+
+    /** Vendite esterne entrate nell'intervallo, con quanto il negozio ha già incassato (`21-dashboard.md` §3). */
+    async findIngestedBetweenInScope(scope: OrganizationScope, from: Date, to: Date, tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { AND: [{
+                    deleted: false,
+                    status: "INGESTED",
+                    receivedAt: { gte: from, lt: to }}, nestedOrganizationScopeWhere(scope, ["salesChannel"])] },
+                select: { depositPaidAmount: true, receivedAt: true },
+            })
+        );
+    }
+
+    /** Vendite ferme che aspettano una mano umana: qualcuno ha pagato e non ha il biglietto. */
+    async countQuarantinedInScope(scope: OrganizationScope, tx?: Prisma.TransactionClient): Promise<number> {
+        return this.count(
+            { AND: [{ deleted: false, status: "QUARANTINED"}, nestedOrganizationScopeWhere(scope, ["salesChannel"])] },
             tx,
         );
     }

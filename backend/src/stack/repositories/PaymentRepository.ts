@@ -3,7 +3,7 @@ import { Payment, PaymentStatus, Prisma } from "@prisma/client";
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
-import { OrganizationScope } from "@utils/helpers/organizationScope";
+import { OrganizationScope, nestedOrganizationScopeWhere } from "@utils/helpers/organizationScope";
 
 /**
  * `Payment` — backend-brief §4.11. **Sola lettura via API** (§3.4).
@@ -83,5 +83,18 @@ export class PaymentRepository extends BaseRepository<"payment"> {
         tx?: Prisma.TransactionClient,
     ): Promise<PaginateDatasourceDTO<Payment>> {
         return this.paginate({ AND: [query, PaymentRepository.visibilityWhere(scope, buyerUserId)] }, options, tx);
+    }
+
+    /** Pagamenti riusciti di ordini pagati nell'intervallo, con l'ora del pagamento (`21-dashboard.md` §3). */
+    async findSucceededForOrdersPaidBetween(scope: OrganizationScope, from: Date, to: Date, tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { AND: [{
+                    deleted: false,
+                    status: "SUCCEEDED",
+                    order: { status: "PAID", deleted: false, paidAt: { gte: from, lt: to } }}, nestedOrganizationScopeWhere(scope, ["order"])] },
+                select: { amount: true, order: { select: { paidAt: true } } },
+            })
+        );
     }
 }

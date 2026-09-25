@@ -355,4 +355,24 @@ export class EventRepository extends BaseRepository<"event"> {
             })
         );
     }
+
+    /** Il prossimo evento (famiglia `EVENT`) non ancora finito né in bozza: il riquadro «Prossimo evento». */
+    async findNextInScope(scope: OrganizationScope, now: Date, tx?: Prisma.TransactionClient): Promise<Event | null> {
+        return this.exec(() =>
+            this.getDelegate(tx).findFirst({
+                where: {
+                    AND: [
+                        {
+                            deleted: false,
+                            endAt: { gte: now },
+                            status: { in: [EventStatus.PUBLISHED, EventStatus.SALES_CLOSED, EventStatus.RUNNING] },
+                            eventType: { family: EventTypeFamily.EVENT },
+                        },
+                        organizationScopeWhere(scope),
+                    ],
+                },
+                orderBy: { startAt: "asc" },
+            })
+        );
+    }
 }

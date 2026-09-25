@@ -3,7 +3,7 @@ import { BalanceSettlement, Prisma } from "@prisma/client";
 import { BaseRepository } from "@repositories/BaseRepository";
 import { FindOptions, PaginateOptions } from "@utils/helpers/exz";
 import { PaginateDatasourceDTO } from "@DTOs/paginate/PaginateDTO";
-import { OrganizationScope } from "@utils/helpers/organizationScope";
+import { OrganizationScope, nestedOrganizationScopeWhere } from "@utils/helpers/organizationScope";
 
 /**
  * Il registro dei saldi incassati al botteghino — `14` §6.
@@ -68,5 +68,28 @@ export class BalanceSettlementRepository extends BaseRepository<"balanceSettleme
         tx?: Prisma.TransactionClient,
     ): Promise<PaginateDatasourceDTO<BalanceSettlement>> {
         return this.paginate({ AND: [query, this.scopeWhere(scope)] }, options, tx);
+    }
+
+    /** Saldi incassati nell'intervallo, escluse le righe in conflitto (`21-dashboard.md` §3). */
+    async findCollectedBetweenInScope(scope: OrganizationScope, from: Date, to: Date, tx?: Prisma.TransactionClient) {
+        return this.exec(() =>
+            this.getDelegate(tx).findMany({
+                where: { AND: [{
+                    deleted: false,
+                    conflictWithId: null,
+                    collectedAt: { gte: from, lt: to }}, nestedOrganizationScopeWhere(scope, ["registration", "event"])] },
+                select: { amount: true, collectedAt: true },
+            })
+        );
+    }
+
+    /** Incassi registrati due volte da postazioni diverse, ancora da risolvere. */
+    async countConflictsInScope(scope: OrganizationScope, tx?: Prisma.TransactionClient): Promise<number> {
+        return this.count(
+            { AND: [{
+                deleted: false,
+                conflictWithId: { not: null }}, nestedOrganizationScopeWhere(scope, ["registration", "event"])] },
+            tx,
+        );
     }
 }
